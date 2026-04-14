@@ -18,6 +18,7 @@ android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTE
 # Android API 레벨 설정 (33 = Android 13)
 android.api = 33
 android.minapi = 21
+android.accept_sdk_license = True
 
 [buildozer]
 log_level = 2
