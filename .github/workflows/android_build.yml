@@ -17,8 +17,10 @@ jobs:
         uses: ArtemSBulgakov/buildozer-action@v1
         id: buildozer
         with:
-          save_cache: true
+          command: buildozer android debug
           buildozer_version: master
+        env:
+          USER: root
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
