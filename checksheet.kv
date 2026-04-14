@@ -1,0 +1,134 @@
+<RootWidget>:
+    orientation: 'vertical'
+    canvas.before:
+        Color:
+            rgba: 0.15, 0.15, 0.15, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    # 상단 메뉴바
+    BoxLayout:
+        size_hint_y: None
+        height: '60dp'
+        padding: '5dp'
+        spacing: '5dp'
+        canvas.before:
+            Color:
+                rgba: 0.2, 0.2, 0.2, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        Button:
+            text: '엑셀 선택'
+            on_release: app.open_file_chooser('file')
+        Button:
+            text: 'PDF 폴더'
+            on_release: app.open_file_chooser('dir')
+        Button:
+            text: '저장하기'
+            background_color: 0.2, 0.7, 0.3, 1
+            on_release: app.save_to_excel()
+
+    # 머릿글 (Header)
+    BoxLayout:
+        size_hint_y: None
+        height: '40dp'
+        padding: [5, 0]
+        canvas.before:
+            Color:
+                rgba: 0.3, 0.3, 0.3, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Label:
+            text: 'No'
+            size_hint_x: 0.1
+            bold: True
+        Label:
+            text: '품목코드'
+            size_hint_x: 0.3
+            bold: True
+        Label:
+            text: '수량'
+            size_hint_x: 0.15
+            bold: True
+        Label:
+            text: '완료'
+            size_hint_x: 0.15
+            bold: True
+        Label:
+            text: '부족'
+            size_hint_x: 0.15
+            bold: True
+        Label:
+            text: '재작업'
+            size_hint_x: 0.15
+            bold: True
+
+    # 데이터 리스트
+    CheckSheetRV:
+        id: rv
+        viewclass: 'RowWidget'
+        RecycleBoxLayout:
+            default_size: None, dp(56)
+            default_size_hint: 1, None
+            size_hint_y: None
+            height: self.minimum_height
+            orientation: 'vertical'
+            spacing: '1dp'
+
+<RowWidget>:
+    orientation: 'horizontal'
+    padding: [5, 2]
+    canvas.before:
+        Color:
+            rgba: 0.25, 0.25, 0.25, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    Label:
+        text: root.no
+        size_hint_x: 0.1
+    
+    Button:
+        text: root.item_code
+        size_hint_x: 0.3
+        background_normal: ''
+        background_color: 0.2, 0.4, 0.6, 1
+        on_release: root.open_pdf()
+        shorten: True
+        shorten_from: 'right'
+
+    Label:
+        text: root.quantity
+        size_hint_x: 0.15
+
+    # 완료 체크
+    Button:
+        text: 'V' if root.complete else ''
+        size_hint_x: 0.15
+        font_size: '20sp'
+        background_normal: ''
+        background_color: (0, 1, 0, 0.5) if root.complete else (0.4, 0.4, 0.4, 1)
+        on_release: root.on_checkbox_active('complete')
+
+    # 부족 체크
+    Button:
+        text: 'V' if root.shortage else ''
+        size_hint_x: 0.15
+        font_size: '20sp'
+        background_normal: ''
+        background_color: (1, 1, 0, 0.5) if root.shortage else (0.4, 0.4, 0.4, 1)
+        on_release: root.on_checkbox_active('shortage')
+
+    # 재작업 체크
+    Button:
+        text: 'V' if root.rework else ''
+        size_hint_x: 0.15
+        font_size: '20sp'
+        background_normal: ''
+        background_color: (1, 0, 0, 0.5) if root.rework else (0.4, 0.4, 0.4, 1)
+        on_release: root.on_checkbox_active('rework')
