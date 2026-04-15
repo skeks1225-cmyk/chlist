@@ -23,29 +23,35 @@ from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.metrics import dp
 
-# --- 1. 한글 폰트 전역 등록 ---
+# --- 1. 한글 폰트 전역 등록 (최강의 방식: 모든 기본 폰트 이름을 가로챔) ---
 FONT_NAME = "font.ttf"
 if platform == 'android':
+    # 안드로이드에서는 현재 실행 파일 위치에서 폰트를 찾음
     FONT_NAME = os.path.join(os.path.dirname(__file__), "font.ttf")
 
 if os.path.exists(FONT_NAME):
     try:
+        # Kivy가 내부적으로 사용하는 모든 폰트 이름을 우리 폰트로 연결
         LabelBase.register(name="Roboto", fn_regular=FONT_NAME)
         LabelBase.register(name="Korean", fn_regular=FONT_NAME)
+        # 시스템 기본 폰트 캐시를 갱신하도록 강제
+        from kivy.core.text import Label as CoreLabel
+        CoreLabel.register("Roboto", FONT_NAME)
     except: pass
 
 # --- 2. 모든 위젯 스타일 설정 ---
 KV_UI = """
 <Label>:
-    font_name: 'Korean'
+    font_name: 'Roboto'
+    outline_width: 0  # 글자가 뭉쳐 보이지 않게 외곽선 제거
 <Button>:
-    font_name: 'Korean'
+    font_name: 'Roboto'
 <TextInput>:
-    font_name: 'Korean'
+    font_name: 'Roboto'
 <FileChooserLabel>:
-    font_name: 'Korean'
+    font_name: 'Roboto'
 <Popup>:
-    title_font: 'Korean'
+    title_font: 'Roboto'
 
 <ListScreen>:
     BoxLayout:
@@ -146,7 +152,6 @@ KV_UI = """
             Label:
                 text: app.viewer_title
                 font_size: '20sp'
-                bold: True
             Button:
                 text: '닫기'
                 size_hint_x: None
@@ -293,7 +298,7 @@ class CheckSheetApp(App):
         if mode == 'dir': fc.dirselect = True
         
         content = BoxLayout(orientation='vertical', padding=dp(5))
-        path_label = Label(text=fc.path, size_hint_y=None, height=dp(40), shorten=True, shorten_from='left', font_name='Korean')
+        path_label = Label(text=fc.path, size_hint_y=None, height=dp(40), shorten=True, shorten_from='left')
         fc.bind(path=lambda obj, val: setattr(path_label, 'text', val))
         
         content.add_widget(path_label)
@@ -377,13 +382,11 @@ class CheckSheetApp(App):
         self.viewer_title = item['item_code']
         self.refresh_viewer_ui()
         
-        # 수정: 고정 폴더가 아니라 사용자가 선택한 pdf_folder_path를 우선 사용
         base_path = self.pdf_folder_path if self.pdf_folder_path else LOCAL_BASE
         local_path = os.path.join(base_path, f"{self.viewer_title}.pdf")
         
         if not os.path.exists(local_path):
             if self.pdf_source == 'smb':
-                # SMB 다운로드 로직은 별도 구현 필요 (생략된 경우를 위해 메시지)
                 self.show_error_popup("SMB에서 파일을 가져오는 중입니다...")
                 return
             else:
@@ -394,7 +397,7 @@ class CheckSheetApp(App):
             self.render_pdf(local_path)
         else:
             self.viewer_image_source = "" 
-            self.show_error_popup("PDF 미리보기는 안드로이드 폰에서만 작동합니다.\n(PC에서는 파일 존재 여부만 확인 가능)")
+            self.show_error_popup("PDF 미리보기는 안드로이드 폰에서만 작동합니다.")
 
     def refresh_viewer_ui(self):
         item = self.root.get_screen('list').ids.rv.data[self.current_view_idx]
