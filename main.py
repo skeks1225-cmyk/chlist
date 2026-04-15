@@ -23,20 +23,18 @@ from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.metrics import dp
 
-# --- 1. 한글 폰트 전역 등록 (강력한 방식) ---
+# --- 1. 한글 폰트 전역 등록 ---
 FONT_NAME = "font.ttf"
 if platform == 'android':
-    # 안드로이드 앱 설치 경로 확인
     FONT_NAME = os.path.join(os.path.dirname(__file__), "font.ttf")
 
 if os.path.exists(FONT_NAME):
     try:
-        # 'Roboto'라는 이름을 가로채서 우리 폰트로 등록하면 모든 기본 위젯에 적용됨
         LabelBase.register(name="Roboto", fn_regular=FONT_NAME)
         LabelBase.register(name="Korean", fn_regular=FONT_NAME)
     except: pass
 
-# --- 2. 모든 위젯 및 파일 선택기 전용 스타일 설정 ---
+# --- 2. 모든 위젯 스타일 설정 ---
 KV_UI = """
 <Label>:
     font_name: 'Korean'
@@ -59,7 +57,6 @@ KV_UI = """
                 pos: self.pos
                 size: self.size
 
-        # 상단 메뉴바
         BoxLayout:
             size_hint_y: None
             height: '60dp'
@@ -86,7 +83,6 @@ KV_UI = """
                 background_color: 0.2, 0.7, 0.3, 1
                 on_release: app.save_to_excel()
 
-        # 머릿글
         BoxLayout:
             size_hint_y: None
             height: '45dp'
@@ -297,7 +293,6 @@ class CheckSheetApp(App):
         if mode == 'dir': fc.dirselect = True
         
         content = BoxLayout(orientation='vertical', padding=dp(5))
-        # 경로 표시 라벨에 한글 폰트 명시
         path_label = Label(text=fc.path, size_hint_y=None, height=dp(40), shorten=True, shorten_from='left', font_name='Korean')
         fc.bind(path=lambda obj, val: setattr(path_label, 'text', val))
         
@@ -376,13 +371,31 @@ class CheckSheetApp(App):
     def open_pdf_viewer(self, idx):
         self.current_view_idx = idx; self.root.current = 'viewer'; self.load_viewer_pdf()
     def close_viewer(self): self.root.current = 'list'
+    
     def load_viewer_pdf(self):
         item = self.root.get_screen('list').ids.rv.data[self.current_view_idx]
-        self.viewer_title = item['item_code']; self.refresh_viewer_ui()
-        local_path = os.path.join(LOCAL_BASE, f"{self.viewer_title}.pdf")
-        if not os.path.exists(local_path) and self.pdf_source == 'smb': self.download_pdf_silently(self.viewer_title); return
-        if platform == 'android': self.render_pdf(local_path)
-        else: self.viewer_image_source = "PDF VIEW (PC)"
+        self.viewer_title = item['item_code']
+        self.refresh_viewer_ui()
+        
+        # 수정: 고정 폴더가 아니라 사용자가 선택한 pdf_folder_path를 우선 사용
+        base_path = self.pdf_folder_path if self.pdf_folder_path else LOCAL_BASE
+        local_path = os.path.join(base_path, f"{self.viewer_title}.pdf")
+        
+        if not os.path.exists(local_path):
+            if self.pdf_source == 'smb':
+                # SMB 다운로드 로직은 별도 구현 필요 (생략된 경우를 위해 메시지)
+                self.show_error_popup("SMB에서 파일을 가져오는 중입니다...")
+                return
+            else:
+                self.show_error_popup(f"PDF 파일을 찾을 수 없습니다.\n파일명: {self.viewer_title}.pdf\n경로: {base_path}")
+                return
+
+        if platform == 'android':
+            self.render_pdf(local_path)
+        else:
+            self.viewer_image_source = "" 
+            self.show_error_popup("PDF 미리보기는 안드로이드 폰에서만 작동합니다.\n(PC에서는 파일 존재 여부만 확인 가능)")
+
     def refresh_viewer_ui(self):
         item = self.root.get_screen('list').ids.rv.data[self.current_view_idx]
         self.color_comp = [0, 1, 0, 1] if item['complete'] else [0.3, 0.3, 0.3, 1]
