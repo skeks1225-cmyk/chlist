@@ -4,9 +4,10 @@ package.name = checksheetapp
 package.domain = org.example
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,xlsx,json
-version = 1.7
+version = 1.8
 
-requirements = python3,kivy,openpyxl,et_xmlfile,jdcal,pyjnius,android,pysmb,pyasn1
+# 의존성 six 추가 (pysmb 라이브러리 구동 필수)
+requirements = python3,kivy,openpyxl,et_xmlfile,jdcal,pyjnius,android,pysmb,pyasn1,six
 
 orientation = portrait
 fullscreen = 0
