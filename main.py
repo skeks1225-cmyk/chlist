@@ -23,18 +23,15 @@ from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.metrics import dp
 
-# --- 1. 한글 폰트 전역 등록 (최강의 방식: 모든 기본 폰트 이름을 가로챔) ---
+# --- 1. 한글 폰트 전역 등록 ---
 FONT_NAME = "font.ttf"
 if platform == 'android':
-    # 안드로이드에서는 현재 실행 파일 위치에서 폰트를 찾음
     FONT_NAME = os.path.join(os.path.dirname(__file__), "font.ttf")
 
 if os.path.exists(FONT_NAME):
     try:
-        # Kivy가 내부적으로 사용하는 모든 폰트 이름을 우리 폰트로 연결
         LabelBase.register(name="Roboto", fn_regular=FONT_NAME)
         LabelBase.register(name="Korean", fn_regular=FONT_NAME)
-        # 시스템 기본 폰트 캐시를 갱신하도록 강제
         from kivy.core.text import Label as CoreLabel
         CoreLabel.register("Roboto", FONT_NAME)
     except: pass
@@ -43,7 +40,7 @@ if os.path.exists(FONT_NAME):
 KV_UI = """
 <Label>:
     font_name: 'Roboto'
-    outline_width: 0  # 글자가 뭉쳐 보이지 않게 외곽선 제거
+    outline_width: 0
 <Button>:
     font_name: 'Roboto'
 <TextInput>:
@@ -273,13 +270,27 @@ class CheckSheetApp(App):
         try:
             from android.permissions import request_permissions, Permission
             from jnius import autoclass
-            request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE, Permission.INTERNET, Permission.ACCESS_NETWORK_STATE, Permission.MANAGE_EXTERNAL_STORAGE])
+            # 1. 일반 권한 요청 (팝업창)
+            request_permissions([
+                Permission.READ_EXTERNAL_STORAGE, 
+                Permission.WRITE_EXTERNAL_STORAGE, 
+                Permission.INTERNET, 
+                Permission.ACCESS_NETWORK_STATE
+            ])
+            # 2. 모든 파일 접근 권한 확인 및 요청 (안드로이드 11 이상 특수 화면)
             Env = autoclass('android.os.Environment')
-            if not Env.isExternalStorageManager():
-                Context = autoclass('org.kivy.android.PythonActivity').mActivity
-                intent = autoclass('android.content.Intent')(autoclass('android.provider.Settings').ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                uri = autoclass('android.net.Uri').fromParts("package", Context.getPackageName(), None); intent.setData(uri); Context.startActivity(intent)
-        except: pass
+            if hasattr(Env, 'isExternalStorageManager'):
+                if not Env.isExternalStorageManager():
+                    Context = autoclass('org.kivy.android.PythonActivity').mActivity
+                    Intent = autoclass('android.content.Intent')
+                    Settings = autoclass('android.provider.Settings')
+                    Uri = autoclass('android.net.Uri')
+                    intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    uri = Uri.fromParts("package", Context.getPackageName(), None)
+                    intent.setData(uri)
+                    Context.startActivity(intent)
+        except Exception as e:
+            print(f"Permission Error: {e}")
 
     def select_source(self, mode):
         content = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(20))
