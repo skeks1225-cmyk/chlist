@@ -21,13 +21,16 @@
                 size: self.size
 
         Button:
-            text: '엑셀 선택'
-            on_release: app.open_file_chooser('file')
+            text: 'SMB 설정'
+            on_release: app.open_smb_settings()
         Button:
-            text: 'PDF 폴더'
-            on_release: app.open_file_chooser('dir')
+            text: '엑셀(SMB)'
+            on_release: app.open_smb_browser('file')
         Button:
-            text: '저장하기'
+            text: 'PDF폴더(SMB)'
+            on_release: app.open_smb_browser('dir')
+        Button:
+            text: '저장(폰)'
             background_color: 0.2, 0.7, 0.3, 1
             on_release: app.save_to_excel()
 
