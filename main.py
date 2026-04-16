@@ -18,6 +18,7 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.scatterlayout import ScatterLayout
 from kivy.core.text import LabelBase
 from kivy.utils import platform
 from kivy.clock import Clock
@@ -40,7 +41,6 @@ if os.path.exists(FONT_NAME):
 KV_UI = """
 <Label>:
     font_name: 'Roboto'
-    outline_width: 0
 <Button>:
     font_name: 'Roboto'
 <TextInput>:
@@ -141,33 +141,51 @@ KV_UI = """
             Rectangle:
                 pos: self.pos
                 size: self.size
-        padding: dp(10)
         
         BoxLayout:
             size_hint_y: None
             height: dp(60)
+            padding: dp(5)
+            canvas.before:
+                Color:
+                    rgba: 0.2, 0.2, 0.2, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
             Label:
                 text: app.viewer_title
-                font_size: '20sp'
+                font_size: '18sp'
+                bold: True
             Button:
                 text: '닫기'
                 size_hint_x: None
                 width: dp(100)
                 on_release: app.close_viewer()
 
-        Image:
-            id: pdf_img
-            source: app.viewer_image_source
-            allow_stretch: True
-            keep_ratio: True
-            on_touch_down: app.on_viewer_touch_down(args[1])
-            on_touch_up: app.on_viewer_touch_up(args[1])
+        # 고해상도 도면 뷰어 영역 (확대/축소 지원)
+        ScatterLayout:
+            id: scatter
+            do_rotation: False
+            auto_bring_to_front: False
+            Image:
+                id: pdf_img
+                source: app.viewer_image_source
+                allow_stretch: True
+                keep_ratio: True
+                size: self.parent.size
+                pos: 0, 0
 
         BoxLayout:
             size_hint_y: None
             height: dp(80)
             spacing: dp(10)
-            padding: [0, dp(10)]
+            padding: [dp(10), dp(10)]
+            canvas.before:
+                Color:
+                    rgba: 0.15, 0.15, 0.15, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
             Button:
                 text: '완료'
                 background_color: app.color_comp
@@ -256,6 +274,8 @@ class CheckSheetApp(App):
 
     def build(self):
         self.load_settings()
+        # 외부 kv 파일을 무시하기 위해 빈 파일로 취급하거나 이름을 다르게 설정
+        self.title = "CheckSheet Pro"
         Builder.load_string(KV_UI)
         sm = ScreenManager()
         sm.add_widget(ListScreen(name='list'))
@@ -270,25 +290,17 @@ class CheckSheetApp(App):
         try:
             from android.permissions import request_permissions, Permission
             from jnius import autoclass
-            request_permissions([
-                Permission.READ_EXTERNAL_STORAGE, 
-                Permission.WRITE_EXTERNAL_STORAGE, 
-                Permission.INTERNET, 
-                Permission.ACCESS_NETWORK_STATE
-            ])
+            request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE, Permission.INTERNET, Permission.ACCESS_NETWORK_STATE])
             Env = autoclass('android.os.Environment')
             if hasattr(Env, 'isExternalStorageManager'):
                 if not Env.isExternalStorageManager():
                     Context = autoclass('org.kivy.android.PythonActivity').mActivity
                     Intent = autoclass('android.content.Intent')
                     Settings = autoclass('android.provider.Settings')
-                    Uri = autoclass('android.net.Uri')
+                    uri = autoclass('android.net.Uri').fromParts("package", Context.getPackageName(), None)
                     intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    uri = Uri.fromParts("package", Context.getPackageName(), None)
-                    intent.setData(uri)
-                    Context.startActivity(intent)
-        except Exception as e:
-            print(f"Permission Error: {e}")
+                    intent.setData(uri); Context.startActivity(intent)
+        except: pass
 
     def select_source(self, mode):
         content = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(20))
@@ -302,24 +314,20 @@ class CheckSheetApp(App):
         pop.open()
 
     def open_local_browser(self, mode):
-        # 마지막 폴더 위치 기억 로직
         start_p = "/storage/emulated/0" if platform=='android' else os.getcwd()
-        if mode == 'file' and self.excel_path:
-            last_dir = os.path.dirname(self.excel_path)
-            if os.path.exists(last_dir): start_p = last_dir
-        elif mode == 'dir' and self.pdf_folder_path:
-            if os.path.exists(self.pdf_folder_path): start_p = self.pdf_folder_path
-            
+        # 마지막 폴더 기억
+        if mode == 'file' and self.excel_path and os.path.exists(os.path.dirname(self.excel_path)):
+            start_p = os.path.dirname(self.excel_path)
+        elif mode == 'dir' and self.pdf_folder_path and os.path.exists(self.pdf_folder_path):
+            start_p = self.pdf_folder_path
+
         fc = FileChooserListView(path=start_p)
         if mode == 'dir': fc.dirselect = True
         
         content = BoxLayout(orientation='vertical', padding=dp(5))
         path_label = Label(text=fc.path, size_hint_y=None, height=dp(40), shorten=True, shorten_from='left')
         fc.bind(path=lambda obj, val: setattr(path_label, 'text', val))
-        
-        content.add_widget(path_label)
-        content.add_widget(fc)
-        
+        content.add_widget(path_label); content.add_widget(fc)
         pop = Popup(title="파일/폴더 선택", content=content, size_hint=(0.95, 0.95))
         
         def on_confirm(instance):
@@ -327,8 +335,8 @@ class CheckSheetApp(App):
             if mode == 'file':
                 if os.path.isfile(target):
                     self.excel_path = target; self.load_excel_data(target); self.save_settings(); pop.dismiss()
-                else: self.show_error_popup("파일을 정확히 선택해 주세요.")
-            else: # dir
+                else: self.show_error_popup("파일을 선택하세요.")
+            else:
                 if os.path.isdir(target):
                     self.pdf_folder_path = target; self.pdf_source = 'local'; self.save_settings(); pop.dismiss()
                 else: self.show_error_popup("폴더가 아닙니다.")
@@ -336,8 +344,7 @@ class CheckSheetApp(App):
         btn_layout = BoxLayout(size_hint_y=None, height=dp(60), spacing=dp(10))
         btn_layout.add_widget(Button(text="취소", on_release=pop.dismiss))
         btn_layout.add_widget(Button(text="확인", on_release=on_confirm, background_color=(0, 0.7, 0, 1)))
-        content.add_widget(btn_layout)
-        pop.open()
+        content.add_widget(btn_layout); pop.open()
 
     def load_excel_data(self, path):
         try:
@@ -390,39 +397,35 @@ class CheckSheetApp(App):
         if self.root.current == 'viewer': self.refresh_viewer_ui()
 
     def open_pdf_viewer(self, idx):
-        self.current_view_idx = idx; self.root.current = 'viewer'; self.load_viewer_pdf()
+        self.current_view_idx = idx; self.root.current = 'viewer'
+        # 뷰어 진입 시 줌 초기화
+        self.root.get_screen('viewer').ids.scatter.scale = 1
+        self.root.get_screen('viewer').ids.scatter.pos = (0, 0)
+        self.load_viewer_pdf()
+
     def close_viewer(self): self.root.current = 'list'
     
     def load_viewer_pdf(self):
         item = self.root.get_screen('list').ids.rv.data[self.current_view_idx]
-        self.viewer_title = item['item_code']
-        self.refresh_viewer_ui()
-        
+        self.viewer_title = item['item_code']; self.refresh_viewer_ui()
         base_path = self.pdf_folder_path if self.pdf_folder_path else LOCAL_BASE
         local_path = os.path.join(base_path, f"{self.viewer_title}.pdf")
-        
         if not os.path.exists(local_path):
-            if self.pdf_source == 'smb':
-                self.show_error_popup("SMB에서 파일을 가져오는 중입니다...")
-                return
-            else:
-                self.show_error_popup(f"PDF 파일을 찾을 수 없습니다.\n파일명: {self.viewer_title}.pdf\n경로: {base_path}")
-                return
-
-        if platform == 'android':
-            self.render_pdf(local_path)
-        else:
-            self.viewer_image_source = "" 
-            self.show_error_popup("PDF 미리보기는 안드로이드 폰에서만 작동합니다.")
+            self.show_error_popup(f"파일 없음: {self.viewer_title}.pdf")
+            return
+        if platform == 'android': self.render_pdf(local_path)
+        else: self.viewer_image_source = ""
 
     def refresh_viewer_ui(self):
         item = self.root.get_screen('list').ids.rv.data[self.current_view_idx]
         self.color_comp = [0, 1, 0, 1] if item['complete'] else [0.3, 0.3, 0.3, 1]
         self.color_short = [1, 1, 0, 1] if item['shortage'] else [0.3, 0.3, 0.3, 1]
         self.color_rew = [1, 0, 0, 1] if item['rework'] else [0.3, 0.3, 0.3, 1]
+
     def update_viewer_status(self, status):
         item = self.root.get_screen('list').ids.rv.data[self.current_view_idx]
         self.update_item_status(item['item_code'], item['no'], status)
+
     def render_pdf(self, path):
         try:
             from jnius import autoclass
@@ -430,23 +433,29 @@ class CheckSheetApp(App):
             if not f.exists(): return
             pfd = autoclass('android.os.ParcelFileDescriptor').open(f, autoclass('android.os.ParcelFileDescriptor').MODE_READ_ONLY)
             renderer = autoclass('android.graphics.pdf.PdfRenderer')(pfd); page = renderer.openPage(0)
-            # 해상도 향상을 위해 밀도 조절
-            bitmap = autoclass('android.graphics.Bitmap').createBitmap(int(page.getWidth()*2.5), int(page.getHeight()*2.5), autoclass('android.graphics.Bitmap$Config').ARGB_8888)
+            # 도면 확인을 위해 4배 고해상도 렌더링 (벡터급 화질 구현)
+            bw, bh = int(page.getWidth() * 4), int(page.getHeight() * 4)
+            bitmap = autoclass('android.graphics.Bitmap').createBitmap(bw, bh, autoclass('android.graphics.Bitmap$Config').ARGB_8888)
             page.render(bitmap, None, None, page.RENDER_MODE_FOR_DISPLAY)
-            # 앱 전용 내부 저장소에 임시 이미지 저장 (권한 문제 방지)
             tmp = os.path.join(self.user_data_dir, "view.png")
-            out = autoclass('java.io.FileOutputStream')(tmp); bitmap.compress(autoclass('android.graphics.Bitmap$CompressFormat').PNG, 100, out); out.close()
+            out = autoclass('java.io.FileOutputStream')(tmp)
+            bitmap.compress(autoclass('android.graphics.Bitmap$CompressFormat').PNG, 100, out); out.close()
             page.close(); renderer.close(); self.viewer_image_source = ""; self.viewer_image_source = tmp
-        except Exception as e:
-            print(f"PDF Render Error: {e}")
+        except: pass
 
-    def on_viewer_touch_down(self, t): self.touch_start_x = t.x
+    def on_viewer_touch_down(self, t):
+        self.touch_start_x = t.x
+
     def on_viewer_touch_up(self, t):
+        # 확대 중(scale > 1.1)일 때는 슬라이드 기능을 막아 도면 이동을 방해하지 않음
+        if self.root.get_screen('viewer').ids.scatter.scale > 1.1: return
         dx = t.x - self.touch_start_x
-        if abs(dx) > dp(100):
+        if abs(dx) > dp(150):
             rv_data = self.root.get_screen('list').ids.rv.data
-            if dx > 0 and self.current_view_idx > 0: self.current_view_idx -= 1; self.load_viewer_pdf()
-            elif dx < 0 and self.current_view_idx < len(rv_data)-1: self.current_view_idx += 1; self.load_viewer_pdf()
+            if dx > 0 and self.current_view_idx > 0: 
+                self.current_view_idx -= 1; self.load_viewer_pdf()
+            elif dx < 0 and self.current_view_idx < len(rv_data)-1: 
+                self.current_view_idx += 1; self.load_viewer_pdf()
 
     def open_smb_shares_browser(self, mode):
         conn = self.get_smb_conn_only()
