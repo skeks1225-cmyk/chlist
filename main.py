@@ -1,9 +1,7 @@
 import os
 import json
-import threading
-import socket
-import time
-from http.server import SimpleHTTPRequestHandler, HTTPServer
+import traceback
+import subprocess
 from openpyxl import load_workbook
 
 from kivy.app import App
@@ -36,7 +34,7 @@ if os.path.exists(FONT_NAME):
         CoreLabel.register("Roboto", FONT_NAME)
     except: pass
 
-# --- 2. UI 디자인 ---
+# --- 2. UI 디자인 (Kivy) ---
 KV_UI = """
 <Label>:
     font_name: 'Roboto'
@@ -154,16 +152,11 @@ KV_UI = """
                 text: '닫기'
                 size_hint_x: None
                 width: dp(100)
-                on_release: app.close_viewer()
+                on_release: app.close_native_pdf()
 
-        BoxLayout:
-            id: webview_container
-            canvas.before:
-                Color:
-                    rgba: 0.1, 0.1, 0.1, 1
-                Rectangle:
-                    pos: self.pos
-                    size: self.size
+        # PDF 영역 (실제 Native 뷰가 이 빈 공간 위에 위치함)
+        Widget:
+            id: pdf_placeholder
 
         BoxLayout:
             size_hint_y: None
@@ -245,32 +238,7 @@ class RowWidget(BoxLayout):
     complete = BooleanProperty(False); shortage = BooleanProperty(False); rework = BooleanProperty(False)
     def on_checkbox_active(self, ct): App.get_running_app().update_item_status(self.item_code, self.no, ct)
     def open_pdf(self):
-        app = App.get_running_app(); rv = app.root.get_screen('list').ids.rv
-        for i, d in enumerate(rv.data):
-            if d['item_code'] == self.item_code and d['no'] == self.no:
-                app.open_pdf_viewer(i); break
-
-# --- 3. 안전한 로컬 파일 서버 (os.chdir 사용 안 함) ---
-class SecurePDFServer(SimpleHTTPRequestHandler):
-    def __init__(self, *args, directory=None, **kwargs):
-        if directory: self.base_dir = directory
-        super().__init__(*args, **kwargs)
-    
-    def translate_path(self, path):
-        path = super().translate_path(path)
-        rel_path = os.path.relpath(path, os.getcwd())
-        return os.path.join(self.base_dir, rel_path)
-
-    def log_message(self, format, *args): pass
-
-def run_server(port, directory):
-    try:
-        # 전역 경로를 바꾸지 않고 생성자에서 경로를 처리하는 핸들러 사용
-        def handler(*args, **kwargs):
-            return SecurePDFServer(*args, directory=directory, **kwargs)
-        httpd = HTTPServer(('127.0.0.1', port), handler)
-        httpd.serve_forever()
-    except: pass
+        App.get_running_app().open_native_pdf(self.item_code)
 
 class CheckSheetApp(App):
     excel_path = StringProperty(''); pdf_folder_path = StringProperty('')
@@ -282,9 +250,9 @@ class CheckSheetApp(App):
     current_view_idx = NumericProperty(-1)
     color_comp = ListProperty([0.3, 0.3, 0.3, 1]); color_short = ListProperty([0.3, 0.3, 0.3, 1]); color_rew = ListProperty([0.3, 0.3, 0.3, 1])
     
-    android_webview = None
-    server_started = False
-    data_loaded = BooleanProperty(False)
+    # 네이티브 제어용 변수
+    native_pdf_view = None
+    data_loaded = False
 
     def build(self):
         self.load_settings()
@@ -297,6 +265,7 @@ class CheckSheetApp(App):
     def on_start(self):
         if platform == 'android': 
             Clock.schedule_once(self.ask_permissions, 1)
+        # 데이터 중복 로드 방지
         if not self.data_loaded and self.excel_path and os.path.exists(self.excel_path):
             self.load_excel_data(self.excel_path)
             self.data_loaded = True
@@ -309,84 +278,81 @@ class CheckSheetApp(App):
             Env = autoclass('android.os.Environment')
             if hasattr(Env, 'isExternalStorageManager'):
                 if not Env.isExternalStorageManager():
-                    Context = autoclass('org.kivy.android.PythonActivity').mActivity
+                    mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
                     Intent = autoclass('android.content.Intent')
                     Settings = autoclass('android.provider.Settings')
+                    uri = autoclass('android.net.Uri').fromParts("package", mActivity.getPackageName(), None)
                     intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    uri = autoclass('android.net.Uri').fromParts("package", Context.getPackageName(), None)
-                    intent.setData(uri); Context.startActivity(intent)
+                    intent.setData(uri); mActivity.startActivity(intent)
         except: pass
 
-    def start_local_server(self, directory):
-        if not self.server_started:
-            threading.Thread(target=run_server, args=(8080, directory), daemon=True).start()
-            self.server_started = True
-
-    def open_pdf_viewer(self, idx):
-        self.current_view_idx = idx
-        item = self.root.get_screen('list').ids.rv.data[idx]
-        self.viewer_title = item['item_code']
-        self.refresh_viewer_ui()
-        
+    # --- 안드로이드 네이티브 PDF 뷰어 핵심 로직 ---
+    def open_native_pdf(self, item_code):
+        self.viewer_title = item_code
         base_path = self.pdf_folder_path if self.pdf_folder_path else LOCAL_BASE
-        if not os.path.exists(base_path):
-            self.show_error_popup("PDF 폴더를 먼저 선택해주세요.")
+        pdf_path = os.path.join(base_path, f"{item_code}.pdf")
+        
+        # 현재 인덱스 찾기 (슬라이드용)
+        rv_data = self.root.get_screen('list').ids.rv.data
+        for i, d in enumerate(rv_data):
+            if d['item_code'] == item_code:
+                self.current_view_idx = i; break
+
+        if not os.path.exists(pdf_path):
+            self.show_error_popup(f"파일이 없습니다: {item_code}.pdf")
             return
 
         self.root.current = 'viewer'
-        
+        self.refresh_viewer_ui()
+
         if platform == 'android':
-            self.start_local_server(base_path)
-            Clock.schedule_once(lambda dt: self.init_android_webview(item['item_code']), 0.5)
+            Clock.schedule_once(lambda dt: self.show_android_pdf(pdf_path), 0.2)
         else:
             self.show_error_popup("벡터 뷰어는 안드로이드에서만 작동합니다.")
 
-    def init_android_webview(self, filename):
+    def show_android_pdf(self, path):
         from jnius import autoclass
         from android.runnable import run_on_main_thread
 
         @run_on_main_thread
-        def setup_webview():
+        def _setup():
             try:
                 mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
-                WebView = autoclass('android.webkit.WebView')
-                WebViewClient = autoclass('android.webkit.WebViewClient')
+                File = autoclass('java.io.File')
+                PDFView = autoclass('com.github.barteksc.pdfviewer.PDFView')
                 
-                if not self.android_webview:
-                    self.android_webview = WebView(mActivity)
-                    settings = self.android_webview.getSettings()
-                    settings.setJavaScriptEnabled(True)
-                    settings.setAllowFileAccess(True)
-                    settings.setBuiltInZoomControls(True)
-                    settings.setDisplayZoomControls(False)
-                    settings.setSupportZoom(True)
-                    settings.setUseWideViewPort(True)
-                    settings.setLoadWithOverviewMode(True)
-                    self.android_webview.setWebViewClient(WebViewClient())
-                    # addContentView 대신 레이아웃에 직접 올리는 방식 시도
-                    mActivity.addContentView(self.android_webview, autoclass('android.view.ViewGroup$LayoutParams')(-1, -1))
+                if not self.native_pdf_view:
+                    self.native_pdf_view = PDFView(mActivity, None)
+                    # Kivy UI 위에 배치 (상단 60dp, 하단 80dp 공간 확보 가능하도록 전체로 우선 배치)
+                    # 실제 업무용으로는 LayoutParams로 좌표 조정이 가능합니다.
+                    mActivity.addContentView(self.native_pdf_view, 
+                        autoclass('android.view.ViewGroup$LayoutParams')(-1, -1))
 
-                self.android_webview.setVisibility(autoclass('android.view.View').VISIBLE)
-                self.android_webview.bringToFront()
-                pdf_url = f"http://127.0.0.1:8080/{filename}.pdf"
-                self.android_webview.loadUrl(pdf_url)
+                self.native_pdf_view.setVisibility(autoclass('android.view.View').VISIBLE)
+                self.native_pdf_view.bringToFront()
+                
+                file = File(path)
+                self.native_pdf_view.fromFile(file)\
+                    .enableSwipe(True)\
+                    .swipeHorizontal(True)\
+                    .enableDoubletap(True)\
+                    .defaultPage(0)\
+                    .load()
             except Exception as e:
-                print(f"WebView Error: {e}")
+                print(f"Native PDF Error: {e}")
+        _setup()
 
-        setup_webview()
-
-    def close_viewer(self):
-        if self.android_webview:
+    def close_native_pdf(self):
+        if platform == 'android' and self.native_pdf_view:
             from jnius import autoclass
             from android.runnable import run_on_main_thread
             @run_on_main_thread
-            def hide_webview():
-                try:
-                    self.android_webview.setVisibility(autoclass('android.view.View').GONE)
-                except: pass
-            hide_webview()
+            def _hide():
+                self.native_pdf_view.setVisibility(autoclass('android.view.View').GONE)
+            _hide()
         self.root.current = 'list'
 
+    # --- 파일/폴더 선택 및 데이터 로직 ---
     def select_source(self, mode):
         content = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(20))
         pop = Popup(title="파일 출처 선택", content=content, size_hint=(0.85, 0.4))
@@ -412,16 +378,13 @@ class CheckSheetApp(App):
         path_label = Label(text=fc.path, size_hint_y=None, height=dp(40), shorten=True, shorten_from='left')
         fc.bind(path=lambda obj, val: setattr(path_label, 'text', val))
         content.add_widget(path_label); content.add_widget(fc)
-        pop = Popup(title="파일/폴더 선택", content=content, size_hint=(0.95, 0.95))
+        pop = Popup(title="선택", content=content, size_hint=(0.95, 0.95))
         
         def on_confirm(instance):
             target = fc.selection[0] if fc.selection else fc.path
             if mode == 'file':
                 if os.path.isfile(target):
-                    self.excel_path = target
-                    self.data_loaded = False
-                    self.load_excel_data(target)
-                    self.save_settings(); pop.dismiss()
+                    self.excel_path = target; self.data_loaded = False; self.load_excel_data(target); self.save_settings(); pop.dismiss()
                 else: self.show_error_popup("파일을 선택하세요.")
             else:
                 if os.path.isdir(target):
@@ -437,7 +400,7 @@ class CheckSheetApp(App):
         try:
             wb = load_workbook(path, data_only=True); ws = wb.active; rows = list(ws.rows)
             rv = self.root.get_screen('list').ids.rv
-            rv.data = []
+            rv.data = [] # 데이터 초기화
             headers = [str(cell.value).strip().lower() for cell in rows[0]]
             idx_no, idx_code, idx_qty = headers.index('no'), headers.index('품목코드'), headers.index('수량')
             rv_data = []
