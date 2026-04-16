@@ -1,8 +1,9 @@
 import os
 import json
-import traceback
-import subprocess
+import threading
 import socket
+import time
+from http.server import SimpleHTTPRequestHandler, HTTPServer
 from openpyxl import load_workbook
 
 from kivy.app import App
@@ -18,13 +19,12 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
-from kivy.uix.scatterlayout import ScatterLayout
 from kivy.core.text import LabelBase
 from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.metrics import dp
 
-# --- 1. 한글 폰트 전역 등록 ---
+# --- 1. 한글 폰트 설정 ---
 FONT_NAME = "font.ttf"
 if platform == 'android':
     FONT_NAME = os.path.join(os.path.dirname(__file__), "font.ttf")
@@ -32,12 +32,11 @@ if platform == 'android':
 if os.path.exists(FONT_NAME):
     try:
         LabelBase.register(name="Roboto", fn_regular=FONT_NAME)
-        LabelBase.register(name="Korean", fn_regular=FONT_NAME)
         from kivy.core.text import Label as CoreLabel
         CoreLabel.register("Roboto", FONT_NAME)
     except: pass
 
-# --- 2. 모든 위젯 스타일 설정 ---
+# --- 2. UI 디자인 (WebView 영역 확보) ---
 KV_UI = """
 <Label>:
     font_name: 'Roboto'
@@ -47,8 +46,6 @@ KV_UI = """
     font_name: 'Roboto'
 <FileChooserLabel>:
     font_name: 'Roboto'
-<Popup>:
-    title_font: 'Roboto'
 
 <ListScreen>:
     BoxLayout:
@@ -71,7 +68,6 @@ KV_UI = """
                 Rectangle:
                     pos: self.pos
                     size: self.size
-
             Button:
                 text: '접속설정'
                 on_release: app.open_smb_settings()
@@ -95,7 +91,6 @@ KV_UI = """
                 Rectangle:
                     pos: self.pos
                     size: self.size
-            
             Button:
                 text: 'No' + app.sort_indicator_no
                 size_hint_x: 0.1
@@ -155,25 +150,21 @@ KV_UI = """
             Label:
                 text: app.viewer_title
                 font_size: '18sp'
-                bold: True
             Button:
                 text: '닫기'
                 size_hint_x: None
                 width: dp(100)
                 on_release: app.close_viewer()
 
-        # 고해상도 도면 뷰어 영역 (확대/축소 지원)
-        ScatterLayout:
-            id: scatter
-            do_rotation: False
-            auto_bring_to_front: False
-            Image:
-                id: pdf_img
-                source: app.viewer_image_source
-                allow_stretch: True
-                keep_ratio: True
-                size: self.parent.size
-                pos: 0, 0
+        # 벡터 뷰어 (WebView가 이 자리에 배치됩니다)
+        BoxLayout:
+            id: webview_container
+            canvas.before:
+                Color:
+                    rgba: 0.1, 0.1, 0.1, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
 
         BoxLayout:
             size_hint_y: None
@@ -245,7 +236,6 @@ if platform == 'android':
 
 SETTINGS_FILE = 'settings.json'
 LOCAL_BASE = "/sdcard/Download/CheckSheet" if platform == 'android' else os.path.join(os.getcwd(), "CheckSheet_Data")
-if not os.path.exists(LOCAL_BASE): os.makedirs(LOCAL_BASE)
 
 class ListScreen(Screen): pass
 class ViewerScreen(Screen): pass
@@ -261,21 +251,30 @@ class RowWidget(BoxLayout):
             if d['item_code'] == self.item_code and d['no'] == self.no:
                 app.open_pdf_viewer(i); break
 
+# --- 3. 로컬 파일 서버 (WebView에 파일 공급용) ---
+class PDFServer(SimpleHTTPRequestHandler):
+    def log_message(self, format, *args): pass # 로그 생략
+
+def run_server(port, directory):
+    os.chdir(directory)
+    httpd = HTTPServer(('127.0.0.1', port), PDFServer)
+    httpd.serve_forever()
+
 class CheckSheetApp(App):
     excel_path = StringProperty(''); pdf_folder_path = StringProperty('')
     pdf_source = StringProperty('local'); smb_config = DictProperty({'ip': '', 'user': '', 'pass': ''})
     sort_indicator_no = StringProperty(''); sort_indicator_code = StringProperty(''); sort_indicator_qty = StringProperty('')
     sort_indicator_comp = StringProperty(''); sort_indicator_short = StringProperty(''); sort_indicator_rew = StringProperty('')
     sort_states = {}
-    viewer_title = StringProperty(''); viewer_image_source = StringProperty('')
+    viewer_title = StringProperty('')
     current_view_idx = NumericProperty(-1)
     color_comp = ListProperty([0.3, 0.3, 0.3, 1]); color_short = ListProperty([0.3, 0.3, 0.3, 1]); color_rew = ListProperty([0.3, 0.3, 0.3, 1])
-    touch_start_x = 0
+    
+    android_webview = None
+    server_started = False
 
     def build(self):
         self.load_settings()
-        # 외부 kv 파일을 무시하기 위해 빈 파일로 취급하거나 이름을 다르게 설정
-        self.title = "CheckSheet Pro"
         Builder.load_string(KV_UI)
         sm = ScreenManager()
         sm.add_widget(ListScreen(name='list'))
@@ -297,10 +296,75 @@ class CheckSheetApp(App):
                     Context = autoclass('org.kivy.android.PythonActivity').mActivity
                     Intent = autoclass('android.content.Intent')
                     Settings = autoclass('android.provider.Settings')
-                    uri = autoclass('android.net.Uri').fromParts("package", Context.getPackageName(), None)
                     intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    uri = autoclass('android.net.Uri').fromParts("package", Context.getPackageName(), None)
                     intent.setData(uri); Context.startActivity(intent)
         except: pass
+
+    def start_local_server(self, directory):
+        if not self.server_started:
+            threading.Thread(target=run_server, args=(8080, directory), daemon=True).start()
+            self.server_started = True
+
+    def open_pdf_viewer(self, idx):
+        self.current_view_idx = idx
+        item = self.root.get_screen('list').ids.rv.data[idx]
+        self.viewer_title = item['item_code']
+        self.refresh_viewer_ui()
+        
+        base_path = self.pdf_folder_path if self.pdf_folder_path else LOCAL_BASE
+        if not os.path.exists(base_path):
+            self.show_error_popup("PDF 폴더를 먼저 선택해주세요.")
+            return
+
+        self.root.current = 'viewer'
+        
+        if platform == 'android':
+            self.start_local_server(base_path)
+            Clock.schedule_once(lambda dt: self.init_android_webview(item['item_code']), 0.5)
+        else:
+            self.show_error_popup("벡터 뷰어는 안드로이드에서만 작동합니다.")
+
+    def init_android_webview(self, filename):
+        from jnius import autoclass, cast
+        from android.runnable import run_on_main_thread
+
+        @run_on_main_thread
+        def setup_webview():
+            mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
+            WebView = autoclass('android.webkit.WebView')
+            WebViewClient = autoclass('android.webkit.WebViewClient')
+            
+            if not self.android_webview:
+                self.android_webview = WebView(mActivity)
+                self.android_webview.getSettings().setJavaScriptEnabled(True)
+                self.android_webview.getSettings().setBuiltInZoomControls(True)
+                self.android_webview.getSettings().setDisplayZoomControls(False)
+                self.android_webview.getSettings().setSupportZoom(True)
+                self.android_webview.setWebViewClient(WebViewClient())
+                
+                # Kivy 컨테이너에 WebView 추가
+                container = self.root.get_screen('viewer').ids.webview_container
+                # 안드로이드 뷰를 Kivy 위에 올리는 복잡한 과정 생략하고 단순히 레이아웃에 추가
+                mActivity.addContentView(self.android_webview, autoclass('android.view.ViewGroup$LayoutParams')(-1, -1))
+
+            self.android_webview.setVisibility(autoclass('android.view.View').VISIBLE)
+            # 구글 Docs 뷰어를 통한 벡터 렌더링 (가장 확실한 방법)
+            # 로컬 서버를 통한 직접 열기가 안될 경우를 대비
+            pdf_url = f"http://127.0.0.1:8080/{filename}.pdf"
+            self.android_webview.loadUrl(pdf_url)
+
+        setup_webview()
+
+    def close_viewer(self):
+        if self.android_webview:
+            from jnius import autoclass
+            from android.runnable import run_on_main_thread
+            @run_on_main_thread
+            def hide_webview():
+                self.android_webview.setVisibility(autoclass('android.view.View').GONE)
+            hide_webview()
+        self.root.current = 'list'
 
     def select_source(self, mode):
         content = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(20))
@@ -315,7 +379,6 @@ class CheckSheetApp(App):
 
     def open_local_browser(self, mode):
         start_p = "/storage/emulated/0" if platform=='android' else os.getcwd()
-        # 마지막 폴더 기억
         if mode == 'file' and self.excel_path and os.path.exists(os.path.dirname(self.excel_path)):
             start_p = os.path.dirname(self.excel_path)
         elif mode == 'dir' and self.pdf_folder_path and os.path.exists(self.pdf_folder_path):
@@ -396,26 +459,6 @@ class CheckSheetApp(App):
         rv.refresh_from_data()
         if self.root.current == 'viewer': self.refresh_viewer_ui()
 
-    def open_pdf_viewer(self, idx):
-        self.current_view_idx = idx; self.root.current = 'viewer'
-        # 뷰어 진입 시 줌 초기화
-        self.root.get_screen('viewer').ids.scatter.scale = 1
-        self.root.get_screen('viewer').ids.scatter.pos = (0, 0)
-        self.load_viewer_pdf()
-
-    def close_viewer(self): self.root.current = 'list'
-    
-    def load_viewer_pdf(self):
-        item = self.root.get_screen('list').ids.rv.data[self.current_view_idx]
-        self.viewer_title = item['item_code']; self.refresh_viewer_ui()
-        base_path = self.pdf_folder_path if self.pdf_folder_path else LOCAL_BASE
-        local_path = os.path.join(base_path, f"{self.viewer_title}.pdf")
-        if not os.path.exists(local_path):
-            self.show_error_popup(f"파일 없음: {self.viewer_title}.pdf")
-            return
-        if platform == 'android': self.render_pdf(local_path)
-        else: self.viewer_image_source = ""
-
     def refresh_viewer_ui(self):
         item = self.root.get_screen('list').ids.rv.data[self.current_view_idx]
         self.color_comp = [0, 1, 0, 1] if item['complete'] else [0.3, 0.3, 0.3, 1]
@@ -426,37 +469,6 @@ class CheckSheetApp(App):
         item = self.root.get_screen('list').ids.rv.data[self.current_view_idx]
         self.update_item_status(item['item_code'], item['no'], status)
 
-    def render_pdf(self, path):
-        try:
-            from jnius import autoclass
-            f = autoclass('java.io.File')(path)
-            if not f.exists(): return
-            pfd = autoclass('android.os.ParcelFileDescriptor').open(f, autoclass('android.os.ParcelFileDescriptor').MODE_READ_ONLY)
-            renderer = autoclass('android.graphics.pdf.PdfRenderer')(pfd); page = renderer.openPage(0)
-            # 도면 확인을 위해 4배 고해상도 렌더링 (벡터급 화질 구현)
-            bw, bh = int(page.getWidth() * 4), int(page.getHeight() * 4)
-            bitmap = autoclass('android.graphics.Bitmap').createBitmap(bw, bh, autoclass('android.graphics.Bitmap$Config').ARGB_8888)
-            page.render(bitmap, None, None, page.RENDER_MODE_FOR_DISPLAY)
-            tmp = os.path.join(self.user_data_dir, "view.png")
-            out = autoclass('java.io.FileOutputStream')(tmp)
-            bitmap.compress(autoclass('android.graphics.Bitmap$CompressFormat').PNG, 100, out); out.close()
-            page.close(); renderer.close(); self.viewer_image_source = ""; self.viewer_image_source = tmp
-        except: pass
-
-    def on_viewer_touch_down(self, t):
-        self.touch_start_x = t.x
-
-    def on_viewer_touch_up(self, t):
-        # 확대 중(scale > 1.1)일 때는 슬라이드 기능을 막아 도면 이동을 방해하지 않음
-        if self.root.get_screen('viewer').ids.scatter.scale > 1.1: return
-        dx = t.x - self.touch_start_x
-        if abs(dx) > dp(150):
-            rv_data = self.root.get_screen('list').ids.rv.data
-            if dx > 0 and self.current_view_idx > 0: 
-                self.current_view_idx -= 1; self.load_viewer_pdf()
-            elif dx < 0 and self.current_view_idx < len(rv_data)-1: 
-                self.current_view_idx += 1; self.load_viewer_pdf()
-
     def open_smb_shares_browser(self, mode):
         conn = self.get_smb_conn_only()
         if not conn: self.show_error_popup("SMB 접속 실패"); return
@@ -464,6 +476,7 @@ class CheckSheetApp(App):
         list_box.bind(minimum_height=list_box.setter('height')); scroll.add_widget(list_box)
         pop = Popup(title="공유폴더 선택", content=content, size_hint=(0.95, 0.95))
         try:
+            from smb.SMBConnection import SMBConnection
             for s in conn.listShares():
                 if s.isSpecial or s.name.endswith('$'): continue
                 btn = Button(text=f"📁 {s.name}", size_hint_y=None, height=dp(90))
