@@ -6,23 +6,23 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,xlsx,json
 version = 1.0
 
-# [최적화] 필수 라이브러리 최소 구성
-requirements = python3,kivy,openpyxl,et_xmlfile,jdcal,pyjnius,android,pysmb,pyasn1,six
+# [App requirements]
+requirements = python3,kivy,openpyxl,et_xmlfile,jdcal,pyjnius,android,pysmb,pyasn1,six,tqdm
 
 orientation = portrait
 fullscreen = 0
 
-# [권한] 오프라인 파일 접근 및 네트워크
+# [Permissions]
 android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE, INTERNET, ACCESS_NETWORK_STATE
 
-# [Native PDF Viewer] MavenCentral에 있는 최신 벡터 렌더링 라이브러리
+# [Android Gradle dependencies]
 android.gradle_dependencies = com.github.barteksc:android-pdf-viewer:3.2.0-beta.1
+android.gradle_repositories = https://jitpack.io
 
-# [중요] AndroidX 및 Jetifier 활성화 (크래시 방지 핵심)
+# [AndroidX support]
 android.enable_androidx = True
-android.gradle_options = android.useAndroidX=true, android.enableJetifier=true
 
-# [빌드 안정화] 
+# [Build settings]
 android.accept_sdk_license = True
 android.api = 33
 android.minapi = 21
