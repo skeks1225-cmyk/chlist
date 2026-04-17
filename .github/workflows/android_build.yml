@@ -13,12 +13,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # [추가] 빌드 실패 방지를 위한 디스크 공간 확보
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
       - name: Build with Buildozer
+        # 검증된 Action 버전 사용
         uses: ArtemSBulgakov/buildozer-action@v1
         id: buildozer
         with:
           command: yes | buildozer android debug
-          buildozer_version: master
+          # [핵심] 불안정한 master 대신 stable 버전 사용
+          buildozer_version: stable
         env:
           USER: root
           PIP_BREAK_SYSTEM_PACKAGES: 1
