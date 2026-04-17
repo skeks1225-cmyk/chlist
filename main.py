@@ -434,7 +434,18 @@ class CheckSheetApp(App):
         elif col == 'complete': self.sort_indicator_comp = ind
         elif col == 'shortage': self.sort_indicator_short = ind
         elif col == 'rework': self.sort_indicator_rew = ind
-        rv.data = sorted(rv.data, key=lambda x: str(x.get(col, '')).lower(), reverse=(new_s == 'desc'))
+        
+        def sort_key(x):
+            val = str(x.get(col, '')).lower()
+            # no나 quantity 열은 숫자로 변환하여 정렬 시도 (자연스러운 정렬)
+            if col in ['no', 'quantity']:
+                try:
+                    return int(''.join(filter(str.isdigit, val)) or 0)
+                except:
+                    return val
+            return val
+
+        rv.data = sorted(rv.data, key=sort_key, reverse=(new_s == 'desc'))
         rv.refresh_from_data()
 
     def update_item_status(self, ic, no, st):
