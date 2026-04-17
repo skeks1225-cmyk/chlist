@@ -1,20 +1,19 @@
 [app]
-title = CheckSheetFinal
-package.name = checksheetv40
+title = CheckSheetApp
+package.name = checksheetv55
 package.domain = org.example
 source.dir = .
-source.include_exts = py,png,jpg,kv,ttf,pdf,xlsx,json,html,js,css,map
+source.include_exts = py,png,jpg,kv,ttf,pdf,xlsx,json,html,js,css,map,ftl
 source.exclude_dirs = backup, bin, .buildozer
-android.add_assets = pdfjs
-version = 4.0
+version = 5.5
 
-# [수정] 강제 종료 방지를 위해 android 제거
-requirements = python3,kivy,pyjnius,openpyxl,pysmb,pyasn1,six,tqdm,et_xmlfile,jdcal,pycryptodome
+# [체크] android 모듈 유지
+requirements = python3,kivy,android,pyjnius,openpyxl,pysmb,pyasn1,six,tqdm,et_xmlfile,jdcal,pycryptodome
 
 orientation = portrait
 fullscreen = 0
 
-# [수정] 충돌 가능성 있는 권한 축소
+# [수정] 크래시 방지를 위해 MANAGE_EXTERNAL_STORAGE 제거
 android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, INTERNET
 
 android.enable_androidx = True
