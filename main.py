@@ -298,8 +298,13 @@ class CheckSheetApp(App):
         rv_data = self.root.get_screen('list').ids.rv.data
         for i, d in enumerate(rv_data):
             if d['item_code'] == item_code: self.current_view_idx = i; break
+        
+        # 피드백 반영: 파일 존재 체크 추가
         if not os.path.exists(pdf_path):
-            self.show_error_popup(f"파일이 없습니다: {item_code}.pdf"); return
+            print("PDF file not found")
+            self.show_error_popup(f"파일이 없습니다: {item_code}.pdf")
+            return
+
         self.root.current = 'viewer'
         self.refresh_viewer_ui()
         if platform == 'android': Clock.schedule_once(lambda dt: self.show_android_pdf(pdf_path), 0.2)
@@ -308,7 +313,7 @@ class CheckSheetApp(App):
         from jnius import autoclass
         from android.runnable import run_on_main_thread
         
-        # 크래시 방지: 클래스 미리 로드
+        # 피드백 반영: 라이브러리 충돌 해결 (com.github.barteksc 버전으로 통일)
         try:
             PythonActivity = autoclass('org.kivy.android.PythonActivity')
             PDFViewClass = autoclass('com.github.barteksc.pdfviewer.PDFView')
@@ -323,15 +328,22 @@ class CheckSheetApp(App):
                 mActivity = PythonActivity.mActivity
                 if not self.native_pdf_view:
                     self.native_pdf_view = PDFViewClass(mActivity, None)
-                    # -1 대신 MATCH_PARENT 상수 사용
                     lp = LayoutParamsClass(LayoutParamsClass.MATCH_PARENT, LayoutParamsClass.MATCH_PARENT)
-                    mActivity.addContentView(self.native_pdf_view, lp)
+                    
+                    # 피드백 반영: Native View 추가 방식 수정 (getDecorView 사용)
+                    decor = mActivity.getWindow().getDecorView()
+                    decor.addView(self.native_pdf_view, lp)
                 
                 self.native_pdf_view.setVisibility(0) # VISIBLE
                 self.native_pdf_view.bringToFront()
                 
-                file_obj = FileClass(os.path.abspath(path))
-                self.native_pdf_view.fromFile(file_obj).enableSwipe(True).load()
+                # 피드백 반영: PDF 파일 경로 처리 수정 (abspath 제거)
+                file_obj = FileClass(path)
+                
+                # 피드백 반영: PDF 로드 방식 수정 (체인 호출 금지 및 분리)
+                config = self.native_pdf_view.fromFile(file_obj)
+                config.enableSwipe(True)
+                config.load()
             except Exception as e:
                 print(f"Native Setup Error: {e}")
         _setup()
