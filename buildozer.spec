@@ -7,13 +7,13 @@ source.include_exts = py,png,jpg,kv,ttf,pdf,xlsx,json,html,js,css,map,ftl
 source.exclude_dirs = backup, bin, .buildozer
 version = 6.0
 
-# [체크] android 모듈 유지
+# [체크] android 모듈 ?��?
 requirements = python3,kivy,android,pyjnius,openpyxl,pysmb,pyasn1,six,tqdm,et_xmlfile,jdcal,pycryptodome
 
 orientation = portrait
 fullscreen = 0
 
-# [수정] 권한 축소
+# [?�정] 권한 축소
 android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, INTERNET
 
 android.enable_androidx = True
