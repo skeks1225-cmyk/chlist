@@ -1,5 +1,6 @@
 import os
 import json
+import shutil
 import traceback
 from openpyxl import load_workbook
 
@@ -145,34 +146,49 @@ KV_UI = """
         
         BoxLayout:
             size_hint_y: None
-            height: dp(60)
+            height: dp(50)
             padding: dp(5)
+            spacing: dp(10)
             canvas.before:
                 Color:
                     rgba: 0.2, 0.2, 0.2, 1
                 Rectangle:
                     pos: self.pos
                     size: self.size
-            Label:
-                text: app.viewer_title
-                font_size: '18sp'
             Button:
                 text: '닫기'
                 size_hint_x: None
-                width: dp(100)
-                on_release: app.close_native_pdf()
+                width: dp(80)
+                on_release: app.close_webview_pdf()
+            Label:
+                text: app.viewer_title
+                bold: True
+                font_size: '14sp'
 
         Widget:
-            id: pdf_placeholder
+            id: webview_placeholder
 
         BoxLayout:
             size_hint_y: None
-            height: dp(80)
-            spacing: dp(10)
-            padding: [dp(10), dp(10)]
+            height: dp(50)
+            spacing: dp(2)
+            Button:
+                text: '<<< 이전'
+                background_color: 0.2, 0.3, 0.5, 1
+                on_release: app.navigate_pdf(-1)
+            Button:
+                text: '다음 >>>'
+                background_color: 0.2, 0.3, 0.5, 1
+                on_release: app.navigate_pdf(1)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(70)
+            spacing: dp(5)
+            padding: dp(5)
             canvas.before:
                 Color:
-                    rgba: 0.15, 0.15, 0.15, 1
+                    rgba: 0.1, 0.1, 0.1, 1
                 Rectangle:
                     pos: self.pos
                     size: self.size
@@ -198,35 +214,23 @@ KV_UI = """
         Rectangle:
             pos: self.pos
             size: self.size
-    Label:
-        text: root.no
-        size_hint_x: 0.1
+    Label: text: root.no; size_hint_x: 0.1
     Button:
-        text: root.item_code
-        size_hint_x: 0.3
-        background_normal: ''
-        background_color: 0.2, 0.4, 0.6, 1
+        text: root.item_code; size_hint_x: 0.3
+        background_normal: ''; background_color: 0.2, 0.4, 0.6, 1
         on_release: root.open_pdf()
-    Label:
-        text: root.quantity
-        size_hint_x: 0.15
+    Label: text: root.quantity; size_hint_x: 0.15
     Button:
-        text: 'V' if root.complete else ''
-        size_hint_x: 0.15
-        background_normal: ''
-        background_color: (0, 1, 0, 0.5) if root.complete else (0.3, 0.3, 0.3, 1)
+        text: 'V' if root.complete else ''; size_hint_x: 0.15
+        background_normal: ''; background_color: (0, 1, 0, 0.5) if root.complete else (0.3, 0.3, 0.3, 1)
         on_release: root.on_checkbox_active('complete')
     Button:
-        text: 'V' if root.shortage else ''
-        size_hint_x: 0.15
-        background_normal: ''
-        background_color: (1, 1, 0, 0.5) if root.shortage else (0.3, 0.3, 0.3, 1)
+        text: 'V' if root.shortage else ''; size_hint_x: 0.15
+        background_normal: ''; background_color: (1, 1, 0, 0.5) if root.shortage else (0.3, 0.3, 0.3, 1)
         on_release: root.on_checkbox_active('shortage')
     Button:
-        text: 'V' if root.rework else ''
-        size_hint_x: 0.15
-        background_normal: ''
-        background_color: (1, 0, 0, 0.5) if root.rework else (0.3, 0.3, 0.3, 1)
+        text: 'V' if root.rework else ''; size_hint_x: 0.15
+        background_normal: ''; background_color: (1, 0, 0, 0.5) if root.rework else (0.3, 0.3, 0.3, 1)
         on_release: root.on_checkbox_active('rework')
 """
 
@@ -244,7 +248,7 @@ class RowWidget(BoxLayout):
     no = StringProperty(''); item_code = StringProperty(''); quantity = StringProperty('')
     complete = BooleanProperty(False); shortage = BooleanProperty(False); rework = BooleanProperty(False)
     def on_checkbox_active(self, ct): App.get_running_app().update_item_status(self.item_code, self.no, ct)
-    def open_pdf(self): App.get_running_app().open_native_pdf(self.item_code)
+    def open_pdf(self): App.get_running_app().prepare_and_open_pdf(self.item_code)
 
 class CheckSheetApp(App):
     excel_path = StringProperty(''); pdf_folder_path = StringProperty('')
@@ -257,7 +261,7 @@ class CheckSheetApp(App):
     current_view_idx = NumericProperty(-1)
     color_comp = ListProperty([0.3, 0.3, 0.3, 1]); color_short = ListProperty([0.3, 0.3, 0.3, 1]); color_rew = ListProperty([0.3, 0.3, 0.3, 1])
     
-    native_pdf_view = None
+    webview = None
     data_loaded = False
 
     def build(self):
@@ -284,79 +288,87 @@ class CheckSheetApp(App):
             if hasattr(Env, 'isExternalStorageManager'):
                 if not Env.isExternalStorageManager():
                     mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
-                    Intent = autoclass('android.content.Intent')
-                    Settings = autoclass('android.provider.Settings')
-                    uri = autoclass('android.net.Uri').fromParts("package", mActivity.getPackageName(), None)
-                    intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    intent.setData(uri); mActivity.startActivity(intent)
+                    intent = autoclass('android.content.Intent')(autoclass('android.provider.Settings').ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    intent.setData(autoclass('android.net.Uri').fromParts("package", mActivity.getPackageName(), None))
+                    mActivity.startActivity(intent)
         except: pass
 
-    def open_native_pdf(self, item_code):
-        self.viewer_title = item_code
-        base_path = self.pdf_folder_path if self.pdf_folder_path else LOCAL_BASE
-        pdf_path = os.path.join(base_path, f"{item_code}.pdf")
+    # --- [핵심] PDF 준비 및 WebView 실행 ---
+    def prepare_and_open_pdf(self, item_code):
         rv_data = self.root.get_screen('list').ids.rv.data
         for i, d in enumerate(rv_data):
-            if d['item_code'] == item_code: self.current_view_idx = i; break
+            if d['item_code'] == item_code:
+                self.current_view_idx = i; break
+        self.load_pdf_into_cache(item_code)
+
+    def load_pdf_into_cache(self, item_code):
+        """지정된 item_code의 PDF를 temp.pdf로 복사하고 WebView 로드"""
+        self.viewer_title = f"[{self.current_view_idx + 1}] {item_code}.pdf"
+        base_path = self.pdf_folder_path if self.pdf_folder_path else LOCAL_BASE
+        src_path = os.path.join(base_path, f"{item_code}.pdf")
         
-        # 피드백 반영: 파일 존재 체크 추가
-        if not os.path.exists(pdf_path):
-            print("PDF file not found")
-            self.show_error_popup(f"파일이 없습니다: {item_code}.pdf")
-            return
+        if not os.path.exists(src_path):
+            self.show_error_popup(f"파일 없음: {item_code}.pdf"); return
 
-        self.root.current = 'viewer'
-        self.refresh_viewer_ui()
-        if platform == 'android': Clock.schedule_once(lambda dt: self.show_android_pdf(pdf_path), 0.2)
+        try:
+            from jnius import autoclass
+            mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
+            internal_dir = mActivity.getFilesDir().getAbsolutePath()
+            dest_path = os.path.join(internal_dir, "temp.pdf")
+            
+            if os.path.exists(dest_path): os.remove(dest_path)
+            shutil.copy2(src_path, dest_path)
+            
+            self.root.current = 'viewer'
+            self.refresh_viewer_ui()
+            
+            if platform == 'android':
+                Clock.schedule_once(lambda dt: self.show_android_webview(dest_path), 0.2)
+        except Exception as e:
+            self.show_error_popup(f"PDF 준비 실패: {e}")
 
-    def show_android_pdf(self, path):
+    def show_android_webview(self, pdf_path):
         from jnius import autoclass
         from android.runnable import run_on_main_thread
-        
-        # 피드백 반영: 라이브러리 충돌 해결 (com.github.barteksc 버전으로 통일)
-        try:
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            PDFViewClass = autoclass('com.github.barteksc.pdfviewer.PDFView')
-            FileClass = autoclass('java.io.File')
-            LayoutParamsClass = autoclass('android.view.ViewGroup$LayoutParams')
-        except Exception as e:
-            self.show_error_popup(f"Library Load Error: {e}"); return
-
         @run_on_main_thread
         def _setup():
             try:
-                mActivity = PythonActivity.mActivity
-                if not self.native_pdf_view:
-                    self.native_pdf_view = PDFViewClass(mActivity, None)
-                    lp = LayoutParamsClass(LayoutParamsClass.MATCH_PARENT, LayoutParamsClass.MATCH_PARENT)
-                    
-                    # 피드백 반영: Native View 추가 방식 수정 (getDecorView 사용)
-                    decor = mActivity.getWindow().getDecorView()
-                    decor.addView(self.native_pdf_view, lp)
-                
-                self.native_pdf_view.setVisibility(0) # VISIBLE
-                self.native_pdf_view.bringToFront()
-                
-                # 피드백 반영: PDF 파일 경로 처리 수정 (abspath 제거)
-                file_obj = FileClass(path)
-                
-                # 피드백 반영: PDF 로드 방식 수정 (체인 호출 금지 및 분리)
-                config = self.native_pdf_view.fromFile(file_obj)
-                config.enableSwipe(True)
-                config.load()
-            except Exception as e:
-                print(f"Native Setup Error: {e}")
+                mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
+                if not self.webview:
+                    self.webview = autoclass('android.webkit.WebView')(mActivity)
+                    settings = self.webview.getSettings()
+                    settings.setJavaScriptEnabled(True)
+                    settings.setAllowFileAccess(True)
+                    settings.setDomStorageEnabled(True)
+                    settings.setBuiltInZoomControls(True)
+                    settings.setDisplayZoomControls(False)
+                    mActivity.addContentView(self.webview, autoclass('android.view.ViewGroup$LayoutParams')(-1, -1))
+                self.webview.setVisibility(0)
+                self.webview.bringToFront()
+                url = f"file:///android_asset/pdfjs/web/viewer.html?file=file://{pdf_path}"
+                self.webview.loadUrl(url)
+            except Exception as e: print(f"WebView Error: {e}")
         _setup()
 
-    def close_native_pdf(self):
-        if platform == 'android' and self.native_pdf_view:
+    def navigate_pdf(self, direction):
+        rv_data = self.root.get_screen('list').ids.rv.data
+        if not rv_data: return
+        new_idx = self.current_view_idx + direction
+        if 0 <= new_idx < len(rv_data):
+            self.current_view_idx = new_idx
+            self.load_pdf_into_cache(rv_data[new_idx]['item_code'])
+        else:
+            self.show_error_popup("항목의 끝입니다.")
+
+    def close_webview_pdf(self):
+        if platform == 'android' and self.webview:
             from android.runnable import run_on_main_thread
             @run_on_main_thread
-            def _hide():
-                self.native_pdf_view.setVisibility(8) # GONE
+            def _hide(): self.webview.setVisibility(8)
             _hide()
         self.root.current = 'list'
 
+    # --- 데이터 로직 ---
     def load_excel_data(self, path):
         try:
             wb = load_workbook(path, data_only=True); ws = wb.active; rows = list(ws.rows)
@@ -365,7 +377,7 @@ class CheckSheetApp(App):
             try:
                 idx_no, idx_code, idx_qty = headers.index('no'), headers.index('품목코드'), headers.index('수량')
             except ValueError:
-                self.show_error_popup("엑셀 헤더(no, 품목코드, 수량)를 확인하세요."); return
+                self.show_error_popup("엑셀 헤더 확인 필요(no, 품목코드, 수량)"); return
             rv_data = []
             for i, row in enumerate(rows[1:]):
                 if not row[idx_code].value: continue
@@ -378,26 +390,25 @@ class CheckSheetApp(App):
                 })
             self.root.get_screen('list').ids.rv.data = rv_data; self.data_loaded = True
             self.current_filename = os.path.basename(path)
-        except Exception as e: self.show_error_popup(f"엑셀 로드 실패: {str(e)}")
+        except Exception as e: self.show_error_popup(f"엑셀 로드 실패: {e}")
 
     def save_to_excel(self):
         if not self.excel_path: return
         try:
             wb = load_workbook(self.excel_path); ws = wb.active; headers = [str(c.value).strip() if c.value else "" for c in ws[1]]
-            target_cols = ['완료', '수량부족', '재작업']
-            cols = {}
+            target_cols = ['완료', '수량부족', '재작업']; cols = {}
             for col_name in target_cols:
                 if col_name in headers: cols[col_name] = headers.index(col_name) + 1
                 else:
-                    new_col_idx = len(headers) + 1; ws.cell(row=1, column=new_col_idx).value = col_name
-                    cols[col_name] = new_col_idx; headers.append(col_name)
+                    new_idx = len(headers) + 1; ws.cell(row=1, column=new_idx).value = col_name
+                    cols[col_name] = new_idx; headers.append(col_name)
             for d in self.root.get_screen('list').ids.rv.data:
                 r = d['real_index'] + 2
                 ws.cell(row=r, column=cols['완료']).value = 'V' if d.get('complete') else ''
                 ws.cell(row=r, column=cols['수량부족']).value = 'V' if d.get('shortage') else ''
                 ws.cell(row=r, column=cols['재작업']).value = 'V' if d.get('rework') else ''
             wb.save(self.excel_path); self.show_error_popup("저장 완료")
-        except Exception as e: self.show_error_popup(f"저장 실패: {str(e)}")
+        except Exception as e: self.show_error_popup(f"저장 실패: {e}")
 
     def sort_by(self, col):
         rv = self.root.get_screen('list').ids.rv
