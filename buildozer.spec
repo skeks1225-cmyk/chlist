@@ -1,11 +1,11 @@
 [app]
-title = PDFTestFinal2
-package.name = pdftestfinal2
+title = PDFTestFinal3
+package.name = pdftestfinal3
 package.domain = org.example
 source.dir = .
 source.include_exts = py,png,jpg,kv,ttf,pdf
 source.exclude_dirs = backup, bin, .buildozer
-version = 1.1
+version = 1.2
 
 requirements = python3,kivy,pyjnius,android
 
@@ -14,14 +14,15 @@ fullscreen = 0
 
 android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE
 
-# [해결] 명시적 저장소 설정을 제거하여 기본 MavenCentral을 사용하도록 유도
-android.gradle_dependencies = com.github.barteksc:android-pdf-viewer:2.8.2
+# [해결] JitPack에서 가장 성공률이 높은 mhiew 포크 버전의 3.2.0-beta.1 사용
+android.gradle_dependencies = com.github.mhiew:android-pdf-viewer:3.2.0-beta.1
+android.gradle_repositories = https://jitpack.io, https://repo.maven.apache.org/maven2/
 
 android.enable_androidx = True
 android.accept_sdk_license = True
 
-# 안정성을 위해 API 31 유지
-android.api = 31
+# 다시 API 33으로 복구 (최신 빌드 도구 사용 유도)
+android.api = 33
 android.minapi = 21
 android.ndk_api = 21
 
