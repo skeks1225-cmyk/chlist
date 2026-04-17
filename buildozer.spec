@@ -1,11 +1,11 @@
 [app]
-title = CheckSheetApp
-package.name = checksheetv55
+title = CheckSheetFinal
+package.name = checksheetv60
 package.domain = org.example
 source.dir = .
 source.include_exts = py,png,jpg,kv,ttf,pdf,xlsx,json,html,js,css,map,ftl
 source.exclude_dirs = backup, bin, .buildozer
-version = 5.5
+version = 6.0
 
 # [체크] android 모듈 유지
 requirements = python3,kivy,android,pyjnius,openpyxl,pysmb,pyasn1,six,tqdm,et_xmlfile,jdcal,pycryptodome
@@ -13,7 +13,7 @@ requirements = python3,kivy,android,pyjnius,openpyxl,pysmb,pyasn1,six,tqdm,et_xm
 orientation = portrait
 fullscreen = 0
 
-# [수정] 크래시 방지를 위해 MANAGE_EXTERNAL_STORAGE 제거
+# [수정] 권한 축소
 android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, INTERNET
 
 android.enable_androidx = True
