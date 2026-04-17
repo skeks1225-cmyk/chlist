@@ -21,7 +21,7 @@ from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.metrics import dp
 
-# --- 1. 한글 폰트 설정 ---
+# --- 1. 한글 폰트 설정 (안정성 강화) ---
 FONT_NAME = "font.ttf"
 if platform == 'android':
     FONT_NAME = os.path.join(os.path.dirname(__file__), "font.ttf")
@@ -29,11 +29,9 @@ if platform == 'android':
 if os.path.exists(FONT_NAME):
     try:
         LabelBase.register(name="Roboto", fn_regular=FONT_NAME)
-        from kivy.core.text import Label as CoreLabel
-        CoreLabel.register("Roboto", FONT_NAME)
     except: pass
 
-# --- 2. UI 디자인 (Kivy) ---
+# --- 2. UI 디자인 ---
 KV_UI = """
 <Label>:
     font_name: 'Roboto'
@@ -52,7 +50,6 @@ KV_UI = """
                 pos: self.pos
                 size: self.size
 
-        # [신규] 최상단 파일명 표시줄
         BoxLayout:
             size_hint_y: None
             height: '40dp'
@@ -65,7 +62,6 @@ KV_UI = """
             Label:
                 text: "현재 파일: " + app.current_filename
                 bold: True
-                font_size: '16sp'
 
         BoxLayout:
             size_hint_y: None
@@ -252,7 +248,7 @@ class RowWidget(BoxLayout):
 
 class CheckSheetApp(App):
     excel_path = StringProperty(''); pdf_folder_path = StringProperty('')
-    current_filename = StringProperty('파일을 선택하세요') # [신규] 파일명 표시용
+    current_filename = StringProperty('파일을 선택하세요')
     pdf_source = StringProperty('local'); smb_config = DictProperty({'ip': '', 'user': '', 'pass': ''})
     sort_indicator_no = StringProperty(''); sort_indicator_code = StringProperty(''); sort_indicator_qty = StringProperty('')
     sort_indicator_comp = StringProperty(''); sort_indicator_short = StringProperty(''); sort_indicator_rew = StringProperty('')
@@ -316,6 +312,7 @@ class CheckSheetApp(App):
             try:
                 mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
                 File = autoclass('java.io.File')
+                # mhiew fork의 경우도 패키지명은 동일하게 유지됨
                 PDFView = autoclass('com.github.barteksc.pdfviewer.PDFView')
                 if not self.native_pdf_view:
                     self.native_pdf_view = PDFView(mActivity, None)
@@ -338,21 +335,36 @@ class CheckSheetApp(App):
     def load_excel_data(self, path):
         try:
             wb = load_workbook(path, data_only=True); ws = wb.active; rows = list(ws.rows)
-            rv = self.root.get_screen('list').ids.rv; rv.data = []
-            headers = [str(cell.value).strip().lower() for cell in rows[0]]
-            idx_no, idx_code, idx_qty = headers.index('no'), headers.index('품목코드'), headers.index('수량')
+            if not rows: return
+            
+            headers = [str(cell.value).strip().lower() if cell.value else "" for cell in rows[0]]
+            
+            # 헤더 인덱스 찾기 (유연하게 처리)
+            try:
+                idx_no = headers.index('no')
+                idx_code = headers.index('품목코드')
+                idx_qty = headers.index('수량')
+            except ValueError:
+                self.show_error_popup("엑셀 헤더(no, 품목코드, 수량)를 확인하세요.")
+                return
+
             rv_data = []
             for i, row in enumerate(rows[1:]):
+                if not row[idx_code].value: continue
                 rv_data.append({
-                    'no': str(row[idx_no].value or ''), 'item_code': str(row[idx_code].value or ''), 'quantity': str(row[idx_qty].value or ''),
+                    'no': str(row[idx_no].value or ''), 
+                    'item_code': str(row[idx_code].value or ''), 
+                    'quantity': str(row[idx_qty].value or ''),
                     'complete': str(ws.cell(row=i+2, column=headers.index('완료')+1).value or '').upper() == 'V' if '완료' in headers else False,
                     'shortage': str(ws.cell(row=i+2, column=headers.index('수량부족')+1).value or '').upper() == 'V' if '수량부족' in headers else False,
                     'rework': str(ws.cell(row=i+2, column=headers.index('재작업')+1).value or '').upper() == 'V' if '재작업' in headers else False,
                     'real_index': i
                 })
-            rv.data = rv_data; self.data_loaded = True
-            self.current_filename = os.path.basename(path) # 파일명 업데이트
-        except: pass
+            self.root.get_screen('list').ids.rv.data = rv_data
+            self.data_loaded = True
+            self.current_filename = os.path.basename(path)
+        except Exception as e:
+            self.show_error_popup(f"엑셀 로드 실패: {str(e)}")
 
     def save_to_excel(self):
         if not self.excel_path: return
@@ -369,12 +381,11 @@ class CheckSheetApp(App):
             for d in self.root.get_screen('list').ids.rv.data:
                 r = d['real_index'] + 2
                 ws.cell(row=r, column=cols['완료']).value = 'V' if d.get('complete') else ''
-                ws.cell(row=r, column=cols['수량부족']).value = 'V' if d.get('수량부족') or d.get('shortage') else ''
+                ws.cell(row=r, column=cols['수량부족']).value = 'V' if d.get('shortage') else ''
                 ws.cell(row=r, column=cols['재작업']).value = 'V' if d.get('rework') else ''
             wb.save(self.excel_path); self.show_error_popup("저장 완료")
         except Exception as e: self.show_error_popup(f"저장 실패: {str(e)}")
 
-    # (이후 SMB 및 기타 설정 함수들은 기존과 동일하게 유지)
     def select_source(self, mode):
         content = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(20))
         pop = Popup(title="파일 출처 선택", content=content, size_hint=(0.85, 0.4))
