@@ -1,4 +1,4 @@
-﻿[app]
+[app]
 title = CheckSheetFinal
 package.name = checksheetv60
 package.domain = org.example
@@ -27,4 +27,3 @@ android.accept_sdk_license = True
 [buildozer]
 log_level = 2
 warn_on_root = 0
-
