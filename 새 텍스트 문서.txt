@@ -1060,14 +1060,208 @@ usb디버깅으로 하려니까 4000줄이 넘어가서 못 붙여넣겠어.
 
 
 
-
-
-
-
-
+fix: v6.0 - zero-jnius-at-startup and lazy loading for webview stability
+Build Android APK #76: Commit 0e571ba pushed by skeks547
+이것또한 실행하자마가 종료가돼.
 
 
 
 fix: v6.0 - zero-jnius-at-startup and lazy loading for webview stability
 Build Android APK #76: Commit 0e571ba pushed by skeks547
-이것또한 실행하자마가 종료가돼.
+아래는 usb디버그 해서 나온거야.
+
+04-17 19:31:22.049  2421  2852 E InputDispatcher: channel '7ea4049 org.example.checksheetv60/org.kivy.android.PythonAct
+ivity' ~ Channel is unrecoverably broken and will be disposed!
+
+
+
+
+fix: v7.1 final stabilization - zero-init at startup and fixed syntax…
+Build Android APK #78: Commit 77619f9 pushed by skeks547
+빌드실패했어.
+
+
+
+2026-04-17T10:42:11.6217748Z ##[group]Run ArtemSBulgakov/buildozer-action@v1
+2026-04-17T10:42:11.6218053Z with:
+2026-04-17T10:42:11.6218514Z   command: yes | buildozer android debug
+2026-04-17T10:42:11.6218782Z   buildozer_version: stable
+2026-04-17T10:42:11.6218988Z   repository_root: .
+2026-04-17T10:42:11.6219170Z   workdir: .
+2026-04-17T10:42:11.6219332Z env:
+2026-04-17T10:42:11.6219488Z   USER: root
+2026-04-17T10:42:11.6219654Z   PIP_BREAK_SYSTEM_PACKAGES: 1
+2026-04-17T10:42:11.6219873Z ##[endgroup]
+2026-04-17T10:42:11.6313828Z ##[command]/usr/bin/docker run --name c1e320c15b8fddcc64971a3eeefce25021ae4_954cb3 --label 1c1e32 --workdir /github/workspace --rm -e "USER" -e "PIP_BREAK_SYSTEM_PACKAGES" -e "INPUT_COMMAND" -e "INPUT_BUILDOZER_VERSION" -e "INPUT_REPOSITORY_ROOT" -e "INPUT_WORKDIR" -e "HOME" -e "GITHUB_JOB" -e "GITHUB_REF" -e "GITHUB_SHA" -e "GITHUB_REPOSITORY" -e "GITHUB_REPOSITORY_OWNER" -e "GITHUB_REPOSITORY_OWNER_ID" -e "GITHUB_RUN_ID" -e "GITHUB_RUN_NUMBER" -e "GITHUB_RETENTION_DAYS" -e "GITHUB_RUN_ATTEMPT" -e "GITHUB_ACTOR_ID" -e "GITHUB_ACTOR" -e "GITHUB_WORKFLOW" -e "GITHUB_HEAD_REF" -e "GITHUB_BASE_REF" -e "GITHUB_EVENT_NAME" -e "GITHUB_SERVER_URL" -e "GITHUB_API_URL" -e "GITHUB_GRAPHQL_URL" -e "GITHUB_REF_NAME" -e "GITHUB_REF_PROTECTED" -e "GITHUB_REF_TYPE" -e "GITHUB_WORKFLOW_REF" -e "GITHUB_WORKFLOW_SHA" -e "GITHUB_REPOSITORY_ID" -e "GITHUB_TRIGGERING_ACTOR" -e "GITHUB_WORKSPACE" -e "GITHUB_ACTION" -e "GITHUB_EVENT_PATH" -e "GITHUB_ACTION_REPOSITORY" -e "GITHUB_ACTION_REF" -e "GITHUB_PATH" -e "GITHUB_ENV" -e "GITHUB_STEP_SUMMARY" -e "GITHUB_STATE" -e "GITHUB_OUTPUT" -e "RUNNER_OS" -e "RUNNER_ARCH" -e "RUNNER_NAME" -e "RUNNER_ENVIRONMENT" -e "RUNNER_TOOL_CACHE" -e "RUNNER_TEMP" -e "RUNNER_WORKSPACE" -e "ACTIONS_RUNTIME_URL" -e "ACTIONS_RUNTIME_TOKEN" -e "ACTIONS_CACHE_URL" -e "ACTIONS_RESULTS_URL" -e "ACTIONS_ORCHESTRATION_ID" -e GITHUB_ACTIONS=true -e CI=true -v "/var/run/docker.sock":"/var/run/docker.sock" -v "/home/runner/work/_temp":"/github/runner_temp" -v "/home/runner/work/_temp/_github_home":"/github/home" -v "/home/runner/work/_temp/_github_workflow":"/github/workflow" -v "/home/runner/work/_temp/_runner_file_commands":"/github/file_commands" -v "/home/runner/work/checksheet-app/checksheet-app":"/github/workspace" 1c1e32:0c15b8fddcc64971a3eeefce25021ae4
+2026-04-17T10:42:12.1229860Z ##[group]Installing Buildozer
+2026-04-17T10:42:12.6335747Z Collecting buildozer
+2026-04-17T10:42:12.6897678Z   Downloading buildozer-1.5.0-py3-none-any.whl.metadata (139 kB)
+2026-04-17T10:42:12.7078494Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 139.8/139.8 kB 8.9 MB/s eta 0:00:00
+2026-04-17T10:42:12.7299143Z Collecting pexpect (from buildozer)
+2026-04-17T10:42:12.7325340Z   Downloading pexpect-4.9.0-py2.py3-none-any.whl.metadata (2.5 kB)
+2026-04-17T10:42:12.8448752Z Collecting virtualenv (from buildozer)
+2026-04-17T10:42:12.8498829Z   Downloading virtualenv-21.2.4-py3-none-any.whl.metadata (3.5 kB)
+2026-04-17T10:42:12.8706030Z Collecting sh (from buildozer)
+2026-04-17T10:42:12.8738072Z   Downloading sh-2.2.2-py3-none-any.whl.metadata (3.7 kB)
+2026-04-17T10:42:12.8938841Z Collecting ptyprocess>=0.5 (from pexpect->buildozer)
+2026-04-17T10:42:12.8972757Z   Downloading ptyprocess-0.7.0-py2.py3-none-any.whl.metadata (1.3 kB)
+2026-04-17T10:42:12.9200498Z Collecting distlib<1,>=0.3.7 (from virtualenv->buildozer)
+2026-04-17T10:42:12.9231326Z   Downloading distlib-0.4.0-py2.py3-none-any.whl.metadata (5.2 kB)
+2026-04-17T10:42:12.9623035Z Collecting filelock<4,>=3.24.2 (from virtualenv->buildozer)
+2026-04-17T10:42:12.9655795Z   Downloading filelock-3.28.0-py3-none-any.whl.metadata (2.0 kB)
+2026-04-17T10:42:12.9942389Z Collecting platformdirs<5,>=3.9.1 (from virtualenv->buildozer)
+2026-04-17T10:42:12.9975032Z   Downloading platformdirs-4.9.6-py3-none-any.whl.metadata (4.7 kB)
+2026-04-17T10:42:13.0133123Z Collecting python-discovery>=1.2.2 (from virtualenv->buildozer)
+2026-04-17T10:42:13.0170586Z   Downloading python_discovery-1.2.2-py3-none-any.whl.metadata (5.4 kB)
+2026-04-17T10:42:13.0452602Z Downloading buildozer-1.5.0-py3-none-any.whl (86 kB)
+2026-04-17T10:42:13.0496866Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 86.9/86.9 kB 34.8 MB/s eta 0:00:00
+2026-04-17T10:42:13.0531363Z Downloading pexpect-4.9.0-py2.py3-none-any.whl (63 kB)
+2026-04-17T10:42:13.0569680Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 63.8/63.8 kB 28.8 MB/s eta 0:00:00
+2026-04-17T10:42:13.0600254Z Downloading sh-2.2.2-py3-none-any.whl (38 kB)
+2026-04-17T10:42:13.0652859Z Downloading virtualenv-21.2.4-py3-none-any.whl (5.8 MB)
+2026-04-17T10:42:13.1103709Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.8/5.8 MB 135.5 MB/s eta 0:00:00
+2026-04-17T10:42:13.1138960Z Downloading distlib-0.4.0-py2.py3-none-any.whl (469 kB)
+2026-04-17T10:42:13.1212350Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 469.0/469.0 kB 87.8 MB/s eta 0:00:00
+2026-04-17T10:42:13.1244507Z Downloading filelock-3.28.0-py3-none-any.whl (39 kB)
+2026-04-17T10:42:13.1294954Z Downloading platformdirs-4.9.6-py3-none-any.whl (21 kB)
+2026-04-17T10:42:13.1344472Z Downloading ptyprocess-0.7.0-py2.py3-none-any.whl (13 kB)
+2026-04-17T10:42:13.1414573Z Downloading python_discovery-1.2.2-py3-none-any.whl (31 kB)
+2026-04-17T10:42:13.2277352Z Installing collected packages: ptyprocess, distlib, sh, platformdirs, pexpect, filelock, python-discovery, virtualenv, buildozer
+2026-04-17T10:42:13.6277774Z Successfully installed buildozer-1.5.0 distlib-0.4.0 filelock-3.28.0 pexpect-4.9.0 platformdirs-4.9.6 ptyprocess-0.7.0 python-discovery-1.2.2 sh-2.2.2 virtualenv-21.2.4
+2026-04-17T10:42:13.6286855Z WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+2026-04-17T10:42:13.7080568Z ##[endgroup]
+2026-04-17T10:42:13.7081019Z ##[group]Applying patches to Buildozer
+2026-04-17T10:42:13.7517700Z Changing global_buildozer_dir
+2026-04-17T10:42:13.7520387Z ##[endgroup]
+2026-04-17T10:42:13.8260414Z Traceback (most recent call last):
+2026-04-17T10:42:13.8261160Z   File "/home/user/.local/bin/buildozer", line 8, in <module>
+2026-04-17T10:42:13.8261759Z     sys.exit(main())
+2026-04-17T10:42:13.8264533Z              ^^^^^^
+2026-04-17T10:42:13.8267177Z   File "/home/user/.local/lib/python3.12/site-packages/buildozer/scripts/client.py", line 13, in main
+2026-04-17T10:42:13.8268531Z     Buildozer().run_command(sys.argv[1:])
+2026-04-17T10:42:13.8271015Z     ^^^^^^^^^^^
+2026-04-17T10:42:13.8271704Z   File "/home/user/.local/lib/python3.12/site-packages/buildozer/__init__.py", line 127, in __init__
+2026-04-17T10:42:13.8272526Z     self.config.read(filename, "utf-8")
+2026-04-17T10:42:13.8273114Z   File "/usr/lib/python3.12/configparser.py", line 684, in read
+2026-04-17T10:42:13.8273688Z     self._read(fp, filename)
+2026-04-17T10:42:13.8274222Z   File "/usr/lib/python3.12/configparser.py", line 999, in _read
+2026-04-17T10:42:13.8274900Z     for lineno, line in enumerate(fp, start=1):
+2026-04-17T10:42:13.8275429Z   File "<frozen codecs>", line 322, in decode
+2026-04-17T10:42:13.8276165Z UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa0 in position 274: invalid start byte
+2026-04-17T10:42:13.8382944Z Traceback (most recent call last):
+2026-04-17T10:42:13.8391083Z   File "/action/entrypoint.py", line 167, in <module>
+2026-04-17T10:42:13.8393512Z     main()
+2026-04-17T10:42:13.8394001Z   File "/action/entrypoint.py", line 27, in main
+2026-04-17T10:42:13.8394911Z     run_command(env["INPUT_COMMAND"])
+2026-04-17T10:42:13.8395516Z   File "/action/entrypoint.py", line 135, in run_command
+2026-04-17T10:42:13.8397516Z     retcode = subprocess.check_call(command, shell=True)
+2026-04-17T10:42:13.8397915Z               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-17T10:42:13.8398564Z   File "/usr/lib/python3.12/subprocess.py", line 413, in check_call
+2026-04-17T10:42:13.8399038Z     raise CalledProcessError(retcode, cmd)
+2026-04-17T10:42:13.8399763Z subprocess.CalledProcessError: Command 'yes | buildozer android debug' returned non-zero exit status 1.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+마지막 푸시도 빌드실패했어.
+
+
+
+Run ArtemSBulgakov/buildozer-action@v1
+/usr/bin/docker run --name b5cf463386163554bb08879be5f7236c879_552545 --label 906b5c --workdir /github/workspace --rm -e "USER" -e "PIP_BREAK_SYSTEM_PACKAGES" -e "INPUT_COMMAND" -e "INPUT_BUILDOZER_VERSION" -e "INPUT_REPOSITORY_ROOT" -e "INPUT_WORKDIR" -e "HOME" -e "GITHUB_JOB" -e "GITHUB_REF" -e "GITHUB_SHA" -e "GITHUB_REPOSITORY" -e "GITHUB_REPOSITORY_OWNER" -e "GITHUB_REPOSITORY_OWNER_ID" -e "GITHUB_RUN_ID" -e "GITHUB_RUN_NUMBER" -e "GITHUB_RETENTION_DAYS" -e "GITHUB_RUN_ATTEMPT" -e "GITHUB_ACTOR_ID" -e "GITHUB_ACTOR" -e "GITHUB_WORKFLOW" -e "GITHUB_HEAD_REF" -e "GITHUB_BASE_REF" -e "GITHUB_EVENT_NAME" -e "GITHUB_SERVER_URL" -e "GITHUB_API_URL" -e "GITHUB_GRAPHQL_URL" -e "GITHUB_REF_NAME" -e "GITHUB_REF_PROTECTED" -e "GITHUB_REF_TYPE" -e "GITHUB_WORKFLOW_REF" -e "GITHUB_WORKFLOW_SHA" -e "GITHUB_REPOSITORY_ID" -e "GITHUB_TRIGGERING_ACTOR" -e "GITHUB_WORKSPACE" -e "GITHUB_ACTION" -e "GITHUB_EVENT_PATH" -e "GITHUB_ACTION_REPOSITORY" -e "GITHUB_ACTION_REF" -e "GITHUB_PATH" -e "GITHUB_ENV" -e "GITHUB_STEP_SUMMARY" -e "GITHUB_STATE" -e "GITHUB_OUTPUT" -e "RUNNER_OS" -e "RUNNER_ARCH" -e "RUNNER_NAME" -e "RUNNER_ENVIRONMENT" -e "RUNNER_TOOL_CACHE" -e "RUNNER_TEMP" -e "RUNNER_WORKSPACE" -e "ACTIONS_RUNTIME_URL" -e "ACTIONS_RUNTIME_TOKEN" -e "ACTIONS_CACHE_URL" -e "ACTIONS_RESULTS_URL" -e "ACTIONS_ORCHESTRATION_ID" -e GITHUB_ACTIONS=true -e CI=true -v "/var/run/docker.sock":"/var/run/docker.sock" -v "/home/runner/work/_temp":"/github/runner_temp" -v "/home/runner/work/_temp/_github_home":"/github/home" -v "/home/runner/work/_temp/_github_workflow":"/github/workflow" -v "/home/runner/work/_temp/_runner_file_commands":"/github/file_commands" -v "/home/runner/work/checksheet-app/checksheet-app":"/github/workspace" 906b5c:f463386163554bb08879be5f7236c879
+Installing Buildozer
+Applying patches to Buildozer
+Traceback (most recent call last):
+  File "/home/user/.local/bin/buildozer", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/user/.local/lib/python3.12/site-packages/buildozer/scripts/client.py", line 13, in main
+    Buildozer().run_command(sys.argv[1:])
+    ^^^^^^^^^^^
+  File "/home/user/.local/lib/python3.12/site-packages/buildozer/__init__.py", line 127, in __init__
+    self.config.read(filename, "utf-8")
+  File "/usr/lib/python3.12/configparser.py", line 684, in read
+    self._read(fp, filename)
+  File "/usr/lib/python3.12/configparser.py", line 1064, in _read
+    raise MissingSectionHeaderError(fpname, lineno, line)
+configparser.MissingSectionHeaderError: File contains no section headers.
+file: 'buildozer.spec', line: 1
+'\ufeff[app]\n'
+Traceback (most recent call last):
+  File "/action/entrypoint.py", line 167, in <module>
+    main()
+  File "/action/entrypoint.py", line 27, in main
+    run_command(env["INPUT_COMMAND"])
+  File "/action/entrypoint.py", line 135, in run_command
+    retcode = subprocess.check_call(command, shell=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 413, in check_call
+    raise CalledProcessError(retcode, cmd)
+subprocess.CalledProcessError: Command 'yes | buildozer android debug' returned non-zero exit status 1.
+
+
+
+
+
+
+실행 후 마찬가지로 바로 종료가 돼.
+
+04-18 10:00:17.503  2421  2852 E InputDispatcher: channel '4d3a24d org.example.checksheetv60/org.kivy.android.PythonAct
+ivity' ~ Channel is unrecoverably broken and will be disposed!
+
+이건 폰의 usb디버그 메세지야.
+
+왜 이런 문제가 발생하는거야?
+어느순간부터 실행자체를 할 수가 없어서 테스트자체를 못하는 상황이야.
+
+이전에는 실행자체는 되었고 pdf뷰어만 문제가 있었어. 그런데 왜 지금은 실행자체를 할 수 없는거야?
+무작정 수정 후 빌드하고 실행하고 계속 실패하고 있는데, 무언가 원인을 찾아야 하는것 아니니?
+
+
+
+  1. 로그 분석: 현재 사용자님이 실행 중인 버전
+  보여주신 로그에 결정적인 정보가 있습니다:
+  > org.example.checksheetv60/org.kivy.android.PythonActivity
+
+  현재 폰에서 실행하신 것은 v6.0 버전입니다. 제가 인코딩 오류(BOM)와 오타를 수정한 v7.2 버전은 패키지명이 checksheetv72로 되어 있어 설치 시 별개의 앱으로 나타나거나, 아직 빌드가 완료되지 않아 설치하지 못하셨을 수       
+  있습니다.
+
+아니야. 아래의 최종버전 테스트한거야. 
+fix: remove UTF-8 BOM from buildozer.spec to resolve parsing error
+Build Android APK #80: Commit 20a633d pushed by skeks547
+
+
+
+
+
+마지막 버젼 역시 실행 후 바로 종료가 돼. 
+fix: rewrite buildozer.spec in pure English to eliminate all encoding…
+Build Android APK #82: Commit 5171b30 pushed by skeks547
+
+04-18 11:07:32.890  2421  2852 E InputDispatcher: channel '5190563 org.example.checksheetv81/org.kivy.android.PythonAct
+ivity' ~ Channel is unrecoverably broken and will be disposed!
+
+
+도대체 이유가 무엇이니? 계속 종료가 되니까 테스트 자체를 할 수 없는 상황이야.
+좀 더 전체적인 분석이 필요해. 처음부터 실행이 되지 않았던게 아니고, 실행이 되었던적이 있었는데, 이제는 실행이 되지 않는게 이해가 안가.
+
+
+
+final이란 글자는 제외해줘.
