@@ -12,22 +12,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Free Disk Space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-
-      - name: Build with Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        env:
-          USER: root
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
         with:
-          buildozer_version: stable
-          command: buildozer android debug
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            python3 \
+            python3-dev \
+            python3-pip \
+            python3-setuptools \
+            libncurses5-dev \
+            libncursesw5-dev \
+            zlib1g-dev \
+            libffi-dev \
+            libssl-dev \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            cmake \
+            unzip \
+            zip \
+            libtinfo5
+
+      - name: Install Buildozer (Force bypass PEP 668)
+        run: |
+          # 파이썬 보안 정책을 무시하고 buildozer 설치
+          pip3 install --user --upgrade buildozer
+          # 로컬 경로를 환경 변수에 추가
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Build Android APK
+        run: |
+          # 라이선스 자동 동의 및 빌드 실행
+          yes | buildozer android debug
+        env:
+          ACCEPT_SDK_LICENSE: "y"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: CheckSheet-Remarks-Debug
+          name: CheckSheet-Final-Debug
           path: bin/*.apk
