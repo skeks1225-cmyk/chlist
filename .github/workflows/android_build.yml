@@ -12,25 +12,64 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Build Dependencies (PPA-Free)
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential git python3 python3-dev python3-pip \
-            openjdk-17-jdk zip unzip autoconf automake libtool \
-            pkg-config cmake libncurses5-dev libncursesw5-dev \
-            zlib1g-dev libffi-dev libssl-dev libtinfo5
+            build-essential \
+            git \
+            libsqlite3-dev \
+            libffi-dev \
+            libssl-dev \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            zlib1g-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            libgdbm-dev \
+            libdb5.3-dev \
+            libbz2-dev \
+            libexpat1-dev \
+            liblzma-dev \
+            libreadline-dev \
+            uuid-dev \
+            python3-pip \
+            python3-setuptools \
+            python3-dev \
+            zip \
+            unzip \
+            cmake \
+            ninja-build \
+            libtinfo5
 
       - name: Install Buildozer and Cython
         run: |
-          # PIP 보안 정책 무시하고 설치
-          pip3 install --user --upgrade "cython<3.0" buildozer
+          pip install --user --upgrade "Cython<3.0" virtualenv buildozer
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Build Android APK
+      - name: Build with Buildozer
         run: |
-          # 라이선스 자동 동의 및 빌드 실행
-          yes | buildozer android debug
+          export PATH=$PATH:$HOME/.local/bin
+          buildozer android debug
         env:
           ACCEPT_SDK_LICENSE: "y"
 
