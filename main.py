@@ -26,7 +26,7 @@ if os.path.exists("font.ttf"):
     try: LabelBase.register(name="Roboto", fn_regular="font.ttf")
     except: pass
 
-# --- UI 디자인 (개편된 레이아웃) ---
+# --- UI 디자인 (비율 조정 버전) ---
 KV_UI = """
 <Label>:
     font_name: 'Roboto'
@@ -91,22 +91,22 @@ KV_UI = """
                 size_hint_x: 0.08
             Label:
                 text: '품목코드'
-                size_hint_x: 0.22
+                size_hint_x: 0.24
             Label:
                 text: '수량'
                 size_hint_x: 0.08
             Label:
                 text: '완료'
-                size_hint_x: 0.1
+                size_hint_x: 0.13
             Label:
                 text: '부족'
-                size_hint_x: 0.1
+                size_hint_x: 0.13
             Label:
                 text: '재작업'
-                size_hint_x: 0.12
+                size_hint_x: 0.14
             Label:
                 text: '비고'
-                size_hint_x: 0.3
+                size_hint_x: 0.2
 
         CheckSheetRV:
             id: rv
@@ -133,7 +133,7 @@ KV_UI = """
         size_hint_x: 0.08
     Button:
         text: root.item_code
-        size_hint_x: 0.22
+        size_hint_x: 0.24
         font_size: '13sp'
         background_normal: ''
         background_color: 0.2, 0.4, 0.6, 1
@@ -143,25 +143,25 @@ KV_UI = """
         size_hint_x: 0.08
     Button:
         text: 'V' if root.complete else ''
-        size_hint_x: 0.1
+        size_hint_x: 0.13
         background_normal: ''
         background_color: (0, 0.8, 0, 0.6) if root.complete else (0.3, 0.3, 0.3, 1)
         on_release: root.on_status('complete')
     Button:
         text: 'V' if root.shortage else ''
-        size_hint_x: 0.1
+        size_hint_x: 0.13
         background_normal: ''
         background_color: (0.8, 0.8, 0, 0.6) if root.shortage else (0.3, 0.3, 0.3, 1)
         on_release: root.on_status('shortage')
     Button:
         text: 'V' if root.rework else ''
-        size_hint_x: 0.12
+        size_hint_x: 0.14
         background_normal: ''
         background_color: (0.8, 0, 0, 0.6) if root.rework else (0.3, 0.3, 0.3, 1)
         on_release: root.on_status('rework')
     TextInput:
         text: root.remarks
-        size_hint_x: 0.3
+        size_hint_x: 0.2
         multiline: False
         font_size: '12sp'
         padding_y: [dp(10), dp(10)]
@@ -174,20 +174,13 @@ class CheckSheetRV(RecycleView): pass
 class RowWidget(BoxLayout):
     no = StringProperty(''); item_code = StringProperty(''); quantity = StringProperty('')
     remarks = StringProperty(''); complete = BooleanProperty(False); shortage = BooleanProperty(False); rework = BooleanProperty(False)
-    
-    def on_status(self, st):
-        App.get_running_app().update_item_status(self.item_code, self.no, st)
-    
-    def on_remarks_change(self, text):
-        App.get_running_app().update_remarks_data(self.item_code, self.no, text)
-    
-    def open_pdf_external(self):
-        App.get_running_app().open_pdf_in_external_app(self.item_code)
+    def on_status(self, st): App.get_running_app().update_item_status(self.item_code, self.no, st)
+    def on_remarks_change(self, text): App.get_running_app().update_remarks_data(self.item_code, self.no, text)
+    def open_pdf_external(self): App.get_running_app().open_pdf_in_external_app(self.item_code)
 
 class CheckSheetApp(App):
     SETTINGS_FILE = 'settings.json'
     LOCAL_BASE = "/sdcard/Download/CheckSheet" if platform == 'android' else os.path.join(os.getcwd(), "CheckSheet_Data")
-
     excel_path = StringProperty(''); pdf_folder_path = StringProperty('')
     current_filename = StringProperty('파일을 선택하세요')
     smb_config = DictProperty({'ip': '', 'user': '', 'pass': ''})
@@ -218,40 +211,30 @@ class CheckSheetApp(App):
             Env = autoclass('android.os.Environment')
             if hasattr(Env, 'isExternalStorageManager') and not Env.isExternalStorageManager():
                 mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
-                Intent = autoclass('android.content.Intent')
-                Settings = autoclass('android.provider.Settings')
-                Uri = autoclass('android.net.Uri')
-                uri = Uri.fromParts("package", mActivity.getPackageName(), None)
-                intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                intent.setData(uri); mActivity.startActivity(intent)
+                Intent = autoclass('android.content.Intent'); Settings = autoclass('android.provider.Settings')
+                uri = autoclass('android.net.Uri').fromParts("package", mActivity.getPackageName(), None)
+                intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION); intent.setData(uri)
+                mActivity.startActivity(intent)
         except: pass
 
     def open_pdf_in_external_app(self, item_code):
         base_path = self.pdf_folder_path if self.pdf_folder_path else self.LOCAL_BASE
         pdf_path = os.path.join(base_path, f"{item_code}.pdf")
-        
         if not os.path.exists(pdf_path):
             self.show_popup("알림", f"파일 없음: {item_code}.pdf"); return
-
         if platform == 'android':
             try:
                 from jnius import autoclass
                 mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
-                Intent = autoclass('android.content.Intent')
-                Uri = autoclass('android.net.Uri')
-                File = autoclass('java.io.File')
-                StrictMode = autoclass('android.os.StrictMode')
-                StrictMode.disableDeathOnFileUriExposure()
+                Intent = autoclass('android.content.Intent'); Uri = autoclass('android.net.Uri'); File = autoclass('java.io.File')
+                StrictMode = autoclass('android.os.StrictMode'); StrictMode.disableDeathOnFileUriExposure()
                 file_obj = File(pdf_path); uri_obj = Uri.fromFile(file_obj)
                 intent = Intent(Intent.ACTION_VIEW)
                 intent.setDataAndType(uri_obj, "application/pdf")
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 mActivity.startActivity(intent)
-            except Exception as e:
-                self.show_popup("오류", f"앱 호출 실패: {e}")
-        else:
-            self.show_popup("알림", f"윈도우 경로: {pdf_path}")
+            except Exception as e: self.show_popup("오류", str(e))
+        else: self.show_popup("알림", f"윈도우 경로: {pdf_path}")
 
     def load_excel_data(self, path):
         try:
@@ -350,7 +333,7 @@ class CheckSheetApp(App):
         pop = Popup(title="파일 선택", content=content, size_hint=(0.9, 0.9))
         def confirm(x):
             t = fc.selection[0] if fc.selection else fc.path
-            if mode == 'file' and os.path.isfile(t): self.load_excel_data(t); self.save_settings(); pop.dismiss()
+            if mode == 'file' and os.path.isfile(t): self.excel_path = t; self.load_excel_data(t); self.save_settings(); pop.dismiss()
             elif mode == 'dir' and os.path.isdir(t): self.pdf_folder_path = t; self.save_settings(); pop.dismiss()
         content.add_widget(Button(text="선택 완료", size_hint_y=None, height=60, on_release=confirm)); pop.open()
 
