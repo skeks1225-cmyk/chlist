@@ -21,15 +21,16 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 from kivy.core.text import LabelBase
 
-# --- 전역 설정 ---
+# --- 1. 설정 및 폰트 ---
 SETTINGS_FILE = 'settings.json'
 LOCAL_BASE = "/sdcard/Download/CheckSheet" if platform == 'android' else os.path.join(os.getcwd(), "CheckSheet_Data")
 
 if os.path.exists("font.ttf"):
-    try: LabelBase.register(name="Roboto", fn_regular="font.ttf")
+    try:
+        LabelBase.register(name="Roboto", fn_regular="font.ttf")
     except: pass
 
-# --- UI 디자인 ---
+# --- 2. UI 디자인 (외부 PDF 앱 전용) ---
 KV_UI = """
 <Label>:
     font_name: 'Roboto'
@@ -58,7 +59,7 @@ KV_UI = """
                     pos: self.pos
                     size: self.size
             Label:
-                text: "Current File: " + app.current_filename
+                text: "현재 파일: " + app.current_filename
                 bold: True
 
         BoxLayout:
@@ -67,16 +68,16 @@ KV_UI = """
             padding: '5dp'
             spacing: '5dp'
             Button:
-                text: 'Settings'
+                text: '접속설정'
                 on_release: app.open_smb_settings()
             Button:
-                text: 'Excel'
+                text: '엑셀선택'
                 on_release: app.select_source('file')
             Button:
-                text: 'PDF Folder'
+                text: 'PDF폴더'
                 on_release: app.select_source('dir')
             Button:
-                text: 'SAVE'
+                text: '저장'
                 background_color: 0.2, 0.7, 0.3, 1
                 on_release: app.save_to_excel()
 
@@ -94,15 +95,15 @@ KV_UI = """
                 size_hint_x: 0.15
                 on_release: app.sort_by('no')
             Button:
-                text: 'Item Code' + app.sort_indicator_code
+                text: '품목코드' + app.sort_indicator_code
                 size_hint_x: 0.4
                 on_release: app.sort_by('item_code')
             Button:
-                text: 'Qty' + app.sort_indicator_qty
+                text: '수량' + app.sort_indicator_qty
                 size_hint_x: 0.15
                 on_release: app.sort_by('quantity')
             Button:
-                text: 'Status'
+                text: '상태'
                 size_hint_x: 0.3
 
         CheckSheetRV:
@@ -141,15 +142,18 @@ KV_UI = """
         size_hint_x: 0.3
         spacing: '2dp'
         Button:
-            text: 'DONE'
+            text: '완료'
+            font_size: '12sp'
             background_color: (0, 1, 0, 0.5) if root.complete else (0.3, 0.3, 0.3, 1)
             on_release: root.on_status('complete')
         Button:
-            text: 'SHORT'
+            text: '부족'
+            font_size: '12sp'
             background_color: (1, 1, 0, 0.5) if root.shortage else (0.3, 0.3, 0.3, 1)
             on_release: root.on_status('shortage')
         Button:
-            text: 'REWK'
+            text: '재작업'
+            font_size: '12sp'
             background_color: (1, 0, 0, 0.5) if root.rework else (0.3, 0.3, 0.3, 1)
             on_release: root.on_status('rework')
 """
@@ -158,8 +162,12 @@ class ListScreen(Screen): pass
 class CheckSheetRV(RecycleView): pass
 
 class RowWidget(BoxLayout):
-    no = StringProperty(''); item_code = StringProperty(''); quantity = StringProperty('')
-    complete = BooleanProperty(False); shortage = BooleanProperty(False); rework = BooleanProperty(False)
+    no = StringProperty('')
+    item_code = StringProperty('')
+    quantity = StringProperty('')
+    complete = BooleanProperty(False)
+    shortage = BooleanProperty(False)
+    rework = BooleanProperty(False)
     
     def on_status(self, st):
         App.get_running_app().update_item_status(self.item_code, self.no, st)
@@ -168,10 +176,13 @@ class RowWidget(BoxLayout):
         App.get_running_app().open_pdf_in_external_app(self.item_code)
 
 class CheckSheetApp(App):
-    excel_path = StringProperty(''); pdf_folder_path = StringProperty('')
-    current_filename = StringProperty('Please select file')
+    excel_path = StringProperty('')
+    pdf_folder_path = StringProperty('')
+    current_filename = StringProperty('파일을 선택하세요')
     smb_config = DictProperty({'ip': '', 'user': '', 'pass': ''})
-    sort_indicator_no = StringProperty(''); sort_indicator_code = StringProperty(''); sort_indicator_qty = StringProperty('')
+    sort_indicator_no = StringProperty('')
+    sort_indicator_code = StringProperty('')
+    sort_indicator_qty = StringProperty('')
     sort_states = {}
 
     def build(self):
@@ -205,18 +216,19 @@ class CheckSheetApp(App):
                 mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
                 Intent = autoclass('android.content.Intent')
                 Settings = autoclass('android.provider.Settings')
-                Uri = autoclass('android.net.Uri').fromParts("package", mActivity.getPackageName(), None)
+                uri = autoclass('android.net.Uri').fromParts("package", mActivity.getPackageName(), None)
                 intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                intent.setData(uri); mActivity.startActivity(intent)
+                intent.setData(uri)
+                mActivity.startActivity(intent)
         except: pass
 
-    # --- 핵심: 외부 PDF 앱 연동 ---
+    # --- 핵심: 외부 앱 연동 로직 ---
     def open_pdf_in_external_app(self, item_code):
         base_path = self.pdf_folder_path if self.pdf_folder_path else LOCAL_BASE
         pdf_path = os.path.join(base_path, f"{item_code}.pdf")
         
         if not os.path.exists(pdf_path):
-            self.show_popup("Notice", f"File not found:\n{item_code}.pdf")
+            self.show_popup("알림", f"파일 없음: {item_code}.pdf")
             return
 
         if platform == 'android':
@@ -227,7 +239,7 @@ class CheckSheetApp(App):
                 Uri = autoclass('android.net.Uri')
                 File = autoclass('java.io.File')
                 
-                # Use StrictMode bypass to open file:// URI
+                # StrictMode 우회 (file:// URI 허용)
                 StrictMode = autoclass('android.os.StrictMode')
                 StrictMode.disableDeathOnFileUriExposure()
                 
@@ -239,25 +251,33 @@ class CheckSheetApp(App):
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 
-                chooser = Intent.createChooser(intent, cast('java.lang.CharSequence', "Open with..."))
+                chooser = Intent.createChooser(intent, cast('java.lang.CharSequence', "PDF 열기..."))
                 mActivity.startActivity(chooser)
             except Exception as e:
-                self.show_popup("Error", f"Failed to open external app: {e}")
+                self.show_popup("오류", f"앱 호출 실패: {e}")
         else:
-            self.show_popup("Notice", f"External app not supported on Windows.\nPath: {pdf_path}")
+            self.show_popup("알림", f"윈도우 경로: {pdf_path}")
 
     def load_excel_data(self, path):
         try:
             from openpyxl import load_workbook
-            wb = load_workbook(path, data_only=True); ws = wb.active; rows = list(ws.rows)
+            wb = load_workbook(path, data_only=True)
+            ws = wb.active
+            rows = list(ws.rows)
             if not rows: return
             h = [str(c.value).strip().lower() if c.value else "" for c in rows[0]]
-            idx_no, idx_code, idx_qty = h.index('no'), h.index('품목코드'), h.index('수량')
+            try:
+                idx_no, idx_code, idx_qty = h.index('no'), h.index('품목코드'), h.index('수량')
+            except:
+                self.show_popup("헤더 오류", "no, 품목코드, 수량 열이 필요합니다.")
+                return
             rv_data = []
             for i, row in enumerate(rows[1:]):
                 if not row[idx_code].value: continue
                 rv_data.append({
-                    'no': str(row[idx_no].value or ''), 'item_code': str(row[idx_code].value or ''), 'quantity': str(row[idx_qty].value or ''),
+                    'no': str(row[idx_no].value or ''),
+                    'item_code': str(row[idx_code].value or ''),
+                    'quantity': str(row[idx_qty].value or ''),
                     'complete': str(ws.cell(row=i+2, column=h.index('완료')+1).value or '').upper() == 'V' if '완료' in h else False,
                     'shortage': str(ws.cell(row=i+2, column=h.index('수량부족')+1).value or '').upper() == 'V' if '수량부족' in h else False,
                     'rework': str(ws.cell(row=i+2, column=h.index('재작업')+1).value or '').upper() == 'V' if '재작업' in h else False,
@@ -265,14 +285,17 @@ class CheckSheetApp(App):
                 })
             self.root.get_screen('list').ids.rv.data = rv_data
             self.current_filename = os.path.basename(path)
-        except Exception as e: self.show_popup("Load Failed", str(e))
+        except Exception as e: self.show_popup("로드 오류", str(e))
 
     def save_to_excel(self):
         if not self.excel_path: return
         try:
             from openpyxl import load_workbook
-            wb = load_workbook(self.excel_path); ws = wb.active; h = [str(c.value).strip() if c.value else "" for c in ws[1]]
-            target = ['완료', '수량부족', '재작업']; cols = {}
+            wb = load_workbook(self.excel_path)
+            ws = wb.active
+            h = [str(c.value).strip() if c.value else "" for c in ws[1]]
+            target = ['완료', '수량부족', '재작업']
+            cols = {}
             for n in target:
                 if n in h: cols[n] = h.index(n) + 1
                 else:
@@ -282,8 +305,8 @@ class CheckSheetApp(App):
                 ws.cell(row=r, column=cols['완료']).value = 'V' if d.get('complete') else ''
                 ws.cell(row=r, column=cols['수량부족']).value = 'V' if d.get('shortage') else ''
                 ws.cell(row=r, column=cols['재작업']).value = 'V' if d.get('rework') else ''
-            wb.save(self.excel_path); self.show_popup("Notice", "Save Successful")
-        except Exception as e: self.show_popup("Save Failed", str(e))
+            wb.save(self.excel_path); self.show_popup("알림", "저장 완료")
+        except Exception as e: self.show_popup("저장 실패", str(e))
 
     def update_item_status(self, ic, no, st):
         rv = self.root.get_screen('list').ids.rv
@@ -318,35 +341,38 @@ class CheckSheetApp(App):
 
     def select_source(self, mode):
         content = BoxLayout(orientation='vertical', padding=20, spacing=20)
-        pop = Popup(title="Select", content=content, size_hint=(0.8, 0.4))
-        content.add_widget(Button(text="Phone Local", on_release=lambda x: (pop.dismiss(), self.open_local_browser(mode))))
-        content.add_widget(Button(text="PC Shared Folder", on_release=lambda x: (pop.dismiss(), self.open_smb_shares_browser(mode))))
+        pop = Popup(title="선택", content=content, size_hint=(0.8, 0.4))
+        content.add_widget(Button(text="내 휴대폰", on_release=lambda x: (pop.dismiss(), self.open_local_browser(mode))))
+        content.add_widget(Button(text="PC 공유폴더", on_release=lambda x: (pop.dismiss(), self.open_smb_shares_browser(mode))))
         pop.open()
 
     def open_local_browser(self, mode):
         fc = FileChooserListView(path="/storage/emulated/0" if platform=='android' else os.getcwd())
         if mode == 'dir': fc.dirselect = True
         content = BoxLayout(orientation='vertical', padding=5); content.add_widget(fc)
-        pop = Popup(title="Choose File", content=content, size_hint=(0.9, 0.9))
+        pop = Popup(title="파일 탐색", content=content, size_hint=(0.9, 0.9))
         def confirm(x):
             t = fc.selection[0] if fc.selection else fc.path
             if mode == 'file' and os.path.isfile(t): self.excel_path = t; self.load_excel_data(t); self.save_settings(); pop.dismiss()
             elif mode == 'dir' and os.path.isdir(t): self.pdf_folder_path = t; self.save_settings(); pop.dismiss()
-        content.add_widget(Button(text="Select", size_hint_y=None, height=60, on_release=confirm)); pop.open()
+        content.add_widget(Button(text="선택 완료", size_hint_y=None, height=60, on_release=confirm)); pop.open()
 
     def open_smb_shares_browser(self, mode):
         conn = self.get_smb_conn_only()
-        if not conn: self.show_popup("Notice", "SMB Failed"); return
+        if not conn: self.show_popup("알림", "SMB 연결 실패"); return
         content = BoxLayout(orientation='vertical'); lb = BoxLayout(orientation='vertical', size_hint_y=None); lb.bind(minimum_height=lb.setter('height')); scroll = ScrollView(); scroll.add_widget(lb)
-        pop = Popup(title="SMB Shares", content=content, size_hint=(0.9, 0.9))
-        for s in conn.listShares():
-            if s.isSpecial or s.name.endswith('$'): continue
-            b = Button(text=s.name, size_hint_y=None, height=80); b.bind(on_release=lambda x, n=s.name: self.open_smb_files_browser(conn, n, "/", mode, pop)); lb.add_widget(b)
+        pop = Popup(title="공유폴더 목록", content=content, size_hint=(0.9, 0.9))
+        try:
+            from smb.SMBConnection import SMBConnection
+            for s in conn.listShares():
+                if s.isSpecial or s.name.endswith('$'): continue
+                b = Button(text=s.name, size_hint_y=None, height=80); b.bind(on_release=lambda x, n=s.name: self.open_smb_files_browser(conn, n, "/", mode, pop)); lb.add_widget(b)
+        except: pass
         content.add_widget(scroll); pop.open()
 
     def open_smb_files_browser(self, conn, share, path, mode, parent):
         content = BoxLayout(orientation='vertical'); lb = BoxLayout(orientation='vertical', size_hint_y=None); lb.bind(minimum_height=lb.setter('height')); scroll = ScrollView(); scroll.add_widget(lb)
-        pop = Popup(title=f"SMB: {share}", content=content, size_hint=(0.9, 0.9))
+        pop = Popup(title=f"폴더: {share}", content=content, size_hint=(0.9, 0.9))
         def refresh(cp):
             lb.clear_widgets()
             for f in conn.listPath(share, cp):
@@ -374,9 +400,9 @@ class CheckSheetApp(App):
         content = BoxLayout(orientation='vertical', padding=10)
         ips = TextInput(text=self.smb_config['ip'], multiline=False); usr = TextInput(text=self.smb_config['user'], multiline=False); pas = TextInput(text=self.smb_config['pass'], password=True, multiline=False)
         content.add_widget(Label(text="IP")); content.add_widget(ips); content.add_widget(Label(text="ID")); content.add_widget(usr); content.add_widget(Label(text="PW")); content.add_widget(pas)
-        pop = Popup(title="SMB Config", content=content, size_hint=(0.8, 0.6))
+        pop = Popup(title="SMB 설정", content=content, size_hint=(0.8, 0.6))
         def save(x): self.smb_config = {'ip':ips.text,'user':usr.text,'pass':pas.text}; self.save_settings(); pop.dismiss()
-        content.add_widget(Button(text="SAVE", on_release=save)); pop.open()
+        content.add_widget(Button(text="저장", on_release=save)); pop.open()
 
     def load_settings(self):
         if os.path.exists(SETTINGS_FILE):
