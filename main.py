@@ -103,15 +103,18 @@ KV_UI = """
                 text: '수량' + app.sort_indicator_qty
                 size_hint_x: 0.08
                 on_release: app.sort_by('quantity')
-            Label:
-                text: '완료'
+            Button:
+                text: '완료' + app.sort_indicator_comp
                 size_hint_x: 0.13
-            Label:
-                text: '부족'
+                on_release: app.sort_by('complete')
+            Button:
+                text: '부족' + app.sort_indicator_short
                 size_hint_x: 0.13
-            Label:
-                text: '재작업'
+                on_release: app.sort_by('shortage')
+            Button:
+                text: '재작업' + app.sort_indicator_rew
                 size_hint_x: 0.14
+                on_release: app.sort_by('rework')
             Label:
                 text: '비고'
                 size_hint_x: 0.2
@@ -192,6 +195,7 @@ class CheckSheetApp(App):
     current_filename = StringProperty('파일을 선택하세요')
     smb_config = DictProperty({'ip': '', 'user': '', 'pass': ''})
     sort_indicator_no = StringProperty(''); sort_indicator_code = StringProperty(''); sort_indicator_qty = StringProperty('')
+    sort_indicator_comp = StringProperty(''); sort_indicator_short = StringProperty(''); sort_indicator_rew = StringProperty('')
     sort_states = {}
 
     def build(self):
@@ -294,11 +298,20 @@ class CheckSheetApp(App):
         if not rv.data: return
         new_s = 'desc' if self.sort_states.get(col) == 'asc' else 'asc'
         self.sort_states = {col: new_s}
-        for k in ['no', 'code', 'qty']: setattr(self, f'sort_indicator_{k}', '')
-        setattr(self, f'sort_indicator_{col if col != "item_code" else "code"}', " ▲" if new_s == 'asc' else " ▼")
+        
+        # 모든 인디케이터 초기화
+        for k in ['no', 'code', 'qty', 'comp', 'short', 'rew']: 
+            setattr(self, f'sort_indicator_{k}', '')
+        
+        # 현재 컬럼의 인디케이터 설정
+        map_col = {'no':'no', 'item_code':'code', 'quantity':'qty', 'complete':'comp', 'shortage':'short', 'rework':'rew'}
+        setattr(self, f'sort_indicator_{map_col[col]}', " ▲" if new_s == 'asc' else " ▼")
+        
         def natural_sort_key(s):
-            val = str(s.get(col, ''))
-            return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', val)]
+            val = s.get(col, '')
+            if isinstance(val, bool): return 1 if val else 0
+            return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', str(val))]
+            
         rv.data = sorted(rv.data, key=natural_sort_key, reverse=(new_s == 'desc')); rv.refresh_from_data()
 
     def update_item_status(self, ic, no, st):
