@@ -352,7 +352,12 @@ class CheckSheetApp(App):
         pop.open()
 
     def open_local_browser(self, mode):
-        fc = FileChooserListView(path="/storage/emulated/0" if platform=='android' else os.getcwd())
+        # 엑셀은 .xlsx, .xls / PDF는 .pdf 필터 추가
+        filters = ['*.xlsx', '*.xls'] if mode == 'file' else ['*.pdf']
+        fc = FileChooserListView(
+            path="/storage/emulated/0" if platform=='android' else os.getcwd(),
+            filters=filters
+        )
         if mode == 'dir': fc.dirselect = True
         content = BoxLayout(orientation='vertical', padding=5); content.add_widget(fc)
         pop = Popup(title="파일 선택", content=content, size_hint=(0.9, 0.9))
@@ -380,8 +385,16 @@ class CheckSheetApp(App):
         pop = Popup(title=f"SMB: {share}", content=content, size_hint=(0.9, 0.9))
         def refresh(cp):
             lb.clear_widgets()
+            # SMB 파일 목록에서도 확장자 필터 적용
+            valid_exts = ['.xlsx', '.xls'] if mode == 'file' else ['.pdf']
             for f in conn.listPath(share, cp):
                 if f.filename in ['.', '..']: continue
+                
+                # 디렉토리가 아니고, 설정된 확장자가 아니면 스킵
+                if not f.isDirectory:
+                    ext = os.path.splitext(f.filename)[1].lower()
+                    if ext not in valid_exts: continue
+
                 b = Button(text=f.filename, size_hint_y=None, height=80)
                 def click(x, file=f):
                     np = os.path.join(path, file.filename).replace("\\", "/")
@@ -391,6 +404,10 @@ class CheckSheetApp(App):
                         if not os.path.exists(self.LOCAL_BASE): os.makedirs(self.LOCAL_BASE)
                         with open(local, 'wb') as lf: conn.retrieveFile(share, np, lf)
                         self.load_excel_data(local); self.save_settings(); pop.dismiss(); parent.dismiss()
+                    elif mode == 'dir': # SMB에서 폴더 선택 시
+                        self.pdf_folder_path = f"smb://{self.smb_config['ip']}/{share}{np}"
+                        self.show_popup("알림", "SMB PDF 경로는 현재 미리보기 전용으로 설정됩니다.")
+                        self.save_settings(); pop.dismiss(); parent.dismiss()
                 b.bind(on_release=click); lb.add_widget(b)
         refresh(path); content.add_widget(scroll); pop.open()
 
