@@ -21,13 +21,12 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 from kivy.core.text import LabelBase
 
-# --- 1. 전역 설정 및 폰트 ---
+# --- 폰트 등록 ---
 if os.path.exists("font.ttf"):
-    try:
-        LabelBase.register(name="Roboto", fn_regular="font.ttf")
+    try: LabelBase.register(name="Roboto", fn_regular="font.ttf")
     except: pass
 
-# --- 2. UI 디자인 (비고란 추가 및 외부 앱 연동) ---
+# --- UI 디자인 ---
 KV_UI = """
 <Label>:
     font_name: 'Roboto'
@@ -159,20 +158,16 @@ KV_UI = """
         multiline: False
         font_size: '12sp'
         hint_text: '비고 입력'
-        on_text: root.on_remarks_change(self.text)
+        on_text_validate: root.on_remarks_change(self.text)
+        on_focus: if not self.focus: root.on_remarks_change(self.text)
 """
 
 class ListScreen(Screen): pass
 class CheckSheetRV(RecycleView): pass
 
 class RowWidget(BoxLayout):
-    no = StringProperty('')
-    item_code = StringProperty('')
-    quantity = StringProperty('')
-    remarks = StringProperty('')
-    complete = BooleanProperty(False)
-    shortage = BooleanProperty(False)
-    rework = BooleanProperty(False)
+    no = StringProperty(''); item_code = StringProperty(''); quantity = StringProperty('')
+    remarks = StringProperty(''); complete = BooleanProperty(False); shortage = BooleanProperty(False); rework = BooleanProperty(False)
     
     def on_status(self, st):
         App.get_running_app().update_item_status(self.item_code, self.no, st)
@@ -187,13 +182,10 @@ class CheckSheetApp(App):
     SETTINGS_FILE = 'settings.json'
     LOCAL_BASE = "/sdcard/Download/CheckSheet" if platform == 'android' else os.path.join(os.getcwd(), "CheckSheet_Data")
 
-    excel_path = StringProperty('')
-    pdf_folder_path = StringProperty('')
+    excel_path = StringProperty(''); pdf_folder_path = StringProperty('')
     current_filename = StringProperty('파일을 선택하세요')
     smb_config = DictProperty({'ip': '', 'user': '', 'pass': ''})
-    sort_indicator_no = StringProperty('')
-    sort_indicator_code = StringProperty('')
-    sort_indicator_qty = StringProperty('')
+    sort_indicator_no = StringProperty(''); sort_indicator_code = StringProperty(''); sort_indicator_qty = StringProperty('')
     sort_states = {}
 
     def build(self):
@@ -224,17 +216,14 @@ class CheckSheetApp(App):
                 Settings = autoclass('android.provider.Settings')
                 uri = autoclass('android.net.Uri').fromParts("package", mActivity.getPackageName(), None)
                 intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                intent.setData(uri)
-                mActivity.startActivity(intent)
+                intent.setData(uri); mActivity.startActivity(intent)
         except: pass
 
-    # --- 외부 PDF 앱 연동 ---
     def open_pdf_in_external_app(self, item_code):
         base_path = self.pdf_folder_path if self.pdf_folder_path else self.LOCAL_BASE
         pdf_path = os.path.join(base_path, f"{item_code}.pdf")
         if not os.path.exists(pdf_path):
-            self.show_popup("알림", f"파일 없음: {item_code}.pdf")
-            return
+            self.show_popup("알림", f"파일 없음: {item_code}.pdf"); return
         if platform == 'android':
             try:
                 from jnius import autoclass, cast
@@ -270,9 +259,7 @@ class CheckSheetApp(App):
             for i, row in enumerate(rows[1:]):
                 if not row[idx_code].value: continue
                 rv_data.append({
-                    'no': str(row[idx_no].value or ''),
-                    'item_code': str(row[idx_code].value or ''),
-                    'quantity': str(row[idx_qty].value or ''),
+                    'no': str(row[idx_no].value or ''), 'item_code': str(row[idx_code].value or ''), 'quantity': str(row[idx_qty].value or ''),
                     'remarks': str(row[idx_remarks].value or '') if idx_remarks != -1 else '',
                     'complete': str(ws.cell(row=i+2, column=h.index('완료')+1).value or '').upper() == 'V' if '완료' in h else False,
                     'shortage': str(ws.cell(row=i+2, column=h.index('수량부족')+1).value or '').upper() == 'V' if '수량부족' in h else False,
@@ -364,7 +351,6 @@ class CheckSheetApp(App):
         content = BoxLayout(orientation='vertical'); lb = BoxLayout(orientation='vertical', size_hint_y=None); lb.bind(minimum_height=lb.setter('height')); scroll = ScrollView(); scroll.add_widget(lb)
         pop = Popup(title="공유폴더", content=content, size_hint=(0.9, 0.9))
         try:
-            from smb.SMBConnection import SMBConnection
             for s in conn.listShares():
                 if s.isSpecial or s.name.endswith('$'): continue
                 b = Button(text=s.name, size_hint_y=None, height=80); b.bind(on_release=lambda x, n=s.name: self.open_smb_files_browser(conn, n, "/", mode, pop)); lb.add_widget(b)
@@ -380,7 +366,7 @@ class CheckSheetApp(App):
                 if f.filename in ['.', '..']: continue
                 b = Button(text=f.filename, size_hint_y=None, height=80)
                 def click(x, file=f):
-                    np = os.path.join(path, file.filename).replace("\\", "/")
+                    np = os.path.join(cp, file.filename).replace("\\", "/")
                     if file.isDirectory: self.open_smb_files_browser(conn, share, np, mode, parent)
                     elif mode == 'file':
                         local = os.path.join(self.LOCAL_BASE, file.filename)
