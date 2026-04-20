@@ -168,15 +168,9 @@ class CheckSheetRV(RecycleView): pass
 class RowWidget(BoxLayout):
     no = StringProperty(''); item_code = StringProperty(''); quantity = StringProperty('')
     remarks = StringProperty(''); complete = BooleanProperty(False); shortage = BooleanProperty(False); rework = BooleanProperty(False)
-    
-    def on_status(self, st):
-        App.get_running_app().update_item_status(self.item_code, self.no, st)
-    
-    def on_remarks_change(self, text):
-        App.get_running_app().update_remarks_data(self.item_code, self.no, text)
-    
-    def open_pdf_external(self):
-        App.get_running_app().open_pdf_in_external_app(self.item_code)
+    def on_status(self, st): App.get_running_app().update_item_status(self.item_code, self.no, st)
+    def on_remarks_change(self, text): App.get_running_app().update_remarks_data(self.item_code, self.no, text)
+    def open_pdf_external(self): App.get_running_app().open_pdf_in_external_app(self.item_code)
 
 class CheckSheetApp(App):
     SETTINGS_FILE = 'settings.json'
@@ -212,11 +206,10 @@ class CheckSheetApp(App):
             Env = autoclass('android.os.Environment')
             if hasattr(Env, 'isExternalStorageManager') and not Env.isExternalStorageManager():
                 mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
-                Intent = autoclass('android.content.Intent')
-                Settings = autoclass('android.provider.Settings')
+                Intent = autoclass('android.content.Intent'); Settings = autoclass('android.provider.Settings')
                 uri = autoclass('android.net.Uri').fromParts("package", mActivity.getPackageName(), None)
-                intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                intent.setData(uri); mActivity.startActivity(intent)
+                intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION); intent.setData(uri)
+                mActivity.startActivity(intent)
         except: pass
 
     def open_pdf_in_external_app(self, item_code):
@@ -228,17 +221,11 @@ class CheckSheetApp(App):
             try:
                 from jnius import autoclass, cast
                 mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
-                Intent = autoclass('android.content.Intent')
-                Uri = autoclass('android.net.Uri')
-                File = autoclass('java.io.File')
-                StrictMode = autoclass('android.os.StrictMode')
-                StrictMode.disableDeathOnFileUriExposure()
-                file = File(pdf_path)
-                uri = Uri.fromFile(file)
-                intent = Intent(Intent.ACTION_VIEW)
-                intent.setDataAndType(uri, "application/pdf")
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                Intent = autoclass('android.content.Intent'); Uri = autoclass('android.net.Uri'); File = autoclass('java.io.File')
+                StrictMode = autoclass('android.os.StrictMode'); StrictMode.disableDeathOnFileUriExposure()
+                file = File(pdf_path); uri = Uri.fromFile(file)
+                intent = Intent(Intent.ACTION_VIEW); intent.setDataAndType(uri, "application/pdf")
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 chooser = Intent.createChooser(intent, cast('java.lang.CharSequence', "PDF 열기..."))
                 mActivity.startActivity(chooser)
             except Exception as e: self.show_popup("오류", str(e))
@@ -250,11 +237,8 @@ class CheckSheetApp(App):
             wb = load_workbook(path, data_only=True); ws = wb.active; rows = list(ws.rows)
             if not rows: return
             h = [str(c.value).strip().lower() if c.value else "" for c in rows[0]]
-            try:
-                idx_no = h.index('no'); idx_code = h.index('품목코드'); idx_qty = h.index('수량')
-                idx_remarks = h.index('비고') if '비고' in h else -1
-            except:
-                self.show_popup("헤더 오류", "no, 품목코드, 수량 열이 필요합니다."); return
+            idx_no = h.index('no'); idx_code = h.index('품목코드'); idx_qty = h.index('수량')
+            idx_remarks = h.index('비고') if '비고' in h else -1
             rv_data = []
             for i, row in enumerate(rows[1:]):
                 if not row[idx_code].value: continue
@@ -311,8 +295,7 @@ class CheckSheetApp(App):
         rv = self.root.get_screen('list').ids.rv
         for d in rv.data:
             if d['item_code'] == ic and d['no'] == no:
-                d['remarks'] = text
-                break
+                d['remarks'] = text; break
 
     def sort_by(self, col):
         rv = self.root.get_screen('list').ids.rv
@@ -343,7 +326,7 @@ class CheckSheetApp(App):
             t = fc.selection[0] if fc.selection else fc.path
             if mode == 'file' and os.path.isfile(t): self.excel_path = t; self.load_excel_data(t); self.save_settings(); pop.dismiss()
             elif mode == 'dir' and os.path.isdir(t): self.pdf_folder_path = t; self.save_settings(); pop.dismiss()
-        content.add_widget(Button(text="선택", size_hint_y=None, height=60, on_release=confirm)); pop.open()
+        content.add_widget(Button(text="확인", size_hint_y=None, height=60, on_release=confirm)); pop.open()
 
     def open_smb_shares_browser(self, mode):
         conn = self.get_smb_conn_only()
@@ -351,6 +334,7 @@ class CheckSheetApp(App):
         content = BoxLayout(orientation='vertical'); lb = BoxLayout(orientation='vertical', size_hint_y=None); lb.bind(minimum_height=lb.setter('height')); scroll = ScrollView(); scroll.add_widget(lb)
         pop = Popup(title="공유폴더", content=content, size_hint=(0.9, 0.9))
         try:
+            from smb.SMBConnection import SMBConnection
             for s in conn.listShares():
                 if s.isSpecial or s.name.endswith('$'): continue
                 b = Button(text=s.name, size_hint_y=None, height=80); b.bind(on_release=lambda x, n=s.name: self.open_smb_files_browser(conn, n, "/", mode, pop)); lb.add_widget(b)
