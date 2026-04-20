@@ -1,10 +1,10 @@
 [app]
 title = CheckSheetFinal
-package.name = checksheetv161
+package.name = checksheetv162
 package.domain = org.example
 source.dir = .
 source.include_exts = py,png,jpg,kv,ttf,pdf,xlsx,json
-version = 16.1
+version = 16.2
 requirements = python3,kivy,android,pyjnius,openpyxl,pysmb,pyasn1,six,tqdm,et_xmlfile,jdcal,pycryptodome
 orientation = portrait
 fullscreen = 0

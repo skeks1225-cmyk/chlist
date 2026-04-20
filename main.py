@@ -2,6 +2,7 @@ import os
 import json
 import shutil
 import traceback
+import re
 
 from kivy.app import App
 from kivy.lang import Builder
@@ -26,7 +27,7 @@ if os.path.exists("font.ttf"):
     try: LabelBase.register(name="Roboto", fn_regular="font.ttf")
     except: pass
 
-# --- UI 디자인 (비율 조정 버전) ---
+# --- UI 디자인 ---
 KV_UI = """
 <Label>:
     font_name: 'Roboto'
@@ -86,15 +87,18 @@ KV_UI = """
                 Rectangle:
                     pos: self.pos
                     size: self.size
-            Label:
-                text: 'No'
+            Button:
+                text: 'No' + app.sort_indicator_no
                 size_hint_x: 0.08
-            Label:
-                text: '품목코드'
+                on_release: app.sort_by('no')
+            Button:
+                text: '품목코드' + app.sort_indicator_code
                 size_hint_x: 0.24
-            Label:
-                text: '수량'
+                on_release: app.sort_by('item_code')
+            Button:
+                text: '수량' + app.sort_indicator_qty
                 size_hint_x: 0.08
+                on_release: app.sort_by('quantity')
             Label:
                 text: '완료'
                 size_hint_x: 0.13
@@ -164,7 +168,6 @@ KV_UI = """
         size_hint_x: 0.2
         multiline: False
         font_size: '12sp'
-        padding_y: [dp(10), dp(10)]
         on_text: root.on_remarks_change(self.text)
 """
 
@@ -229,8 +232,7 @@ class CheckSheetApp(App):
                 Intent = autoclass('android.content.Intent'); Uri = autoclass('android.net.Uri'); File = autoclass('java.io.File')
                 StrictMode = autoclass('android.os.StrictMode'); StrictMode.disableDeathOnFileUriExposure()
                 file_obj = File(pdf_path); uri_obj = Uri.fromFile(file_obj)
-                intent = Intent(Intent.ACTION_VIEW)
-                intent.setDataAndType(uri_obj, "application/pdf")
+                intent = Intent(Intent.ACTION_VIEW); intent.setDataAndType(uri_obj, "application/pdf")
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 mActivity.startActivity(intent)
             except Exception as e: self.show_popup("오류", str(e))
@@ -251,38 +253,30 @@ class CheckSheetApp(App):
             rv_data = []
             for i, row in enumerate(rows[1:]):
                 if len(row) <= idx_code or not row[idx_code].value: continue
-                val_comp = str(row[idx_comp].value or '').upper() == 'V' if len(row) > idx_comp else False
-                val_short = str(row[idx_short].value or '').upper() == 'V' if len(row) > idx_short else False
-                val_rew = str(row[idx_rew].value or '').upper() == 'V' if len(row) > idx_rew else False
-                val_rem = str(row[idx_rem].value or '') if len(row) > idx_rem else ''
                 rv_data.append({
                     'no': str(row[idx_no].value or ''), 'item_code': str(row[idx_code].value or ''), 'quantity': str(row[idx_qty].value or ''),
-                    'remarks': val_rem, 'complete': val_comp, 'shortage': val_short, 'rework': val_rew, 'real_index': i
+                    'remarks': str(row[idx_rem].value or '') if len(row) > idx_rem else '',
+                    'complete': str(row[idx_comp].value or '').upper() == 'V' if len(row) > idx_comp else False,
+                    'shortage': str(row[idx_short].value or '').upper() == 'V' if len(row) > idx_short else False,
+                    'rework': str(row[idx_rew].value or '').upper() == 'V' if len(row) > idx_rew else False,
+                    'real_index': i
                 })
             self.root.get_screen('list').ids.rv.data = rv_data
             self.current_filename = os.path.basename(path); self.excel_path = path
         except Exception as e: self.show_popup("로드 오류", str(e))
 
-    def save_to_excel(self):
-        if not self.excel_path: return
-        try:
-            from openpyxl import load_workbook
-            wb = load_workbook(self.excel_path); ws = wb.active; h = [str(c.value).strip() if c.value else "" for c in ws[1]]
-            target_cols = ['완료', '수량부족', '재작업', '비고']
-            cols = {}
-            for col_name in target_cols:
-                if col_name in h: cols[col_name] = h.index(col_name) + 1
-                else:
-                    new_idx = len(h) + 1; ws.cell(row=1, column=new_idx).value = col_name
-                    cols[col_name] = new_idx; h.append(col_name)
-            for d in self.root.get_screen('list').ids.rv.data:
-                r = d['real_index'] + 2
-                ws.cell(row=r, column=cols['완료']).value = 'V' if d.get('complete') else ''
-                ws.cell(row=r, column=cols['수량부족']).value = 'V' if d.get('shortage') else ''
-                ws.cell(row=r, column=cols['재작업']).value = 'V' if d.get('rework') else ''
-                ws.cell(row=r, column=cols['비고']).value = d.get('remarks', '')
-            wb.save(self.excel_path); self.show_popup("알림", "저장 완료")
-        except Exception as e: self.show_popup("저장 실패", str(e))
+    def sort_by(self, col):
+        rv = self.root.get_screen('list').ids.rv
+        if not rv.data: return
+        new_s = 'desc' if self.sort_states.get(col) == 'asc' else 'asc'
+        self.sort_states = {col: new_s}
+        for k in ['no','code','qty']: setattr(self, f'sort_indicator_{k}', '')
+        ind = " ▲" if new_s == 'asc' else " ▼"
+        setattr(self, f'sort_indicator_{col if col != "item_code" else "code"}', ind)
+        def natural_sort_key(s):
+            val = str(s.get(col, ''))
+            return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', val)]
+        rv.data = sorted(rv.data, key=natural_sort_key, reverse=(new_s == 'desc')); rv.refresh_from_data()
 
     def update_item_status(self, ic, no, st):
         rv = self.root.get_screen('list').ids.rv
@@ -306,18 +300,26 @@ class CheckSheetApp(App):
             if d['item_code'] == ic and d['no'] == no:
                 d['remarks'] = text; break
 
-    def sort_by(self, col):
-        rv = self.root.get_screen('list').ids.rv
-        if not rv.data: return
-        new_s = 'desc' if self.sort_states.get(col) == 'asc' else 'asc'
-        self.sort_states = {col: new_s}
-        def sk(x):
-            v = str(x.get(col, '')).lower()
-            if col in ['no', 'quantity']:
-                try: return int(''.join(filter(str.isdigit, v)) or 0)
-                except: return v
-            return v
-        rv.data = sorted(rv.data, key=sk, reverse=(new_s == 'desc')); rv.refresh_from_data()
+    def save_to_excel(self):
+        if not self.excel_path: return
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(self.excel_path); ws = wb.active; h = [str(c.value).strip() if c.value else "" for c in ws[1]]
+            target_cols = ['완료', '수량부족', '재작업', '비고']
+            cols = {}
+            for col_name in target_cols:
+                if col_name in h: cols[col_name] = h.index(col_name) + 1
+                else:
+                    new_idx = len(h) + 1; ws.cell(row=1, column=new_idx).value = col_name
+                    cols[col_name] = new_idx; h.append(col_name)
+            for d in self.root.get_screen('list').ids.rv.data:
+                r = d['real_index'] + 2
+                ws.cell(row=r, column=cols['완료']).value = 'V' if d.get('complete') else ''
+                ws.cell(row=r, column=cols['수량부족']).value = 'V' if d.get('shortage') else ''
+                ws.cell(row=r, column=cols['재작업']).value = 'V' if d.get('rework') else ''
+                ws.cell(row=r, column=cols['비고']).value = d.get('remarks', '')
+            wb.save(self.excel_path); self.show_popup("알림", "저장 완료")
+        except Exception as e: self.show_popup("저장 실패", str(e))
 
     def select_source(self, mode):
         content = BoxLayout(orientation='vertical', padding=20, spacing=20)
@@ -333,7 +335,7 @@ class CheckSheetApp(App):
         pop = Popup(title="파일 선택", content=content, size_hint=(0.9, 0.9))
         def confirm(x):
             t = fc.selection[0] if fc.selection else fc.path
-            if mode == 'file' and os.path.isfile(t): self.excel_path = t; self.load_excel_data(t); self.save_settings(); pop.dismiss()
+            if mode == 'file' and os.path.isfile(t): self.load_excel_data(t); self.save_settings(); pop.dismiss()
             elif mode == 'dir' and os.path.isdir(t): self.pdf_folder_path = t; self.save_settings(); pop.dismiss()
         content.add_widget(Button(text="선택 완료", size_hint_y=None, height=60, on_release=confirm)); pop.open()
 
