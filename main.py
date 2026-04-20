@@ -120,7 +120,7 @@ KV_UI = """
             id: rv
             viewclass: 'RowWidget'
             RecycleBoxLayout:
-                default_size: None, dp(45)
+                default_size: None, dp(30)
                 default_size_hint: 1, None
                 size_hint_y: None
                 height: self.minimum_height
