@@ -1,18 +1,15 @@
 [app]
-title = CheckSheetFinal
-package.name = checksheetv126
+title = PDFViewerTest
+package.name = checksheetpdftest
 package.domain = org.example
 source.dir = .
 source.include_exts = py,png,jpg,kv,ttf,pdf,xlsx,json,html,js,css,map,ftl
-source.exclude_dirs = backup, bin, .buildozer
 android.add_assets = pdfjs
-version = 12.6
-requirements = python3,kivy,android,pyjnius,openpyxl,pysmb,pyasn1,six,tqdm,et_xmlfile,jdcal,pycryptodome
+version = 13.0
+requirements = python3,kivy,android,pyjnius
 orientation = portrait
 fullscreen = 0
-android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE, INTERNET, ACCESS_NETWORK_STATE
-android.enable_androidx = True
-android.enable_jetifier = True
+android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, INTERNET
 android.api = 33
 android.minapi = 21
 android.ndk_api = 21

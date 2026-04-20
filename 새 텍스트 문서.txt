@@ -1345,3 +1345,59 @@ Build Android APK #91: Commit 466dea9 pushed by skeks547
 
 
 
+
+
+이것도 테스트버젼이잖아.
+main.py가 다 비었는데?
+
+
+물론 buildozer.spec도 최종수정이 된것이겠지?
+
+
+        Builder.load_string(KV_UI)
+
+
+
+
+아니야, 윈도우os에서는 실행이 되지 않아도 돼.
+폰에서만 잘 실행되면돼.
+
+
+
+예외가 발생했습니다. NameError
+name 'SETTINGS_FILE' is not defined
+  File "D:\VSCODE\main.py", line 594, in load_settings
+    if os.path.exists(SETTINGS_FILE):
+                      ^^^^^^^^^^^^^
+  File "D:\VSCODE\main.py", line 293, in build
+    self.load_settings()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "D:\VSCODE\main.py", line 610, in <module>
+    CheckSheetApp().run()
+    ~~~~~~~~~~~~~~~~~~~^^
+NameError: name 'SETTINGS_FILE' is not defined
+
+
+
+수정한것 맞니? 여전히 안되는데?
+
+예외가 발생했습니다. NameError
+name 'SETTINGS_FILE' is not defined
+  File "D:\VSCODE\main.py", line 594, in load_settings
+    if os.path.exists(SETTINGS_FILE):
+                      ^^^^^^^^^^^^^
+  File "D:\VSCODE\main.py", line 293, in build
+    self.load_settings()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "D:\VSCODE\main.py", line 610, in <module>
+    CheckSheetApp().run()
+    ~~~~~~~~~~~~~~~~~~~^^
+NameError: name 'SETTINGS_FILE' is not defined
+
+
+
+
+
+pdf뷰어가 여전히 실행되지 않아. 품목코드 클릭하면 화면 넘어가다가 강제종료돼.
+pdf뷰어만 분리해서 테스트가 필요해.
+무조건 한 파일만 보이는게 아니라. 내가 선택한 파일 볼 수 있도록 테스트 할 수 있게 푸시해줘.
