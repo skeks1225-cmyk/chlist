@@ -74,6 +74,10 @@ KV_UI = """
                 text: 'PDF폴더'
                 on_release: app.select_source('dir')
             Button:
+                text: '리셋'
+                background_color: 0.8, 0.3, 0.3, 1
+                on_release: app.show_reset_confirm()
+            Button:
                 text: '저장'
                 background_color: 0.2, 0.7, 0.3, 1
                 on_release: app.save_to_excel()
@@ -227,7 +231,7 @@ class CheckSheetApp(App):
             self.show_popup("알림", f"파일 없음: {item_code}.pdf"); return
         if platform == 'android':
             try:
-                from jnius import autoclass
+                from jnius import autoclass, cast
                 mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
                 Intent = autoclass('android.content.Intent'); Uri = autoclass('android.net.Uri'); File = autoclass('java.io.File')
                 StrictMode = autoclass('android.os.StrictMode'); StrictMode.disableDeathOnFileUriExposure()
@@ -265,14 +269,33 @@ class CheckSheetApp(App):
             self.current_filename = os.path.basename(path); self.excel_path = path
         except Exception as e: self.show_popup("로드 오류", str(e))
 
+    def show_reset_confirm(self):
+        content = BoxLayout(orientation='vertical', padding=20, spacing=20)
+        content.add_widget(Label(text="모든 체크와 비고를 지우시겠습니까?"))
+        btn_layout = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
+        pop = Popup(title="데이터 리셋", content=content, size_hint=(0.8, 0.4))
+        btn_layout.add_widget(Button(text="아니오", on_release=pop.dismiss))
+        btn_layout.add_widget(Button(text="예", on_release=lambda x: (self.reset_all_data(), pop.dismiss())))
+        content.add_widget(btn_layout)
+        pop.open()
+
+    def reset_all_data(self):
+        rv = self.root.get_screen('list').ids.rv
+        if not rv.data: return
+        new_data = []
+        for d in rv.data:
+            d['complete'] = False; d['shortage'] = False; d['rework'] = False; d['remarks'] = ""
+            new_data.append(d)
+        rv.data = new_data
+        rv.refresh_from_data()
+
     def sort_by(self, col):
         rv = self.root.get_screen('list').ids.rv
         if not rv.data: return
         new_s = 'desc' if self.sort_states.get(col) == 'asc' else 'asc'
         self.sort_states = {col: new_s}
-        for k in ['no','code','qty']: setattr(self, f'sort_indicator_{k}', '')
-        ind = " ▲" if new_s == 'asc' else " ▼"
-        setattr(self, f'sort_indicator_{col if col != "item_code" else "code"}', ind)
+        for k in ['no', 'code', 'qty']: setattr(self, f'sort_indicator_{k}', '')
+        setattr(self, f'sort_indicator_{col if col != "item_code" else "code"}', " ▲" if new_s == 'asc' else " ▼")
         def natural_sort_key(s):
             val = str(s.get(col, ''))
             return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', val)]
@@ -335,7 +358,7 @@ class CheckSheetApp(App):
         pop = Popup(title="파일 선택", content=content, size_hint=(0.9, 0.9))
         def confirm(x):
             t = fc.selection[0] if fc.selection else fc.path
-            if mode == 'file' and os.path.isfile(t): self.load_excel_data(t); self.save_settings(); pop.dismiss()
+            if mode == 'file' and os.path.isfile(t): self.excel_path = t; self.load_excel_data(t); self.save_settings(); pop.dismiss()
             elif mode == 'dir' and os.path.isdir(t): self.pdf_folder_path = t; self.save_settings(); pop.dismiss()
         content.add_widget(Button(text="선택 완료", size_hint_y=None, height=60, on_release=confirm)); pop.open()
 
