@@ -17,72 +17,14 @@ jobs:
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/local/share/boost
-          sudo rm -rf /usr/local/lib/android # 기존 SDK 제거 후 새로 설치 유도
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10' # Ubuntu 22.04 기본 버전과 일치시켜 호환성 확보
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17' # API 33 빌드에 필수적인 버전
-
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            git \
-            ffmpeg \
-            libgmp-dev \
-            libmpfr-dev \
-            libmpc-dev \
-            encode-lib \
-            libsqlite3-dev \
-            libffi-dev \
-            libssl-dev \
-            autoconf \
-            automake \
-            libtool \
-            pkg-config \
-            zlib1g-dev \
-            libncurses5-dev \
-            libncursesw5-dev \
-            libgdbm-dev \
-            libdb5.3-dev \
-            libbz2-dev \
-            libexpat1-dev \
-            liblzma-dev \
-            libreadline-dev \
-            uuid-dev \
-            python3-pip \
-            python3-setuptools \
-            zip \
-            unzip \
-            cmake \
-            ninja-build \
-            gperf \
-            libltdl-dev \
-            libtinfo5
-
-      - name: Install Buildozer and Cython
-        run: |
-          # Cython 0.29.33 버전이 Kivy 빌드에서 가장 안정적입니다.
-          pip install --user --upgrade "Cython<3.0" virtualenv buildozer
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Build with Buildozer
-        run: |
-          export PATH=$PATH:$HOME/.local/bin
-          # Gradle 메모리 부족 및 데몬 이슈 방지
-          export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g"
-          # 라이선스 자동 동의 및 빌드
-          yes | buildozer android debug
+        uses: ArtemSBulgakov/buildozer-action@v1
         env:
-          ACCEPT_SDK_LICENSE: "y"
+          PIP_BREAK_SYSTEM_PACKAGES: 1
+        with:
+          buildozer_version: stable
+          command: buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
