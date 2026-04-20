@@ -1,8 +1,8 @@
-name: Build Android APK
+name: Android Build
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -10,31 +10,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      # [추가] 빌드 실패 방지를 위한 디스크 공간 확보
-      - name: Free Disk Space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-
-      - name: Build with Buildozer
-        # 검증된 Action 버전 사용
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
+      - name: set up JDK 17
+        uses: actions/setup-java@v3
         with:
-          command: yes | buildozer android debug
-          # [핵심] 불안정한 master 대신 stable 버전 사용
-          buildozer_version: stable
-        env:
-          USER: root
-          PIP_BREAK_SYSTEM_PACKAGES: 1
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+        continue-on-error: true # gradlew가 아직 없을 수 있음
+
+      - name: Create Gradle Wrapper if missing
+        run: |
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.1.1
+          fi
+
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: package
-          path: bin/*.apk
+          name: CheckSheet-Native-Debug
+          path: app/build/outputs/apk/debug/app-debug.apk
