@@ -436,10 +436,18 @@ class CheckSheetApp(App):
             start_path = "/storage/emulated/0" if platform=='android' else os.getcwd()
 
         fc = FileChooserListView(path=start_path, filters=filters)
+        
+        # 단일 클릭으로 폴더 들어가기 로직 추가
+        def on_sel(instance, selection):
+            if selection and os.path.isdir(selection[0]):
+                instance.path = selection[0]
+        fc.bind(on_selection=on_sel)
+
         if mode == 'dir': fc.dirselect = True
         content = BoxLayout(orientation='vertical', padding=5); content.add_widget(fc)
         pop = Popup(title="파일 선택", content=content, size_hint=(0.9, 0.9))
         def confirm(x):
+            # 선택된 항목이 있으면 그것을 사용, 없으면 현재 보고 있는 폴더 경로(fc.path) 사용
             t = fc.selection[0] if fc.selection else fc.path
             if mode == 'file' and os.path.isfile(t): self.excel_path = t; self.load_excel_data(t); self.save_settings(); pop.dismiss()
             elif mode == 'dir' and os.path.isdir(t): self.pdf_folder_path = t; self.save_settings(); pop.dismiss()
