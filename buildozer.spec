@@ -14,10 +14,9 @@ fullscreen = 0
 
 android.permissions = INTERNET,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE
 
-# 🔥 안정 핵심
+# 🔥 안정 핵심 (NDK 자동 선택 유도)
 android.api = 31
 android.minapi = 21
-android.ndk = 25c
 android.ndk_api = 21
 
 android.accept_sdk_license = True
