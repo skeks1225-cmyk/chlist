@@ -64,13 +64,13 @@ class ExcelService {
     for (var item in items) {
       int r = item.realIndex;
       sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: idxComp, rowIndex: r), 
-          item.isComplete ? "V" : "");
+          item.isComplete ? TextCellValue("V") : TextCellValue(""));
       sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: idxShort, rowIndex: r), 
-          item.isShortage ? "V" : "");
+          item.isShortage ? TextCellValue("V") : TextCellValue(""));
       sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: idxRew, rowIndex: r), 
-          item.isRework ? "V" : "");
+          item.isRework ? TextCellValue("V") : TextCellValue(""));
       sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: idxRem, rowIndex: r), 
-          item.remarks);
+          TextCellValue(item.remarks));
     }
 
     var fileBytes = excel.save();
