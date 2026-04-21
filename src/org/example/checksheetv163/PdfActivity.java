@@ -114,6 +114,8 @@ public class PdfActivity extends Activity {
                     .swipeHorizontal(false)
                     .enableDoubletap(true)
                     .defaultPage(0)
+                    .enableAntialiasing(true)
+                    .spacing(10)
                     .scrollHandle(new DefaultScrollHandle(this))
                     .load();
 
