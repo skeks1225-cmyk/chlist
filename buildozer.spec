@@ -15,6 +15,8 @@ android.ndk_api = 21
 android.accept_sdk_license = True
 android.gradle_dependencies = com.github.barteksc:android-pdf-viewer:2.8.2
 android.enable_androidx = True
+android.enable_jetifier = True
+android.manifest.activities = org.example.checksheetv163.PdfActivity
 android.add_src = src
 [buildozer]
 log_level = 2

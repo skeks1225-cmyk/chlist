@@ -318,7 +318,7 @@ class CheckSheetApp(App):
         pop = Popup(title="데이터 리셋", content=content, size_hint=(0.8, 0.4))
         btn_layout.add_widget(Button(text="아니오", on_release=pop.dismiss))
         btn_layout.add_widget(Button(text="예", on_release=lambda x: (self.reset_all_data(), pop.dismiss())))
-        content.add_widget(btn_layout); content.add_widget(btn_layout)
+        content.add_widget(btn_layout)
         pop.open()
 
     def reset_all_data(self):
