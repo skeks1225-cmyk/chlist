@@ -240,9 +240,50 @@ class CheckSheetApp(App):
 
     def open_pdf_in_external_app(self, item_code):
         base_path = self.pdf_folder_path if self.pdf_folder_path else self.LOCAL_BASE
-        pdf_path = os.path.join(base_path, f"{item_code}.pdf")
+        
+        # SMB 경로 처리
+        if base_path.startswith("smb://"):
+            conn = self.get_smb_conn_only()
+            if not conn: self.show_popup("알림", "SMB 연결 실패"); return
+            try:
+                # url 파싱: smb://ip/share/path/to/dir
+                parts = base_path.replace("smb://", "").split("/", 1)
+                if len(parts) < 2: self.show_popup("오류", "잘못된 SMB 경로"); return
+                share_name = parts[1].split("/", 1)[0]
+                inner_path = parts[1].split("/", 1)[1] if "/" in parts[1] else ""
+                
+                remote_file = os.path.join(inner_path, f"{item_code}.pdf").replace("\\", "/")
+                local_file = os.path.join(self.LOCAL_BASE, f"{item_code}.pdf")
+                
+                # 스마트 다운로드: 파일이 존재하고 크기와 시간이 일치하면 다운로드 건너뜀
+                should_download = True
+                try:
+                    attr = conn.getAttributes(share_name, remote_file)
+                    if os.path.exists(local_file):
+                        local_size = os.path.getsize(local_file)
+                        local_mtime = os.path.getmtime(local_file)
+                        
+                        # 1. 크기가 같고 2. 서버 파일이 로컬 파일보다 최신이 아니면 (작거나 같으면)
+                        # 원격 시간(attr.last_write_time)과 로컬 시간(local_mtime) 비교
+                        if local_size == attr.file_size and attr.last_write_time <= local_mtime:
+                            should_download = False
+                except: pass # 오류 시 안전을 위해 다운로드 진행
+
+                if should_download:
+                    if not os.path.exists(self.LOCAL_BASE): os.makedirs(self.LOCAL_BASE)
+                    with open(local_file, 'wb') as lf:
+                        conn.retrieveFile(share_name, remote_file, lf)
+                    # 다운로드 후 로컬 파일 시간을 원격 파일 시간과 맞추면 더 정확하지만,
+                    # 현재 로직(원격 > 로컬일 때만 다운)으로도 충분히 목적 달성 가능합니다.
+                pdf_path = local_file
+            except Exception as e:
+                self.show_popup("오류", f"SMB 파일 다운로드 실패:\n{str(e)}"); return
+        else:
+            pdf_path = os.path.join(base_path, f"{item_code}.pdf")
+
         if not os.path.exists(pdf_path):
             self.show_popup("알림", f"파일 없음: {item_code}.pdf"); return
+            
         if platform == 'android':
             try:
                 from jnius import autoclass, cast
