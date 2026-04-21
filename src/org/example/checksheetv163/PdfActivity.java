@@ -111,8 +111,11 @@ public class PdfActivity extends android.app.Activity {
                     .swipeHorizontal(false)
                     .enableDoubletap(true)
                     .defaultPage(0)
+                    .enableAntialiasing(true)
+                    .spacing(10)
                     .scrollHandle(new DefaultScrollHandle(this))
                     .load();
+
         } catch (Exception e) {
             Toast.makeText(this, "PDF 로드 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
