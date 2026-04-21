@@ -6,8 +6,8 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,ttf,json
 version = 16.3
 
-# 🔥 핵심: android 제거 및 pysmb 버전 고정 해제 (존재하지 않는 1.2.9 에러 해결)
-requirements = python3==3.10.11,kivy==2.2.0,pyjnius==1.5.0,openpyxl,pysmb
+# 🔥 핵심: 정석대로 pysmb 1.2.9.1 버전 고정 (빌드 재현성 확보)
+requirements = python3==3.10.11,kivy==2.2.0,pyjnius==1.5.0,openpyxl,pysmb==1.2.9.1
 
 orientation = portrait
 fullscreen = 0
