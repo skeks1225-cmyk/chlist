@@ -2317,3 +2317,97 @@ zoom / scroll / page 완벽
 ❌ 단점
 Python 코드 재사용 불가
 UI 재작성 필요
+
+
+
+
+
+👉 GitHub Actions는 사실상 필요 없어.
+
+✅ 너 상황 기준 정리
+✔ 혼자 사용
+✔ APK 직접 설치해서 쓰면 됨
+✔ 서버 배포 필요 없음
+✔ 자동 릴리즈 필요 없음
+
+👉 이런 경우 GitHub Actions는 “편의 기능”이지 필수 아님
+
+🧭 추천 개발 방식 (최적)
+🟢 1. 개발
+
+VS Code에서:
+
+flutter run
+폰 연결해서 바로 실행
+UI 수정 즉시 반영 (Hot Reload)
+🟡 2. 테스트 APK 만들기
+flutter build apk --release
+
+👉 결과:
+
+build/app/outputs/flutter-apk/app-release.apk
+
+→ 이거 폰에 설치하면 끝
+
+🔵 3. 업데이트 필요할 때만 반복
+수정 → flutter run → 문제없음 확인 → build apk → 설치
+❌ GitHub Actions이 필요 없는 이유
+
+너 구조에서는:
+
+자동 배포 ❌
+팀 협업 ❌
+CI/CD ❌
+버전 릴리즈 자동화 ❌
+
+👉 전부 불필요
+
+💡 오히려 GitHub 쓰면 생기는 문제
+빌드 실패 원인 추가됨
+Java / Gradle / SDK 충돌
+네가 지금 겪은 문제 재발
+🚀 Flutter 기준 최적 결론
+
+👉 너 같은 “혼자 쓰는 업무용 앱”은
+
+✔ VS Code + flutter build apk
+이것만으로 100% 충분
+
+🧠 한줄 정리
+
+👉 GitHub는 “자동 공장”이고
+👉 너는 “직접 만드는 개인 작업실”이면 된다
+
+이런 의견이 있는데, 굳이 깃허브에서 빌드할 필요가 없는거니?
+
+
+
+그렇다면 빌드는 깃허브에서 하자.
+그런데 파이썬처럼 실행을 해볼수는 없는거니?
+
+
+아니야 빌드 후에 웹에서 볼 수 잇는거면 굳이 필요없어.
+폰에 설치해보면 되는걸.
+
+
+
+feat: implemented ChecklistScreen and PdfViewerScreen with pdfx #52
+이것도 빌드실패했어..
+
+Run flutter build apk --release
+
+[!] Your app is using an unsupported Gradle project. To fix this problem, create a new project by running `flutter create -t app <app-directory>` and then move the dart code, assets and pubspec.yaml to the new project.
+Error: Process completed with exit code 1.
+
+
+마지막 빌드 설치했는데,
+상단에 체크리스트 글자만 있고 그냥 빈화면만 나오는데?
+
+
+
+
+D:\VSCODE\backup_kivy
+원래 kivy+android-pdf-viewer 의 안드로이드프로그램을
+Flutter+pdfx 의 안드로이드 프로그램으로 이식하려고해.
+이유는 기존 방식으로 환경문제로 인해 빌드가 계속 실패하기 때문이야.
+

@@ -10,28 +10,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: actions/setup-java@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
       
-      - uses: subosito/flutter-action@v2
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           flutter-version: '3.22.3'
 
       - name: Reconstruct Standard Flutter Project
         run: |
-          mkdir temp_code
-          mv lib pubspec.yaml temp_code/
-          flutter create . --org org.example --project-name checksheet_final
-          mv temp_code/lib/* lib/
-          mv temp_code/pubspec.yaml .
+          # 1. 기존 코드 임시 저장
+          mkdir -p ../temp_project/lib
+          cp -r lib/* ../temp_project/lib/
+          cp pubspec.yaml ../temp_project/
           
-      - run: flutter pub get
-      - run: flutter build apk --release
+          # 2. 현재 폴더 비우기 (단, .git 폴더와 backup_kivy는 유지)
+          find . -maxdepth 1 ! -name "." ! -name ".." ! -name ".git" ! -name "backup_kivy" -exec rm -rf {} +
+          
+          # 3. 깨끗한 상태에서 프로젝트 생성 (overwrite 옵션 사용)
+          flutter create . --org org.example --project-name checksheet_final --overwrite
+          
+          # 4. 내 코드 덮어쓰기
+          rm -rf lib/*
+          cp -r ../temp_project/lib/* lib/
+          cp ../temp_project/pubspec.yaml .
+          
+      - name: Install dependencies
+        run: flutter pub get
+        
+      - name: Build APK
+        run: flutter build apk --release
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: Release-APK
+          name: CheckSheet-Flutter-Release
           path: build/app/outputs/flutter-apk/app-release.apk
