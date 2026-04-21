@@ -86,7 +86,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(title),
         content: Text(msg),
-        actions: [TextButton(on_release: () => Navigator.pop(ctx), child: const Text("확인"))],
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))],
       ),
     );
   }
