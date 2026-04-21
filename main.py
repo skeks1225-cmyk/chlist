@@ -437,18 +437,19 @@ class CheckSheetApp(App):
 
         fc = FileChooserListView(path=start_path, filters=filters)
         
-        # 단일 클릭으로 폴더 들어가기 로직 추가
+        # 단일 클릭으로 폴더 들어가기 로직 (Clock을 사용하여 타이밍 이슈 해결)
         def on_sel(instance, selection):
             if selection and os.path.isdir(selection[0]):
-                instance.path = selection[0]
+                def change_path(dt): instance.path = selection[0]
+                Clock.schedule_once(change_path)
         fc.bind(on_selection=on_sel)
 
         if mode == 'dir': fc.dirselect = True
         content = BoxLayout(orientation='vertical', padding=5); content.add_widget(fc)
         pop = Popup(title="파일 선택", content=content, size_hint=(0.9, 0.9))
         def confirm(x):
-            # 선택된 항목이 있으면 그것을 사용, 없으면 현재 보고 있는 폴더 경로(fc.path) 사용
-            t = fc.selection[0] if fc.selection else fc.path
+            # 폴더 선택 모드에서는 현재 보고 있는 경로(fc.path)를 우선시함
+            t = fc.path if mode == 'dir' else (fc.selection[0] if fc.selection else fc.path)
             if mode == 'file' and os.path.isfile(t): self.excel_path = t; self.load_excel_data(t); self.save_settings(); pop.dismiss()
             elif mode == 'dir' and os.path.isdir(t): self.pdf_folder_path = t; self.save_settings(); pop.dismiss()
         content.add_widget(Button(text="선택 완료", size_hint_y=None, height=60, on_release=confirm)); pop.open()
