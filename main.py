@@ -420,39 +420,76 @@ class CheckSheetApp(App):
         content.add_widget(Button(text="PC 공유폴더", on_release=lambda x: (pop.dismiss(), self.open_smb_shares_browser(mode))))
         pop.open()
 
-    def open_local_browser(self, mode):
-        # 엑셀은 .xlsx, .xls / PDF는 .pdf 필터 추가
-        filters = ['*.xlsx', '*.xls'] if mode == 'file' else ['*.pdf']
-        
-        # 최근 경로 기억 로직
-        start_path = ""
-        if mode == 'file' and self.excel_path:
-            d = os.path.dirname(self.excel_path)
-            if os.path.exists(d): start_path = d
-        elif mode == 'dir' and self.pdf_folder_path:
-            if os.path.exists(self.pdf_folder_path): start_path = self.pdf_folder_path
-        
-        if not start_path:
-            start_path = "/storage/emulated/0" if platform=='android' else os.getcwd()
+    def open_local_browser(self, mode, path=None):
+        if path is None:
+            # 최근 경로 기억 로직
+            start_path = ""
+            if mode == 'file' and self.excel_path:
+                d = os.path.dirname(self.excel_path)
+                if os.path.exists(d): start_path = d
+            elif mode == 'dir' and self.pdf_folder_path:
+                if os.path.exists(self.pdf_folder_path) and not self.pdf_folder_path.startswith("smb://"): 
+                    start_path = self.pdf_folder_path
+            
+            if not start_path:
+                start_path = "/storage/emulated/0" if platform=='android' else os.getcwd()
+            path = start_path
 
-        fc = FileChooserListView(path=start_path, filters=filters)
+        content = BoxLayout(orientation='vertical')
+        lb = BoxLayout(orientation='vertical', size_hint_y=None); lb.bind(minimum_height=lb.setter('height')); scroll = ScrollView(); scroll.add_widget(lb)
+        content.add_widget(scroll)
         
-        # 단일 클릭으로 폴더 들어가기 로직 (Clock을 사용하여 타이밍 이슈 해결)
-        def on_sel(instance, selection):
-            if selection and os.path.isdir(selection[0]):
-                def change_path(dt): instance.path = selection[0]
-                Clock.schedule_once(change_path)
-        fc.bind(on_selection=on_sel)
+        pop = Popup(title=f"탐색: {path}", content=content, size_hint=(0.9, 0.9))
+        
+        self.current_local_selection = None
 
-        if mode == 'dir': fc.dirselect = True
-        content = BoxLayout(orientation='vertical', padding=5); content.add_widget(fc)
-        pop = Popup(title="파일 선택", content=content, size_hint=(0.9, 0.9))
         def confirm(x):
-            # 폴더 선택 모드에서는 현재 보고 있는 경로(fc.path)를 우선시함
-            t = fc.path if mode == 'dir' else (fc.selection[0] if fc.selection else fc.path)
-            if mode == 'file' and os.path.isfile(t): self.excel_path = t; self.load_excel_data(t); self.save_settings(); pop.dismiss()
-            elif mode == 'dir' and os.path.isdir(t): self.pdf_folder_path = t; self.save_settings(); pop.dismiss()
-        content.add_widget(Button(text="선택 완료", size_hint_y=None, height=60, on_release=confirm)); pop.open()
+            if mode == 'dir':
+                self.pdf_folder_path = path; self.save_settings(); pop.dismiss()
+            elif mode == 'file':
+                if self.current_local_selection:
+                    self.excel_path = self.current_local_selection; self.load_excel_data(self.excel_path); self.save_settings(); pop.dismiss()
+                else: self.show_popup("알림", "파일을 먼저 선택해 주세요.")
+
+        content.add_widget(Button(text="선택 완료", size_hint_y=None, height=dp(60), on_release=confirm))
+
+        # 상위 폴더로 이동 버튼
+        parent_dir = os.path.dirname(path)
+        if parent_dir and parent_dir != path:
+            up_btn = Button(text=".. (상위 폴더로)", size_hint_y=None, height=dp(50), background_color=(0.3, 0.3, 0.3, 1))
+            def go_up(x, p=parent_dir): pop.dismiss(); self.open_local_browser(mode, p)
+            up_btn.bind(on_release=go_up); lb.add_widget(up_btn)
+
+        try:
+            # 파일 및 폴더 목록 가져오기
+            items = sorted(os.listdir(path))
+            valid_exts = ['.xlsx', '.xls'] if mode == 'file' else ['.pdf']
+            
+            for item in items:
+                full_p = os.path.join(path, item)
+                is_dir = os.path.isdir(full_p)
+                
+                if not is_dir:
+                    ext = os.path.splitext(item)[1].lower()
+                    if ext not in valid_exts: continue
+
+                btn = Button(text=item + ("/" if is_dir else ""), size_hint_y=None, height=dp(50))
+                if is_dir:
+                    # 폴더는 싱글 클릭 시 즉시 진입
+                    def go_dir(instance, p=full_p): pop.dismiss(); self.open_local_browser(mode, p)
+                    btn.bind(on_release=go_dir)
+                else:
+                    # 파일은 클릭 시 선택 표시
+                    def select_file(instance, p=full_p):
+                        self.current_local_selection = p
+                        for child in lb.children: child.background_color = (1, 1, 1, 1)
+                        instance.background_color = (0.2, 0.4, 0.6, 1)
+                    btn.bind(on_release=select_file)
+                lb.add_widget(btn)
+        except Exception as e:
+            lb.add_widget(Label(text=f"접근 불가: {str(e)}", size_hint_y=None, height=dp(50)))
+            
+        pop.open()
 
     def open_smb_shares_browser(self, mode):
         conn = self.get_smb_conn_only()
