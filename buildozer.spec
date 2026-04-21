@@ -17,7 +17,7 @@ android.permissions = INTERNET,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANA
 # 🔥 안정 핵심
 android.api = 31
 android.minapi = 21
-android.ndk = 23b
+android.ndk = 25c
 android.ndk_api = 21
 
 android.accept_sdk_license = True
