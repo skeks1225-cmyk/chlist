@@ -29,6 +29,8 @@ public class PdfActivity extends android.app.Activity {
                 @Override
                 public void run() {
                     Intent intent = new Intent(PythonActivity.mActivity, PdfActivity.class);
+                    // 실행 크래시 방지 필수 플래그
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     PythonActivity.mActivity.startActivity(intent);
                 }
             });

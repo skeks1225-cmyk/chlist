@@ -254,12 +254,21 @@ class CheckSheetApp(App):
         rv = self.root.get_screen('list').ids.rv.data
         if not rv: return
         base_path = self.pdf_folder_path if self.pdf_folder_path else self.LOCAL_BASE
+        
+        # SMB 경로일 경우 현재 선택된 파일 미리 다운로드 (Java는 SMB 직접 불가)
+        if base_path.startswith("smb://"):
+            # 기존 단일 파일 오픈 로직(open_pdf_in_external_app)의 다운로드 부분 재활용
+            # 다운로드 성공 시 base_path를 LOCAL_BASE로 대체하여 Java에 전달
+            self.open_pdf_in_external_app(item_code)
+            base_path = self.LOCAL_BASE
+
         file_list = []; target_index = 0
         for i, d in enumerate(rv):
             ic = d['item_code']
             p = os.path.join(base_path, f"{ic}.pdf")
             file_list.append(p)
             if ic == item_code: target_index = i
+            
         try:
             from jnius import autoclass
             ArrayList = autoclass('java.util.ArrayList'); PdfActivity = autoclass('org.example.checksheetv163.PdfActivity')
