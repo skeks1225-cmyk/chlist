@@ -367,10 +367,19 @@ class CheckSheetApp(App):
     def open_local_browser(self, mode):
         # 엑셀은 .xlsx, .xls / PDF는 .pdf 필터 추가
         filters = ['*.xlsx', '*.xls'] if mode == 'file' else ['*.pdf']
-        fc = FileChooserListView(
-            path="/storage/emulated/0" if platform=='android' else os.getcwd(),
-            filters=filters
-        )
+        
+        # 최근 경로 기억 로직
+        start_path = ""
+        if mode == 'file' and self.excel_path:
+            d = os.path.dirname(self.excel_path)
+            if os.path.exists(d): start_path = d
+        elif mode == 'dir' and self.pdf_folder_path:
+            if os.path.exists(self.pdf_folder_path): start_path = self.pdf_folder_path
+        
+        if not start_path:
+            start_path = "/storage/emulated/0" if platform=='android' else os.getcwd()
+
+        fc = FileChooserListView(path=start_path, filters=filters)
         if mode == 'dir': fc.dirselect = True
         content = BoxLayout(orientation='vertical', padding=5); content.add_widget(fc)
         pop = Popup(title="파일 선택", content=content, size_hint=(0.9, 0.9))
@@ -394,35 +403,59 @@ class CheckSheetApp(App):
         content.add_widget(scroll); pop.open()
 
     def open_smb_files_browser(self, conn, share, path, mode, parent):
-        content = BoxLayout(orientation='vertical'); lb = BoxLayout(orientation='vertical', size_hint_y=None); lb.bind(minimum_height=lb.setter('height')); scroll = ScrollView(); scroll.add_widget(lb)
-        pop = Popup(title=f"SMB: {share}", content=content, size_hint=(0.9, 0.9))
+        content = BoxLayout(orientation='vertical')
+        lb = BoxLayout(orientation='vertical', size_hint_y=None); lb.bind(minimum_height=lb.setter('height')); scroll = ScrollView(); scroll.add_widget(lb)
+        content.add_widget(scroll)
+        
+        pop = Popup(title=f"SMB: {share}{path}", content=content, size_hint=(0.9, 0.9))
+        
+        # 선택 상태 추적 (엑셀 파일 선택용)
+        self.current_smb_selection = None
+
+        def confirm(x):
+            if mode == 'dir':
+                # 폴더 선택 모드: 현재 경로 확정
+                self.pdf_folder_path = f"smb://{self.smb_config['ip']}/{share}{path}"
+                self.show_popup("알림", f"SMB PDF 경로 설정:\n{share}{path}")
+                self.save_settings(); pop.dismiss(); parent.dismiss()
+            elif mode == 'file':
+                # 파일 선택 모드: 선택된 파일 다운로드 및 로드
+                if self.current_smb_selection:
+                    fname, fpath = self.current_smb_selection
+                    local = os.path.join(self.LOCAL_BASE, fname)
+                    if not os.path.exists(self.LOCAL_BASE): os.makedirs(self.LOCAL_BASE)
+                    with open(local, 'wb') as lf: conn.retrieveFile(share, fpath, lf)
+                    self.load_excel_data(local); self.save_settings(); pop.dismiss(); parent.dismiss()
+                else:
+                    self.show_popup("알림", "파일을 먼저 선택해 주세요.")
+
+        # 하단에 '선택 완료' 버튼 추가 (형식 통일)
+        content.add_widget(Button(text="선택 완료", size_hint_y=None, height=dp(60), on_release=confirm))
+
         def refresh(cp):
             lb.clear_widgets()
-            # SMB 파일 목록에서도 확장자 필터 적용
             valid_exts = ['.xlsx', '.xls'] if mode == 'file' else ['.pdf']
             for f in conn.listPath(share, cp):
                 if f.filename in ['.', '..']: continue
-                
-                # 디렉토리가 아니고, 설정된 확장자가 아니면 스킵
                 if not f.isDirectory:
                     ext = os.path.splitext(f.filename)[1].lower()
                     if ext not in valid_exts: continue
 
-                b = Button(text=f.filename, size_hint_y=None, height=80)
-                def click(x, file=f):
+                btn = Button(text=f.filename + ("/" if f.isDirectory else ""), size_hint_y=None, height=dp(50))
+                def click(instance, file=f):
                     np = os.path.join(path, file.filename).replace("\\", "/")
-                    if file.isDirectory: self.open_smb_files_browser(conn, share, np, mode, parent)
+                    if file.isDirectory:
+                        # 폴더 클릭 시 하위 폴더로 이동 (새 팝업)
+                        pop.dismiss()
+                        self.open_smb_files_browser(conn, share, np, mode, parent)
                     elif mode == 'file':
-                        local = os.path.join(self.LOCAL_BASE, file.filename)
-                        if not os.path.exists(self.LOCAL_BASE): os.makedirs(self.LOCAL_BASE)
-                        with open(local, 'wb') as lf: conn.retrieveFile(share, np, lf)
-                        self.load_excel_data(local); self.save_settings(); pop.dismiss(); parent.dismiss()
-                    elif mode == 'dir': # SMB에서 폴더 선택 시
-                        self.pdf_folder_path = f"smb://{self.smb_config['ip']}/{share}{np}"
-                        self.show_popup("알림", "SMB PDF 경로는 현재 미리보기 전용으로 설정됩니다.")
-                        self.save_settings(); pop.dismiss(); parent.dismiss()
-                b.bind(on_release=click); lb.add_widget(b)
-        refresh(path); content.add_widget(scroll); pop.open()
+                        # 파일 클릭 시 선택 상태 업데이트 및 시각적 강조
+                        self.current_smb_selection = (file.filename, np)
+                        for child in lb.children: child.background_color = (1, 1, 1, 1)
+                        instance.background_color = (0.2, 0.4, 0.6, 1) # 선택된 파일 강조
+                btn.bind(on_release=click); lb.add_widget(btn)
+        
+        refresh(path); pop.open()
 
     def get_smb_conn_only(self):
         try:
