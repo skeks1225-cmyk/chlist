@@ -40,6 +40,7 @@ jobs:
           yes | buildozer -v android debug
         env:
           ACCEPT_SDK_LICENSE: "y"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
