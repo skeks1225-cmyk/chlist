@@ -14,33 +14,16 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           flutter-version: '3.19.0'
 
-      - name: Reconstruct Standard Flutter Project
-        run: |
-          # 1. 현재 내용을 임시 폴더로 이동
-          mkdir temp_code
-          mv lib pubspec.yaml temp_code/
-          
-          # 2. Flutter 표준 구조 강제 생성
-          flutter create . --org org.example --project-name checksheet_final
-          
-          # 3. 기존 코드 복구
-          mv temp_code/lib/* lib/
-          mv temp_code/pubspec.yaml .
-          
-          # 4. 의존성 설치
-          flutter pub get
+      # ❗ 프로젝트 생성 없이 빌드 시도 (프로젝트 구조가 리포지토리에 포함되어야 함)
+      - run: flutter pub get
+      - run: flutter build apk --release
 
-      - name: Build APK
-        run: flutter build apk --release
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: CheckSheet-Flutter-Release
+          name: Release-APK
           path: build/app/outputs/flutter-apk/app-release.apk
