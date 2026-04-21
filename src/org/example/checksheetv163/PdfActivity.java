@@ -1,6 +1,5 @@
 package org.example.checksheetv163;
 
-import android.app.Activity;
 import android.os.Bundle;
 import android.widget.*;
 import android.view.*;
@@ -15,7 +14,7 @@ import java.util.ArrayList;
 
 import org.kivy.android.PythonActivity;
 
-public class PdfActivity extends Activity {
+public class PdfActivity extends android.app.Activity {
 
     static ArrayList<String> fileList;
     static int currentIndex = 0;
@@ -25,10 +24,13 @@ public class PdfActivity extends Activity {
         currentIndex = index;
 
         if (PythonActivity.mActivity != null) {
-            PythonActivity.mActivity.runOnUiThread(() -> {
-                Intent intent = new Intent(PythonActivity.mActivity, PdfActivity.class);
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                PythonActivity.mActivity.startActivity(intent);
+            PythonActivity.mActivity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Intent intent = new Intent(PythonActivity.mActivity, PdfActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    PythonActivity.mActivity.startActivity(intent);
+                }
             });
         }
     }
@@ -58,15 +60,9 @@ public class PdfActivity extends Activity {
 
         Button btnPrev = new Button(this); btnPrev.setText("이전");
         Button btnNext = new Button(this); btnNext.setText("다음");
-        Button btnDone = new Button(this); btnDone.setText("완료");
-        Button btnShort = new Button(this); btnShort.setText("부족");
-        Button btnRework = new Button(this); btnRework.setText("재작업");
 
         btnLayout.addView(btnPrev);
         btnLayout.addView(btnNext);
-        btnLayout.addView(btnDone);
-        btnLayout.addView(btnShort);
-        btnLayout.addView(btnRework);
 
         root.addView(pdfView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
@@ -89,21 +85,20 @@ public class PdfActivity extends Activity {
                 loadPdf();
             }
         });
-
-        btnDone.setOnClickListener(v -> sendStatus("complete"));
-        btnShort.setOnClickListener(v -> sendStatus("shortage"));
-        btnRework.setOnClickListener(v -> sendStatus("rework"));
     }
 
     private void loadPdf() {
         try {
-            if (fileList == null || fileList.size() == 0) return;
+            if (fileList == null || fileList.isEmpty()) {
+                Toast.makeText(this, "파일 없음", Toast.LENGTH_SHORT).show();
+                return;
+            }
 
             String path = fileList.get(currentIndex);
             File file = new File(path);
 
             if (!file.exists()) {
-                Toast.makeText(this, "파일 없음", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "파일 없음: " + path, Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -120,31 +115,7 @@ public class PdfActivity extends Activity {
                     .load();
 
         } catch (Exception e) {
-            Toast.makeText(this, "PDF 오류: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private void sendStatus(String status) {
-        try {
-            String fileName = new File(fileList.get(currentIndex)).getName();
-            String itemCode = fileName.replace(".pdf", "");
-
-            // 전문가 조언대로 클래스로더 워밍업 (생략 없이 그대로 유지)
-            org.kivy.android.PythonActivity.mActivity.runOnUiThread(() -> {
-                try { Class.forName("org.kivy.android.PythonActivity"); } catch (Exception ignored) {}
-            });
-
-            // 🔥 실제 Python 호출 (수정본)
-            PythonUtil.callPythonFunction("update_status_from_java", itemCode, status);
-            Toast.makeText(this, itemCode + ": " + status + " 반영됨", Toast.LENGTH_SHORT).show();
-
-            if (status.equals("complete") && currentIndex < fileList.size() - 1) {
-                currentIndex++;
-                loadPdf();
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
+            Toast.makeText(this, "오류: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 }
