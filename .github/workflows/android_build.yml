@@ -18,10 +18,12 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Force Java 17 for Buildozer
+      - name: Force Java 17 (hard override)
         run: |
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
           echo "PATH=$JAVA_HOME_17_X64/bin:$PATH" >> $GITHUB_ENV
+          sudo update-alternatives --set java $JAVA_HOME_17_X64/bin/java || true
+          java -version
 
       - name: Install system deps
         run: |
