@@ -58,6 +58,12 @@ KV_UI = """
             Label:
                 text: "현재 파일: " + app.current_filename
                 bold: True
+                size_hint_x: 0.7
+            Button:
+                text: "자동저장: " + ("ON" if app.auto_save else "OFF")
+                size_hint_x: 0.3
+                background_color: (0.2, 0.6, 0.2, 1) if app.auto_save else (0.6, 0.2, 0.2, 1)
+                on_release: app.toggle_auto_save()
 
         BoxLayout:
             size_hint_y: None
@@ -65,7 +71,7 @@ KV_UI = """
             padding: '5dp'
             spacing: '5dp'
             Button:
-                text: '접속설정'
+                text: '설정'
                 on_release: app.open_smb_settings()
             Button:
                 text: '엑셀선택'
@@ -192,7 +198,7 @@ class CheckSheetApp(App):
     SETTINGS_FILE = 'settings.json'
     LOCAL_BASE = "/sdcard/Download/CheckSheet" if platform == 'android' else os.path.join(os.getcwd(), "CheckSheet_Data")
     excel_path = StringProperty(''); pdf_folder_path = StringProperty('')
-    current_filename = StringProperty('파일을 선택하세요')
+    current_filename = StringProperty('파일을 선택하세요'); auto_save = BooleanProperty(True)
     smb_config = DictProperty({'ip': '', 'user': '', 'pass': ''})
     sort_indicator_no = StringProperty(''); sort_indicator_code = StringProperty(''); sort_indicator_qty = StringProperty('')
     sort_indicator_comp = StringProperty(''); sort_indicator_short = StringProperty(''); sort_indicator_rew = StringProperty('')
@@ -204,6 +210,10 @@ class CheckSheetApp(App):
         sm = ScreenManager()
         sm.add_widget(ListScreen(name='list'))
         return sm
+
+    def toggle_auto_save(self):
+        self.auto_save = not self.auto_save
+        self.save_settings()
 
     def on_start(self):
         Clock.schedule_once(self.delayed_init, 1)
@@ -292,6 +302,7 @@ class CheckSheetApp(App):
             new_data.append(d)
         rv.data = new_data
         rv.refresh_from_data()
+        if self.auto_save: self.save_to_excel()
 
     def sort_by(self, col):
         rv = self.root.get_screen('list').ids.rv
@@ -329,17 +340,16 @@ class CheckSheetApp(App):
                     if d['rework']: d['complete'] = d['shortage'] = False
                 break
         rv.refresh_from_data()
-        self.save_to_excel()
+        if self.auto_save: self.save_to_excel(show_popup=False)
 
     def update_remarks_data(self, ic, no, text):
         rv = self.root.get_screen('list').ids.rv
         for d in rv.data:
             if d['item_code'] == ic and d['no'] == no:
                 d['remarks'] = text; break
-        # 비고란 입력 시에도 자동 저장 (성능을 위해 엑셀 경기 있을 때만)
-        if self.excel_path: self.save_to_excel()
+        if self.auto_save and self.excel_path: self.save_to_excel(show_popup=False)
 
-    def save_to_excel(self):
+    def save_to_excel(self, show_popup=True):
         if not self.excel_path: return
         try:
             from openpyxl import load_workbook
@@ -357,8 +367,10 @@ class CheckSheetApp(App):
                 ws.cell(row=r, column=cols['수량부족']).value = 'V' if d.get('shortage') else ''
                 ws.cell(row=r, column=cols['재작업']).value = 'V' if d.get('rework') else ''
                 ws.cell(row=r, column=cols['비고']).value = d.get('remarks', '')
-            wb.save(self.excel_path); self.show_popup("알림", "저장 완료")
-        except Exception as e: self.show_popup("저장 실패", str(e))
+            wb.save(self.excel_path)
+            if show_popup: self.show_popup("알림", "저장 완료")
+        except Exception as e: 
+            if show_popup: self.show_popup("저장 실패", str(e))
 
     def select_source(self, mode):
         content = BoxLayout(orientation='vertical', padding=20, spacing=20)
@@ -479,11 +491,21 @@ class CheckSheetApp(App):
         if os.path.exists(self.SETTINGS_FILE):
             try:
                 with open(self.SETTINGS_FILE, 'r') as f:
-                    d = json.load(f); self.excel_path = d.get('excel_path', ''); self.pdf_folder_path = d.get('pdf_folder_path', ''); self.smb_config = d.get('smb_config', {'ip':'','user':'','pass':''})
+                    d = json.load(f)
+                    self.excel_path = d.get('excel_path', '')
+                    self.pdf_folder_path = d.get('pdf_folder_path', '')
+                    self.smb_config = d.get('smb_config', {'ip':'','user':'','pass':''})
+                    self.auto_save = d.get('auto_save', True)
             except: pass
 
     def save_settings(self):
-        with open(self.SETTINGS_FILE, 'w') as f: json.dump({'excel_path': self.excel_path, 'pdf_folder_path': self.pdf_folder_path, 'smb_config': self.smb_config}, f)
+        with open(self.SETTINGS_FILE, 'w') as f:
+            json.dump({
+                'excel_path': self.excel_path,
+                'pdf_folder_path': self.pdf_folder_path,
+                'smb_config': self.smb_config,
+                'auto_save': self.auto_save
+            }, f)
 
     def show_popup(self, title, msg): Popup(title=title, content=Label(text=str(msg)), size_hint=(0.8, 0.4)).open()
 
