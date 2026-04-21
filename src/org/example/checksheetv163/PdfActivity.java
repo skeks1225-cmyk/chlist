@@ -7,6 +7,8 @@ import android.graphics.Color;
 import android.content.Intent;
 
 import com.github.barteksc.pdfviewer.PDFView;
+import com.github.barteksc.pdfviewer.listener.OnPageChangeListener;
+import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -18,18 +20,19 @@ public class PdfActivity extends android.app.Activity {
     static ArrayList<String> fileList;
     static int currentIndex = 0;
 
-    // Python에서 호출할 정적 메서드
     public static void open(ArrayList<String> files, int index) {
         fileList = files;
         currentIndex = index;
 
-        PythonActivity.mActivity.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                Intent intent = new Intent(PythonActivity.mActivity, PdfActivity.class);
-                PythonActivity.mActivity.startActivity(intent);
-            }
-        });
+        if (PythonActivity.mActivity != null) {
+            PythonActivity.mActivity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Intent intent = new Intent(PythonActivity.mActivity, PdfActivity.class);
+                    PythonActivity.mActivity.startActivity(intent);
+                }
+            });
+        }
     }
 
     PDFView pdfView;
@@ -105,9 +108,10 @@ public class PdfActivity extends android.app.Activity {
 
             pdfView.fromFile(file)
                     .enableSwipe(true)
-                    .swipeHorizontal(false) // 세로 스크롤이 더 안정적임
+                    .swipeHorizontal(false)
                     .enableDoubletap(true)
                     .defaultPage(0)
+                    .scrollHandle(new DefaultScrollHandle(this))
                     .load();
         } catch (Exception e) {
             Toast.makeText(this, "PDF 로드 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -120,11 +124,9 @@ public class PdfActivity extends android.app.Activity {
             String fileName = new File(filePath).getName();
             String itemCode = fileName.replace(".pdf", "");
 
-            // Python 콜백 호출
             PythonUtil.callPythonFunction("update_status_from_java", itemCode, status);
             Toast.makeText(this, itemCode + ": " + status + " 반영됨", Toast.LENGTH_SHORT).show();
             
-            // '완료'인 경우 자동으로 다음 파일로 이동 (편의성)
             if (status.equals("complete") && currentIndex < fileList.size() - 1) {
                 currentIndex++;
                 loadPdf();
