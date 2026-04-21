@@ -24,6 +24,11 @@ jobs:
           channel: 'stable'
           flutter-version: '3.19.0'
 
+      # ❗ 핵심: 누락된 android/ 폴더 및 구조를 빌드 서버에서 강제 생성
+      - name: Initialize Flutter Project Structure
+        run: |
+          flutter create . --org org.example --project-name checksheet_final --force
+
       - name: Install dependencies
         run: flutter pub get
 
