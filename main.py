@@ -329,12 +329,15 @@ class CheckSheetApp(App):
                     if d['rework']: d['complete'] = d['shortage'] = False
                 break
         rv.refresh_from_data()
+        self.save_to_excel()
 
     def update_remarks_data(self, ic, no, text):
         rv = self.root.get_screen('list').ids.rv
         for d in rv.data:
             if d['item_code'] == ic and d['no'] == no:
                 d['remarks'] = text; break
+        # 비고란 입력 시에도 자동 저장 (성능을 위해 엑셀 경기 있을 때만)
+        if self.excel_path: self.save_to_excel()
 
     def save_to_excel(self):
         if not self.excel_path: return
