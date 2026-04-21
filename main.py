@@ -184,6 +184,34 @@ KV_UI = """
         on_text: root.on_remarks_change(self.text)
 """
 
+# --- Java 콜백용 전역 함수 ---
+def update_status_from_java(item_code, status):
+    app = App.get_running_app()
+    if not app: return
+    
+    # UI 스레드에서 데이터 업데이트 수행
+    def update_data(dt):
+        rv = app.root.get_screen('list').ids.rv
+        found = False
+        for d in rv.data:
+            if d['item_code'] == item_code:
+                if status == 'complete':
+                    d['complete'] = not d['complete']
+                    if d['complete']: d['shortage'] = d['rework'] = False
+                elif status == 'shortage':
+                    d['shortage'] = not d['shortage']
+                    if d['shortage']: d['complete'] = d['rework'] = False
+                elif status == 'rework':
+                    d['rework'] = not d['rework']
+                    if d['rework']: d['complete'] = d['shortage'] = False
+                found = True; break
+        
+        if found:
+            rv.refresh_from_data()
+            if app.auto_save: app.save_to_excel(show_popup=False)
+            
+    Clock.schedule_once(update_data)
+
 class ListScreen(Screen): pass
 class CheckSheetRV(RecycleView): pass
 
@@ -192,36 +220,45 @@ class RowWidget(BoxLayout):
     remarks = StringProperty(''); complete = BooleanProperty(False); shortage = BooleanProperty(False); rework = BooleanProperty(False)
     def on_status(self, st): App.get_running_app().update_item_status(self.item_code, self.no, st)
     def on_remarks_change(self, text): App.get_running_app().update_remarks_data(self.item_code, self.no, text)
-    def open_pdf_external(self): App.get_running_app().open_pdf_in_external_app(self.item_code)
+    # 내부 뷰어로 실행하도록 변경
+    def open_pdf_external(self): App.get_running_app().open_pdf_viewer_flow(self.item_code)
 
 class CheckSheetApp(App):
-    SETTINGS_FILE = 'settings.json'
-    LOCAL_BASE = "/sdcard/Download/CheckSheet" if platform == 'android' else os.path.join(os.getcwd(), "CheckSheet_Data")
-    excel_path = StringProperty(''); pdf_folder_path = StringProperty('')
-    current_filename = StringProperty('파일을 선택하세요'); auto_save = BooleanProperty(True)
-    smb_config = DictProperty({'ip': '', 'user': '', 'pass': ''})
-    sort_indicator_no = StringProperty(''); sort_indicator_code = StringProperty(''); sort_indicator_qty = StringProperty('')
-    sort_indicator_comp = StringProperty(''); sort_indicator_short = StringProperty(''); sort_indicator_rew = StringProperty('')
-    sort_states = {}
+    # ... (생략된 기존 속성들) ...
 
-    def build(self):
-        self.load_settings()
-        Builder.load_string(KV_UI)
-        sm = ScreenManager()
-        sm.add_widget(ListScreen(name='list'))
-        return sm
+    # 내부 PDF 뷰어 실행 로직 (새로 추가)
+    def open_pdf_viewer_flow(self, item_code):
+        rv = self.root.get_screen('list').ids.rv.data
+        if not rv: return
 
-    def toggle_auto_save(self):
-        self.auto_save = not self.auto_save
-        self.save_settings()
+        # PDF 폴더 경로 확인
+        base_path = self.pdf_folder_path if self.pdf_folder_path else self.LOCAL_BASE
+        
+        # 파일 목록 및 현재 인덱스 준비
+        file_list = []
+        target_index = 0
+        
+        # 전체 리스트를 순회하며 PDF 경로 목록 생성
+        for i, d in enumerate(rv):
+            ic = d['item_code']
+            p = os.path.join(base_path, f"{ic}.pdf")
+            # SMB 경로일 경우 임시 로컬 경로로 미리 변환 (필요시 다운로드는 Java에서 하거나 여기서 처리)
+            # 일단 단순화를 위해 로컬 경로 위주로 리스트 생성
+            file_list.append(p)
+            if ic == item_code: target_index = i
 
-    def on_start(self):
-        Clock.schedule_once(self.delayed_init, 1)
+        try:
+            from jnius import autoclass
+            ArrayList = autoclass('java.util.ArrayList')
+            PdfActivity = autoclass('org.example.checksheetv163.PdfActivity')
 
-    def delayed_init(self, dt):
-        self.ask_permissions()
-        if self.excel_path and os.path.exists(self.excel_path):
-            self.load_excel_data(self.excel_path)
+            j_list = ArrayList()
+            for f in file_list: j_list.add(f)
+
+            # Java PdfActivity 실행
+            PdfActivity.open(j_list, target_index)
+        except Exception as e:
+            self.show_popup("오류", f"내부 뷰어 실행 실패: {str(e)}\n빌드 설정을 확인하세요.")
 
     def ask_permissions(self):
         if platform != 'android': return
