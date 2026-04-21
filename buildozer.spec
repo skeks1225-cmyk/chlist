@@ -12,11 +12,16 @@ android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTE
 android.api = 31
 android.minapi = 21
 android.ndk_api = 21
+
 android.accept_sdk_license = True
+
+# 🔥 PDF 뷰어 안정 조합 (쉼표 제거)
 android.gradle_dependencies = com.github.barteksc:android-pdf-viewer:2.8.2
 android.gradle_repositories = mavenCentral() https://jitpack.io
+
 android.enable_androidx = True
 android.enable_jetifier = True
+
 android.manifest.activities = org.example.checksheetv163.PdfActivity
 android.add_src = src
 [buildozer]
