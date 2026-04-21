@@ -13,7 +13,8 @@ android.api = 33
 android.minapi = 21
 android.ndk_api = 21
 android.accept_sdk_license = True
-android.gradle_dependencies = com.github.barteksc:android-pdf-viewer:3.2.0-beta.1
+android.gradle_dependencies = com.github.barteksc:android-pdf-viewer:2.8.2
+android.enable_androidx = True
 android.add_src = src
 [buildozer]
 log_level = 2

@@ -89,14 +89,25 @@ public class PdfActivity extends android.app.Activity {
 
     private void loadPdf() {
         try {
+            if (fileList == null || fileList.isEmpty()) {
+                Toast.makeText(this, "표시할 파일이 없습니다.", Toast.LENGTH_SHORT).show();
+                return;
+            }
             String path = fileList.get(currentIndex);
             File file = new File(path);
+            
+            if (!file.exists()) {
+                titleView.setText("파일 없음: " + file.getName());
+                return;
+            }
+
             titleView.setText("[" + (currentIndex + 1) + "/" + fileList.size() + "] " + file.getName());
 
             pdfView.fromFile(file)
                     .enableSwipe(true)
-                    .swipeHorizontal(true)
+                    .swipeHorizontal(false) // 세로 스크롤이 더 안정적임
                     .enableDoubletap(true)
+                    .defaultPage(0)
                     .load();
         } catch (Exception e) {
             Toast.makeText(this, "PDF 로드 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
