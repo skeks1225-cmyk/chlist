@@ -21,8 +21,8 @@ android.ndk_api = 21
 
 android.accept_sdk_license = True
 
-# ✅ PDF (검증)
-android.gradle_dependencies = com.github.barteksc:android-pdf-viewer:2.8.2
+# ✅ PDF (JitPack 기반 3.2.0-beta.1)
+android.gradle_dependencies = com.github.barteksc:android-pdf-viewer:3.2.0-beta.1
 android.gradle_repositories = https://jitpack.io
 
 android.enable_androidx = True
