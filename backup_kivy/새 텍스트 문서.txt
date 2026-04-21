@@ -2289,31 +2289,3 @@ pysmb 제거 (가장 확실)
 
 
 빌드실패했어.
-
-
-
-kivy+android-pdf-viewer는 현재로서는 불가능한가봐
-다른계정까지 합쳐서 백번가깝게 시도했는데, 안되는 거면 해결이 불가능하다고 봐야해.
-그래서 방법을 바꾸고 싶어.
-기능만 그대로 살리고 처음부터 새로 시작하는 거야.
-
-
-🔥 3️⃣ 완전 추천 (현실적으로 가장 안정)
-👉 Flutter + native PDF
-
-Flutter
-+
-pdfx 또는 Syncfusion PDF
-
-구조
-Flutter 앱
-  ↓
-PDF widget (native optimized)
-✔️ 장점
-PDF 문제 거의 사라짐
-빌드 안정성 매우 높음
-Android/iOS 모두 대응 가능
-zoom / scroll / page 완벽
-❌ 단점
-Python 코드 재사용 불가
-UI 재작성 필요

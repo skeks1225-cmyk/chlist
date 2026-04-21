@@ -1,4 +1,4 @@
-name: Android Build
+name: Flutter Android Build
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -18,44 +18,20 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Force Java 17 (hard override)
-        run: |
-          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
-          echo "PATH=$JAVA_HOME_17_X64/bin:$PATH" >> $GITHUB_ENV
-          sudo update-alternatives --set java $JAVA_HOME_17_X64/bin/java || true
-          java -version
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.19.0'
 
-      - name: Install system deps
-        run: |
-          sudo apt update
-          sudo apt install -y \
-            python3-pip \
-            build-essential \
-            git zip unzip \
-            autoconf libtool pkg-config \
-            zlib1g-dev libncurses5-dev \
-            libffi-dev libssl-dev
-
-      - name: Install buildozer
-        run: |
-          pip install --upgrade pip
-          pip install buildozer cython==0.29.33
-
-      - name: Clean build
-        run: |
-          rm -rf .buildozer
-          rm -rf bin
+      - name: Install dependencies
+        run: flutter pub get
 
       - name: Build APK
-        run: |
-          # 라이선스 자동 동의 및 빌드 실행
-          yes | buildozer -v android debug
-        env:
-          ACCEPT_SDK_LICENSE: "y"
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
+        run: flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: apk
-          path: bin/*.apk
+          name: CheckSheet-Flutter-Release
+          path: build/app/outputs/flutter-apk/app-release.apk
