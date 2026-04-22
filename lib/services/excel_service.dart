@@ -58,6 +58,20 @@ class ExcelService {
 
   Future<bool> saveExcel(String path, List<ItemModel> items) async {
     try {
+      final file = File(path);
+      
+      // ❗ 전문가 조언: 파일이 다른 앱에서 사용 중인지 체크
+      if (file.existsSync()) {
+        try {
+          // 파일에 쓰기 가능한지 테스트 (열려 있으면 여기서 에러 발생)
+          var f = file.openSync(mode: FileMode.append);
+          f.closeSync();
+        } catch (e) {
+          print("파일 잠김: 다른 앱에서 사용 중");
+          return false;
+        }
+      }
+
       var excel = Excel.createExcel();
       String sheetName = "Sheet1";
       excel.rename(excel.getDefaultSheet()!, sheetName);
@@ -81,15 +95,14 @@ class ExcelService {
 
       var fileBytes = excel.save();
       if (fileBytes != null) {
-        final file = File(path);
-        // ❗ 파일 존재 시 삭제 후 동기식(Sync)으로 즉시 기록하여 안정성 확보
+        // ❗ 가장 강력한 저장 방식: 기존 파일 완전 삭제 후 바이너리 기록
         if (file.existsSync()) file.deleteSync();
         file.writeAsBytesSync(fileBytes, flush: true);
         return true;
       }
       return false;
     } catch (e) {
-      print("엑셀 저장 치명적 에러: $e");
+      print("저장 치명적 에러: $e");
       return false;
     }
   }

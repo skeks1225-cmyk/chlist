@@ -9,11 +9,16 @@ void main() async {
 }
 
 Future<void> _requestPermissions() async {
-  // 저장소 및 관리 권한 요청 (안드로이드 11 이상 대응)
+  // 1. 일반적인 저장소 권한 요청
   await [
     Permission.storage,
-    Permission.manageExternalStorage,
+    Permission.notification,
   ].request();
+
+  // 2. 안드로이드 11 이상 필수: 모든 파일 접근 권한 확인 및 요청
+  if (await Permission.manageExternalStorage.isDenied) {
+    await Permission.manageExternalStorage.request();
+  }
 }
 
 class CheckSheetApp extends StatelessWidget {
