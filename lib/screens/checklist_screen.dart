@@ -222,14 +222,21 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                           Expanded(
                             flex: 3,
                             child: InkWell(
-                              onTap: () => Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => PdfViewerScreen(
-                                  items: _items,
-                                  initialIndex: idx,
-                                  pdfFolderPath: _pdfFolderPath,
-                                  onStatusUpdate: (it, type) => _toggleStatus(it, type),
-                                ),
-                              )),
+                              onTap: () {
+                                if (_pdfFolderPath.isEmpty) {
+                                  _showError("알림", "PDF 폴더를 먼저 선택해 주세요.");
+                                  return;
+                                }
+                                Navigator.push(context, MaterialPageRoute(
+                                  builder: (_) => PdfViewerScreen(
+                                    items: _items,
+                                    initialIndex: idx,
+                                    pdfFolderPath: _pdfFolderPath,
+                                    onStatusUpdate: (it, type) => _toggleStatus(it, type),
+                                  ),
+                                ));
+                              },
+
                               child: Container(
                                 color: isDark ? Colors.blueGrey[900] : Colors.blue[50],
                                 alignment: Alignment.center,
