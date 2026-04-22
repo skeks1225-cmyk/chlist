@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pdfx/pdfx.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../models/item_model.dart';
 import 'dart:io';
 
@@ -23,54 +23,40 @@ class PdfViewerScreen extends StatefulWidget {
 
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
   late int _currentIndex;
-  PdfControllerPinch? _pdfController;
+  final PdfViewerController _pdfViewerController = PdfViewerController();
   String _currentPdfPath = "";
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
-    _loadPdf();
+    _updatePath();
   }
 
-  void _loadPdf() {
+  void _updatePath() {
     final item = widget.items[_currentIndex];
     final path = "${widget.pdfFolderPath}/${item.itemCode}.pdf";
-    
-    // 이전 리소스 완전 해제
-    _pdfController?.dispose();
-    
-    if (File(path).existsSync()) {
-      _currentPdfPath = path;
-      _pdfController = PdfControllerPinch(
-        document: PdfDocument.openFile(path),
-        initialPage: 1,
-      );
-    } else {
-      _currentPdfPath = "";
-      _pdfController = null;
-    }
-    setState(() {});
+    setState(() {
+      _currentPdfPath = File(path).existsSync() ? path : "";
+    });
   }
 
   void _next() {
     if (_currentIndex < widget.items.length - 1) {
-      _currentIndex++;
-      _loadPdf();
+      setState(() {
+        _currentIndex++;
+        _updatePath();
+      });
     }
   }
 
   void _prev() {
     if (_currentIndex > 0) {
-      _currentIndex--;
-      _loadPdf();
+      setState(() {
+        _currentIndex--;
+        _updatePath();
+      });
     }
-  }
-
-  @override
-  void dispose() {
-    _pdfController?.dispose();
-    super.dispose();
   }
 
   @override
@@ -82,21 +68,25 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         title: Text(item.itemCode, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        actions: [
+          // 전체 화면 핏 버튼 추가
+          IconButton(
+            icon: const Icon(Icons.fullscreen_exit),
+            onPressed: () => _pdfViewerController.zoomLevel = 1.0,
+          )
+        ],
       ),
       backgroundColor: Colors.black,
       body: Column(
         children: [
           Expanded(
-            child: _pdfController != null
-                ? PdfViewPinch(
-                    key: ValueKey(_currentPdfPath),
-                    controller: _pdfController!,
-                    builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
-                      options: const DefaultBuilderOptions(),
-                      documentLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-                      pageLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-                      errorBuilder: (_, error) => Center(child: Text("PDF 로드 오류: $error", style: const TextStyle(color: Colors.white))),
-                    ),
+            child: _currentPdfPath.isNotEmpty
+                ? SfPdfViewer.file(
+                    File(_currentPdfPath),
+                    controller: _pdfViewerController,
+                    // ❗ 핵심 설정: 핀치 줌을 자유롭게 허용
+                    enableDoubleTapZooming: true,
+                    interactionMode: PdfInteractionMode.pan,
                   )
                 : const Center(child: Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: Colors.white, fontSize: 16))),
           ),
@@ -110,7 +100,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   children: [
                     _buildStatusBtn("완료", Colors.green, item.complete, () {
                       widget.onStatusUpdate(item, 'complete');
-                      setState(() {}); // 즉시 색상 갱신
+                      setState(() {});
                       Future.delayed(const Duration(milliseconds: 300), () => _next());
                     }),
                     _buildStatusBtn("부족", Colors.orange, item.shortage, () {
