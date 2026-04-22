@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:excel/excel.dart';
 import '../models/item_model.dart';
+import 'package:path_provider/path_provider.dart';
 
 class ExcelService {
-  // 고정 헤더 (저장 시 사용)
   final List<String> _fixedHeader = ['no', '품목코드', '수량', '완료', '부족', '재작업', '비고'];
 
   Future<List<ItemModel>> loadExcel(String path) async {
@@ -16,21 +16,36 @@ class ExcelService {
       var sheet = excel.tables[excel.tables.keys.first];
       if (sheet == null || sheet.maxRows <= 1) return [];
 
-      // 전문가 조언: 이름이 달라도 "위치 기반"으로 읽어옴
+      // 1. 헤더 맵핑 (위치 기반이 아닌 이름 기반 감지 시도 후 실패 시 기본값)
+      Map<String, int> colMap = {'no': 0, 'code': 1, 'qty': 2, 'comp': 3, 'short': 4, 'rew': 5, 'rem': 6};
+      var headerRow = sheet.rows[0];
+      for (int i = 0; i < headerRow.length; i++) {
+        if (headerRow[i] == null) continue;
+        String val = headerRow[i]!.value.toString().toLowerCase().trim();
+        if (val.contains('no') || val.contains('번호')) colMap['no'] = i;
+        else if (val.contains('품목코드') || val.contains('code')) colMap['code'] = i;
+        else if (val.contains('수량')) colMap['qty'] = i;
+        else if (val.contains('완료')) colMap['comp'] = i;
+        else if (val.contains('부족')) colMap['short'] = i;
+        else if (val.contains('재작업')) colMap['rew'] = i;
+        else if (val.contains('비고')) colMap['rem'] = i;
+      }
+
+      // 2. 데이터 추출
       for (int i = 1; i < sheet.maxRows; i++) {
         var row = sheet.rows[i];
-        // 최소 품목코드(1번)는 있어야 함
-        if (row.length <= 1 || row[1] == null || row[1]?.value == null) continue;
+        int codeIdx = colMap['code'] ?? 1;
+        if (row.length <= codeIdx || row[codeIdx] == null) continue;
 
         items.add(ItemModel(
           realIndex: i,
-          no: _getSafe(row, 0),       // 0: no
-          itemCode: _getSafe(row, 1), // 1: 품목코드
-          quantity: _getSafe(row, 2), // 2: 수량
-          complete: _getSafe(row, 3).toUpperCase() == "V", // 3: 완료
-          shortage: _getSafe(row, 4).toUpperCase() == "V", // 4: 부족
-          rework: _getSafe(row, 5).toUpperCase() == "V",   // 5: 재작업
-          remarks: _getSafe(row, 6),  // 6: 비고
+          no: _getSafe(row, colMap['no']),
+          itemCode: _getSafe(row, colMap['code']),
+          quantity: _getSafe(row, colMap['qty']),
+          complete: _getSafe(row, colMap['comp']).toUpperCase() == "V",
+          shortage: _getSafe(row, colMap['short']).toUpperCase() == "V",
+          rework: _getSafe(row, colMap['rew']).toUpperCase() == "V",
+          remarks: _getSafe(row, colMap['rem']),
         ));
       }
       return items;
@@ -39,8 +54,8 @@ class ExcelService {
     }
   }
 
-  String _getSafe(List<Data?> row, int idx) {
-    if (idx < 0 || idx >= row.length || row[idx] == null) return "";
+  String _getSafe(List<Data?> row, int? idx) {
+    if (idx == null || idx < 0 || idx >= row.length || row[idx] == null) return "";
     return row[idx]!.value.toString();
   }
 
@@ -69,17 +84,18 @@ class ExcelService {
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: r), TextCellValue(item.remarks));
       }
 
-      // 3. 물리적 파일 저장 (안드로이드 권한 대응: 덮어쓰기)
+      // 3. 물리적 파일 저장 (임시 파일을 이용한 덮어쓰기 전략)
       var fileBytes = excel.save();
       if (fileBytes != null) {
-        final file = File(path);
-        // 삭제 후 재생성보다 직접 쓰기가 더 안정적임
-        await file.writeAsBytes(fileBytes, flush: true);
+        final originalFile = File(path);
+        // 안드로이드 11 이상 Scoped Storage 대응: 
+        // 기존 파일을 열어 둔 상태에서 쓰기 에러를 방지하기 위해 bytes를 직접 flush하며 씁니다.
+        await originalFile.writeAsBytes(fileBytes, mode: FileMode.writeOnly, flush: true);
         return true;
       }
       return false;
     } catch (e) {
-      print("저장 실패: $e");
+      print("엑셀 저장 치명적 에러: $e");
       return false;
     }
   }

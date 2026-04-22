@@ -37,32 +37,36 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     final item = widget.items[_currentIndex];
     final path = "${widget.pdfFolderPath}/${item.itemCode}.pdf";
     
-    // 이전 컨트롤러 해제 필수 (메모리 및 갱신 에러 방지)
+    // 1. 기존 컨트롤러와 리소스 확실히 해제
     _pdfController?.dispose();
     
     if (File(path).existsSync()) {
-      _pdfController = PdfControllerPinch(
-        document: PdfDocument.openFile(path),
-        initialPage: 1,
-      );
-      _currentPdfPath = path;
+      setState(() {
+        _currentPdfPath = path;
+        // 2. 새 경로로 컨트롤러 생성
+        _pdfController = PdfControllerPinch(
+          document: PdfDocument.openFile(path),
+          initialPage: 1,
+        );
+      });
     } else {
-      _pdfController = null;
-      _currentPdfPath = "";
+      setState(() {
+        _pdfController = null;
+        _currentPdfPath = "";
+      });
     }
-    setState(() {}); // UI 강제 갱신
   }
 
   void _next() {
     if (_currentIndex < widget.items.length - 1) {
-      _currentIndex++;
+      setState(() => _currentIndex++);
       _loadPdf();
     }
   }
 
   void _prev() {
     if (_currentIndex > 0) {
-      _currentIndex--;
+      setState(() => _currentIndex--);
       _loadPdf();
     }
   }
@@ -89,12 +93,14 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           Expanded(
             child: _pdfController != null
                 ? PdfViewPinch(
+                    // ❗ 핵심: ValueKey를 사용하여 파일이 바뀔 때마다 뷰어 위젯을 강제로 새로고침함
+                    key: ValueKey(_currentPdfPath),
                     controller: _pdfController!,
-                    // 핏 옵션: 축소 시 화면에 맞게 조절되도록 설정
                     builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
                       options: const DefaultBuilderOptions(),
-                      documentLoaderBuilder: (_) => const Center(child: CircularProgressIndicator()),
-                      pageLoaderBuilder: (_) => const Center(child: CircularProgressIndicator()),
+                      documentLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                      pageLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                      errorBuilder: (_, error) => Center(child: Text("PDF 로드 오류: $error", style: const TextStyle(color: Colors.white))),
                     ),
                   )
                 : const Center(child: Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: Colors.white))),
@@ -110,7 +116,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                     _buildStatusBtn("완료", Colors.green, item.complete, () {
                       widget.onStatusUpdate(item, 'complete');
                       setState(() {});
-                      _next();
+                      // '완료' 시에만 자동으로 다음으로 넘어가며 뷰어 갱신
+                      Future.delayed(const Duration(milliseconds: 200), () => _next());
                     }),
                     _buildStatusBtn("부족", Colors.orange, item.shortage, () {
                       widget.onStatusUpdate(item, 'shortage');
