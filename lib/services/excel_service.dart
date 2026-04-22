@@ -3,14 +3,8 @@ import 'package:excel/excel.dart';
 import '../models/item_model.dart';
 
 class ExcelService {
-  // 로딩과 저장을 위해 감지된 컬럼 인덱스들을 보관
-  int _idxNo = 0;
-  int _idxCode = 1;
-  int _idxQty = 2;
-  int _idxComp = 3;
-  int _idxShort = 4;
-  int _idxRew = 5;
-  int _idxRem = 6;
+  // 사용자가 요청한 정석 헤더 구조
+  final List<String> _fixedHeader = ['no', '품목코드', '수량', '완료', '부족', '재작업', '비고'];
 
   Future<List<ItemModel>> loadExcel(String path) async {
     try {
@@ -22,81 +16,85 @@ class ExcelService {
       var sheet = excel.tables[excel.tables.keys.first];
       if (sheet == null || sheet.maxRows <= 1) return [];
 
-      var header = sheet.rows[0];
-      // 헤더 명칭을 기반으로 유연하게 인덱스 찾기
-      _idxNo = _findCol(header, ['no', '번호'], 0);
-      _idxCode = _findCol(header, ['품목코드', 'code', 'item code'], 1);
-      _idxQty = _findCol(header, ['수량', 'qty'], 2);
-      _idxComp = _findCol(header, ['완료', 'done'], 3);
-      // '부족' 또는 '수량부족' 중 있는 것을 선택
-      _idxShort = _findCol(header, ['부족', '수량부족', 'short'], 4);
-      _idxRew = _findCol(header, ['재작업', 'rework'], 5);
-      _idxRem = _findCol(header, ['비고', 'remarks'], 6);
+      // 헤더 위치 분석
+      var headerRow = sheet.rows[0];
+      Map<String, int> colMap = {};
+      for (int i = 0; i < headerRow.length; i++) {
+        if (headerRow[i] == null) continue;
+        String val = headerRow[i]!.value.toString().toLowerCase().trim();
+        if (val.contains('no') || val.contains('번호')) colMap['no'] = i;
+        else if (val.contains('품목코드') || val.contains('code')) colMap['code'] = i;
+        else if (val.contains('수량')) colMap['qty'] = i;
+        else if (val.contains('완료')) colMap['comp'] = i;
+        else if (val.contains('부족')) colMap['short'] = i;
+        else if (val.contains('재작업')) colMap['rew'] = i;
+        else if (val.contains('비고')) colMap['rem'] = i;
+      }
 
       for (int i = 1; i < sheet.maxRows; i++) {
         var row = sheet.rows[i];
-        if (row.length <= _idxCode || row[_idxCode] == null || row[_idxCode]?.value == null) continue;
+        int codeIdx = colMap['code'] ?? 1;
+        if (row.length <= codeIdx || row[codeIdx] == null || row[codeIdx]?.value == null) continue;
 
         items.add(ItemModel(
           realIndex: i,
-          no: row.length > _idxNo ? row[_idxNo]?.value?.toString() ?? "" : "",
-          itemCode: row[_idxCode]?.value?.toString() ?? "",
-          quantity: row.length > _idxQty ? row[_idxQty]?.value?.toString() ?? "" : "",
-          complete: _isV(row, _idxComp),
-          shortage: _isV(row, _idxShort) || _isV(row, _findCol(header, ['수량부족'], -1)),
-          rework: _isV(row, _idxRew),
-          remarks: (row.length > _idxRem ? row[_idxRem]?.value?.toString() ?? "" : ""),
+          no: _getVal(row, colMap['no']),
+          itemCode: _getVal(row, colMap['code']),
+          quantity: _getVal(row, colMap['qty']),
+          complete: _getVal(row, colMap['comp']).toUpperCase() == "V",
+          shortage: _getVal(row, colMap['short']).toUpperCase() == "V",
+          rework: _getVal(row, colMap['rew']).toUpperCase() == "V",
+          remarks: _getVal(row, colMap['rem']),
         ));
       }
       return items;
     } catch (e) {
+      print("로드 에러: $e");
       rethrow;
     }
   }
 
-  bool _isV(List<Data?> row, int idx) {
-    if (idx < 0 || idx >= row.length) return false;
-    return row[idx]?.value?.toString().toUpperCase() == "V";
-  }
-
-  int _findCol(List<Data?> header, List<String> targets, int defaultIdx) {
-    for (int i = 0; i < header.length; i++) {
-      if (header[i] == null) continue;
-      var val = header[i]?.value?.toString().toLowerCase().trim() ?? "";
-      if (targets.contains(val)) return i;
-    }
-    return defaultIdx;
+  String _getVal(List<Data?> row, int? idx) {
+    if (idx == null || idx < 0 || idx >= row.length || row[idx] == null) return "";
+    return row[idx]!.value.toString();
   }
 
   Future<void> saveExcel(String path, List<ItemModel> items) async {
     try {
-      var bytes = File(path).readAsBytesSync();
-      var excel = Excel.decodeBytes(bytes);
-      if (excel.tables.isEmpty) return;
-      var sheet = excel.tables[excel.tables.keys.first];
-      if (sheet == null) return;
+      // 1. 새로운 엑셀 객체 생성 (기존 파일의 찌꺼기를 없애기 위해 새로 만듦)
+      var excel = Excel.createExcel();
+      String sheetName = "Sheet1";
+      excel.rename(excel.getDefaultSheet()!, sheetName);
+      var sheet = excel[sheetName];
 
-      for (var item in items) {
-        int r = item.realIndex;
-        // 감지된 인덱스 위치에 정확히 저장
-        _safeUpdate(sheet, _idxComp, r, item.complete ? "V" : "");
-        _safeUpdate(sheet, _idxShort, r, item.shortage ? "V" : "");
-        _safeUpdate(sheet, _idxRew, r, item.rework ? "V" : "");
-        _safeUpdate(sheet, _idxRem, r, item.remarks);
+      // 2. 고정 헤더 쓰기
+      for (int i = 0; i < _fixedHeader.length; i++) {
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0), TextCellValue(_fixedHeader[i]));
       }
-      
-      var fileBytes = excel.save();
-      if (fileBytes != null) File(path).writeAsBytesSync(fileBytes);
-    } catch (e) {
-      print("저장 오류: $e");
-    }
-  }
 
-  void _safeUpdate(Sheet sheet, int col, int row, String val) {
-    if (col < 0) return;
-    sheet.updateCell(
-      CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row),
-      TextCellValue(val),
-    );
+      // 3. 데이터 쓰기
+      for (int i = 0; i < items.length; i++) {
+        var item = items[i];
+        int r = i + 1; // 0번은 헤더이므로 1번부터 시작
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: r), TextCellValue(item.no));
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: r), TextCellValue(item.itemCode));
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: r), TextCellValue(item.quantity));
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: r), TextCellValue(item.complete ? "V" : ""));
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: r), TextCellValue(item.shortage ? "V" : ""));
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: r), TextCellValue(item.rework ? "V" : ""));
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: r), TextCellValue(item.remarks));
+      }
+
+      // 4. 물리적 파일 저장 (가장 중요)
+      var fileBytes = excel.save();
+      if (fileBytes != null) {
+        final file = File(path);
+        if (await file.exists()) await file.delete(); // 기존 파일 강제 삭제 후 재생성
+        await file.writeAsBytes(fileBytes, flush: true);
+        print("엑셀 저장 성공: $path");
+      }
+    } catch (e) {
+      print("저장 치명적 에러: $e");
+    }
   }
 }
