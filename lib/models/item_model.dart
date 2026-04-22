@@ -7,6 +7,7 @@ class ItemModel {
   bool shortage;
   bool rework;
   String remarks;
+  bool isSubheading; // ❗ 소제목 여부
 
   ItemModel({
     required this.realIndex,
@@ -17,5 +18,6 @@ class ItemModel {
     this.shortage = false,
     this.rework = false,
     this.remarks = "",
+    this.isSubheading = false,
   });
 }

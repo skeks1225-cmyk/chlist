@@ -15,34 +15,28 @@ class ExcelService {
       var sheet = excel.tables[excel.tables.keys.first];
       if (sheet == null || sheet.maxRows <= 1) return [];
 
-      Map<String, int> colMap = {'no': 0, 'code': 1, 'qty': 2, 'comp': 3, 'short': 4, 'rew': 5, 'rem': 6};
-      var headerRow = sheet.rows[0];
-      for (int i = 0; i < headerRow.length; i++) {
-        if (headerRow[i] == null) continue;
-        String val = headerRow[i]!.value.toString().toLowerCase().trim();
-        if (val.contains('no') || val.contains('번호')) colMap['no'] = i;
-        else if (val.contains('품목코드') || val.contains('code')) colMap['code'] = i;
-        else if (val.contains('수량')) colMap['qty'] = i;
-        else if (val.contains('완료')) colMap['comp'] = i;
-        else if (val.contains('부족')) colMap['short'] = i;
-        else if (val.contains('재작업')) colMap['rew'] = i;
-        else if (val.contains('비고')) colMap['rem'] = i;
-      }
-
+      // 전문가 조언: 이름이 달라도 "위치 기반"으로 읽어옴
       for (int i = 1; i < sheet.maxRows; i++) {
         var row = sheet.rows[i];
-        int codeIdx = colMap['code'] ?? 1;
-        if (row.length <= codeIdx || row[codeIdx] == null) continue;
+        if (row.length <= 1) continue;
+
+        String no = _getSafe(row, 0);
+        String code = _getSafe(row, 1);
+        String qty = _getSafe(row, 2);
+
+        // ❗ 소제목 판단: No와 Qty가 없고 코드만 있을 때
+        bool isSub = (no.isEmpty && qty.isEmpty && code.isNotEmpty);
 
         items.add(ItemModel(
           realIndex: i,
-          no: _getSafe(row, colMap['no']),
-          itemCode: _getSafe(row, colMap['code']),
-          quantity: _getSafe(row, colMap['qty']),
-          complete: _getSafe(row, colMap['comp']).toUpperCase() == "V",
-          shortage: _getSafe(row, colMap['short']).toUpperCase() == "V",
-          rework: _getSafe(row, colMap['rew']).toUpperCase() == "V",
-          remarks: _getSafe(row, colMap['rem']),
+          no: no,
+          itemCode: code,
+          quantity: qty,
+          complete: _getSafe(row, 3).toUpperCase() == "V",
+          shortage: _getSafe(row, 4).toUpperCase() == "V",
+          rework: _getSafe(row, 5).toUpperCase() == "V",
+          remarks: _getSafe(row, 6),
+          isSubheading: isSub,
         ));
       }
       return items;
@@ -51,26 +45,13 @@ class ExcelService {
     }
   }
 
-  String _getSafe(List<Data?> row, int? idx) {
-    if (idx == null || idx < 0 || idx >= row.length || row[idx] == null) return "";
+  String _getSafe(List<Data?> row, int idx) {
+    if (idx < 0 || idx >= row.length || row[idx] == null) return "";
     return row[idx]!.value.toString();
   }
 
-  // ❗ 빌드 에러 해결을 위해 다시 bool을 반환하도록 원복
   Future<bool> saveExcel(String path, List<ItemModel> items) async {
     try {
-      final file = File(path);
-      
-      if (file.existsSync()) {
-        try {
-          var f = file.openSync(mode: FileMode.append);
-          f.closeSync();
-        } catch (e) {
-          print("잠금 에러");
-          return false;
-        }
-      }
-
       var excel = Excel.createExcel();
       String sheetName = "Sheet1";
       excel.rename(excel.getDefaultSheet()!, sheetName);
@@ -80,6 +61,7 @@ class ExcelService {
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0), TextCellValue(_fixedHeader[i]));
       }
 
+      // ❗ 정렬과 상관없이 전달받은 리스트(원본 순서) 그대로 저장
       for (int i = 0; i < items.length; i++) {
         var item = items[i];
         int r = i + 1;
@@ -94,12 +76,12 @@ class ExcelService {
 
       var fileBytes = excel.save();
       if (fileBytes != null) {
+        final file = File(path);
         file.writeAsBytesSync(fileBytes, flush: true);
         return true;
       }
       return false;
     } catch (e) {
-      print("저장 오류: $e");
       return false;
     }
   }

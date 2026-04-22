@@ -3052,3 +3052,46 @@ SMB 지원	✔ 문제 없음
 안정성	✔ 높음
 구현 난이도	중간
 Flutter 적합성	✔ 매우 좋음
+
+
+
+
+빌드실패했어. 아래는 로그야.
+
+Run flutter pub get
+Resolving dependencies...
+Because checksheet depends on smb_connect ^1.0.1 which doesn't match any versions, version solving failed.
+
+
+You can try the following suggestion to make the pubspec resolve:
+* Consider downgrading your constraint on smb_connect: flutter pub add smb_connect:^0.0.9
+Error: Process completed with exit code 1.
+
+
+1.
+No	품목코드	수량	완료	부족	재작업	비고
+	R2026-1463_260414-260515_진율근_7D_5종_1대					
+1	4090003593	1				cs
+2	4060002051	1				t
+3	4060002052	1				b
+4	4060002055	1				b
+5	4060002056	1				z
+	R2026-1514_260417-260429_장기영_BA1100_1종_2대					
+1	4000500383	2				i
+	메카트로_260422-260428_전재완_기타_1종_25대					
+1	AAPRP-414-B02	25				
+
+
+엑셀 시트에 위 내용처럼 입력이 되어 있으면 읽어오질 못해.
+내가 원하는 건 품목코드만 있고, 나머지 열에는 값이 없을 때도 읽어올 수 있어야해.
+그리고 품목코드는 중앙정렬말고 좌측정렬되게 해워.
+그리고 품목코드만 있고, 나머지 열에는 값이 없을 때에는 품목코드의 값이 그 행 전체에 나타나게 해줘.
+품목코드에만 값이 있는 것은 소제목으로 구분을 위한거야.
+
+2.
+그리고 smb 추가한것은 맞아?
+추가를 했으면 기존 키비버젼처럼 ip, id, pw 입력할 수 있도록 해줘야지.
+지금은 입력하는 방법이 없는 것 아니야?
+
+
+바로 수정하지 말고 위 내용 의논해보자.
