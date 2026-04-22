@@ -56,17 +56,18 @@ class ExcelService {
     return row[idx]!.value.toString();
   }
 
-  Future<bool> saveExcel(String path, List<ItemModel> items) async {
+  // ❗ 저장 결과와 실제 에러 메시지를 반환하도록 수정
+  Future<String?> saveExcel(String path, List<ItemModel> items) async {
     try {
       final file = File(path);
       
-      // 파일 접근 가능 여부 체크
+      // 쓰기 권한 및 파일 잠금 사전 체크
       if (file.existsSync()) {
         try {
           var f = file.openSync(mode: FileMode.append);
           f.closeSync();
         } catch (e) {
-          throw Exception("파일이 다른 앱에서 사용 중입니다. 엑셀 뷰어 등을 종료해 주세요.");
+          return "파일이 다른 앱에서 열려 있습니다. (잠금 에러)";
         }
       }
 
@@ -93,17 +94,13 @@ class ExcelService {
 
       var fileBytes = excel.save();
       if (fileBytes != null) {
-        // ❗ 안드로이드 최후의 방법: RandomAccessFile을 사용하여 물리적 덮어쓰기
-        final raf = file.openSync(mode: FileMode.write);
-        raf.writeFromSync(fileBytes);
-        raf.flushSync();
-        raf.closeSync();
-        return true;
+        // ❗ 동기식 저장으로 안정성 확보
+        file.writeAsBytesSync(fileBytes, flush: true);
+        return null; // null 반환 시 성공
       }
-      return false;
+      return "데이터 생성 실패";
     } catch (e) {
-      print("저장 치명적 에러: $e");
-      rethrow;
+      return e.toString(); // 실제 에러 메시지 반환
     }
   }
 }

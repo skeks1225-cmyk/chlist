@@ -25,6 +25,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   late int _currentIndex;
   PdfControllerPinch? _pdfController;
   String _currentPdfPath = "";
+  // ❗ 뷰어 강제 새로고침을 위한 키
+  Key _viewerKey = UniqueKey();
 
   @override
   void initState() {
@@ -37,7 +39,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     final item = widget.items[_currentIndex];
     final path = "${widget.pdfFolderPath}/${item.itemCode}.pdf";
     
-    // 리소스 해제
+    // 리소스 완전 해제
     _pdfController?.dispose();
     
     if (File(path).existsSync()) {
@@ -50,24 +52,26 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       _currentPdfPath = "";
       _pdfController = null;
     }
+    // ❗ 키를 새로 생성하여 위젯을 뿌리부터 다시 그림 (로딩 루프 방지)
+    _viewerKey = UniqueKey();
     setState(() {});
   }
 
-  // ❗ FIT 버튼: 초기 줌 상태로 되돌리기 (가로 핏)
+  // ❗ FIT 버튼: 현재 파일을 다시 로드하여 초기 상태(가로 핏)로 복구
   void _resetFit() {
     _loadPdf(); 
   }
 
   void _next() {
     if (_currentIndex < widget.items.length - 1) {
-      setState(() => _currentIndex++);
+      _currentIndex++;
       _loadPdf();
     }
   }
 
   void _prev() {
     if (_currentIndex > 0) {
-      setState(() => _currentIndex--);
+      _currentIndex--;
       _loadPdf();
     }
   }
@@ -88,7 +92,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         actions: [
-          // ❗ 가로 핏 버튼 추가
           TextButton(
             onPressed: _resetFit,
             child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16)),
@@ -101,7 +104,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           Expanded(
             child: _pdfController != null
                 ? PdfViewPinch(
-                    key: ValueKey(_currentPdfPath),
+                    key: _viewerKey, // ❗ 가변 키 적용
                     controller: _pdfController!,
                     builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
                       options: const DefaultBuilderOptions(),
@@ -122,7 +125,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                     _buildStatusBtn("완료", Colors.green, item.complete, () {
                       widget.onStatusUpdate(item, 'complete');
                       setState(() {});
-                      // 자동 이동 제거됨
                     }),
                     _buildStatusBtn("부족", Colors.orange, item.shortage, () {
                       widget.onStatusUpdate(item, 'shortage');
