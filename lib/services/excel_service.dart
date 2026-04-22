@@ -93,13 +93,16 @@ class ExcelService {
 
       var fileBytes = excel.save();
       if (fileBytes != null) {
-        // ❗ 기존 파일을 완전히 지우고 새로운 바이트로 덮어쓰기
-        await file.writeAsBytes(fileBytes, flush: true);
+        // ❗ 안드로이드 최후의 방법: RandomAccessFile을 사용하여 물리적 덮어쓰기
+        final raf = file.openSync(mode: FileMode.write);
+        raf.writeFromSync(fileBytes);
+        raf.flushSync();
+        raf.closeSync();
         return true;
       }
       return false;
     } catch (e) {
-      print("엑셀 저장 오류: $e");
+      print("저장 치명적 에러: $e");
       rethrow;
     }
   }

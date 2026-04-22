@@ -82,8 +82,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             child: _currentPdfPath.isNotEmpty
                 ? SfPdfViewer.file(
                     File(_currentPdfPath),
-                    // ❗ 핵심: ValueKey를 사용하여 파일이 바뀔 때마다 뷰어 위젯을 완전히 새로 로드함
-                    key: ValueKey(_currentPdfPath),
+                    // ❗ 핵심: UniqueKey를 사용하여 파일이 바뀔 때마다 위젯을 아예 새로 그림
+                    key: UniqueKey(),
                     controller: _pdfViewerController,
                     enableDoubleTapZooming: true,
                     interactionMode: PdfInteractionMode.pan,
@@ -101,7 +101,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                     _buildStatusBtn("완료", Colors.green, item.complete, () {
                       widget.onStatusUpdate(item, 'complete');
                       setState(() {});
-                      // ❗ 다음 파일로 자동 이동 기능 제거
+                      // ❗ 자동 다음 파일 이동 기능 제거
                     }),
                     _buildStatusBtn("부족", Colors.orange, item.shortage, () {
                       widget.onStatusUpdate(item, 'shortage');
