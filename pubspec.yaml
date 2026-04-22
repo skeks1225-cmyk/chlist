@@ -1,4 +1,4 @@
-name: checksheet_final
+name: checksheet
 description: "CheckSheet Flutter App"
 publish_to: 'none'
 version: 16.3.0+1
@@ -16,7 +16,7 @@ dependencies:
   intl: ^0.19.0
   path: ^1.9.0
   permission_handler: ^11.3.1
-  external_path: ^1.0.3  # ❗ 진짜 경로 확보를 위한 필수 패키지 추가
+  external_path: ^1.0.3
 
 dev_dependencies:
   flutter_test:

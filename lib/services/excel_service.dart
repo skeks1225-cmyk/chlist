@@ -56,18 +56,18 @@ class ExcelService {
     return row[idx]!.value.toString();
   }
 
-  // ❗ 저장 결과와 실제 에러 메시지를 반환하도록 수정
-  Future<String?> saveExcel(String path, List<ItemModel> items) async {
+  // ❗ 빌드 에러 해결을 위해 다시 bool을 반환하도록 원복
+  Future<bool> saveExcel(String path, List<ItemModel> items) async {
     try {
       final file = File(path);
       
-      // 쓰기 권한 및 파일 잠금 사전 체크
       if (file.existsSync()) {
         try {
           var f = file.openSync(mode: FileMode.append);
           f.closeSync();
         } catch (e) {
-          return "파일이 다른 앱에서 열려 있습니다. (잠금 에러)";
+          print("잠금 에러");
+          return false;
         }
       }
 
@@ -94,13 +94,13 @@ class ExcelService {
 
       var fileBytes = excel.save();
       if (fileBytes != null) {
-        // ❗ 동기식 저장으로 안정성 확보
         file.writeAsBytesSync(fileBytes, flush: true);
-        return null; // null 반환 시 성공
+        return true;
       }
-      return "데이터 생성 실패";
+      return false;
     } catch (e) {
-      return e.toString(); // 실제 에러 메시지 반환
+      print("저장 오류: $e");
+      return false;
     }
   }
 }

@@ -25,7 +25,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   late int _currentIndex;
   PdfControllerPinch? _pdfController;
   String _currentPdfPath = "";
-  // ❗ 뷰어 강제 새로고침을 위한 키
+  // ❗ 정석 리셋을 위한 고유 키
   Key _viewerKey = UniqueKey();
 
   @override
@@ -39,7 +39,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     final item = widget.items[_currentIndex];
     final path = "${widget.pdfFolderPath}/${item.itemCode}.pdf";
     
-    // 리소스 완전 해제
     _pdfController?.dispose();
     
     if (File(path).existsSync()) {
@@ -52,14 +51,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       _currentPdfPath = "";
       _pdfController = null;
     }
-    // ❗ 키를 새로 생성하여 위젯을 뿌리부터 다시 그림 (로딩 루프 방지)
+    // ❗ 키를 새로 발급하여 위젯을 강제로 처음부터 다시 그림 (가로 핏 적용 시점)
     _viewerKey = UniqueKey();
     setState(() {});
   }
 
-  // ❗ FIT 버튼: 현재 파일을 다시 로드하여 초기 상태(가로 핏)로 복구
   void _resetFit() {
-    _loadPdf(); 
+    _loadPdf(); // 파일을 다시 열어 초기 핏 상태로 복구
   }
 
   void _next() {
@@ -104,8 +102,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           Expanded(
             child: _pdfController != null
                 ? PdfViewPinch(
-                    key: _viewerKey, // ❗ 가변 키 적용
+                    key: _viewerKey,
                     controller: _pdfController!,
+                    // ❗ 가로 핏(Fit Width)을 위해 세로 스크롤 모드로 설정
+                    scrollDirection: Axis.vertical, 
                     builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
                       options: const DefaultBuilderOptions(),
                       documentLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
@@ -125,6 +125,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                     _buildStatusBtn("완료", Colors.green, item.complete, () {
                       widget.onStatusUpdate(item, 'complete');
                       setState(() {});
+                      // 자동 다음 이동 없음
                     }),
                     _buildStatusBtn("부족", Colors.orange, item.shortage, () {
                       widget.onStatusUpdate(item, 'shortage');
