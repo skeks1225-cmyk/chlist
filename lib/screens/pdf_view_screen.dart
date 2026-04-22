@@ -69,7 +69,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         actions: [
-          // 전체 화면 핏 버튼 추가
           IconButton(
             icon: const Icon(Icons.fullscreen_exit),
             onPressed: () => _pdfViewerController.zoomLevel = 1.0,
@@ -83,8 +82,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             child: _currentPdfPath.isNotEmpty
                 ? SfPdfViewer.file(
                     File(_currentPdfPath),
+                    // ❗ 핵심: ValueKey를 사용하여 파일이 바뀔 때마다 뷰어 위젯을 완전히 새로 로드함
+                    key: ValueKey(_currentPdfPath),
                     controller: _pdfViewerController,
-                    // ❗ 핵심 설정: 핀치 줌을 자유롭게 허용
                     enableDoubleTapZooming: true,
                     interactionMode: PdfInteractionMode.pan,
                   )
@@ -101,7 +101,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                     _buildStatusBtn("완료", Colors.green, item.complete, () {
                       widget.onStatusUpdate(item, 'complete');
                       setState(() {});
-                      Future.delayed(const Duration(milliseconds: 300), () => _next());
+                      // ❗ 다음 파일로 자동 이동 기능 제거
                     }),
                     _buildStatusBtn("부족", Colors.orange, item.shortage, () {
                       widget.onStatusUpdate(item, 'shortage');

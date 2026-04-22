@@ -60,15 +60,13 @@ class ExcelService {
     try {
       final file = File(path);
       
-      // ❗ 전문가 조언: 파일이 다른 앱에서 사용 중인지 체크
+      // 파일 접근 가능 여부 체크
       if (file.existsSync()) {
         try {
-          // 파일에 쓰기 가능한지 테스트 (열려 있으면 여기서 에러 발생)
           var f = file.openSync(mode: FileMode.append);
           f.closeSync();
         } catch (e) {
-          print("파일 잠김: 다른 앱에서 사용 중");
-          return false;
+          throw Exception("파일이 다른 앱에서 사용 중입니다. 엑셀 뷰어 등을 종료해 주세요.");
         }
       }
 
@@ -95,15 +93,14 @@ class ExcelService {
 
       var fileBytes = excel.save();
       if (fileBytes != null) {
-        // ❗ 가장 강력한 저장 방식: 기존 파일 완전 삭제 후 바이너리 기록
-        if (file.existsSync()) file.deleteSync();
-        file.writeAsBytesSync(fileBytes, flush: true);
+        // ❗ 기존 파일을 완전히 지우고 새로운 바이트로 덮어쓰기
+        await file.writeAsBytes(fileBytes, flush: true);
         return true;
       }
       return false;
     } catch (e) {
-      print("저장 치명적 에러: $e");
-      return false;
+      print("엑셀 저장 오류: $e");
+      rethrow;
     }
   }
 }
