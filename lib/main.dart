@@ -23,10 +23,18 @@ class CheckSheetApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'CheckSheet Final',
+      // 라이트 테마
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey, brightness: Brightness.light),
         useMaterial3: true,
       ),
+      // 다크 테마
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey, brightness: Brightness.dark),
+        useMaterial3: true,
+      ),
+      // 시스템 설정에 따라 자동 전환
+      themeMode: ThemeMode.system,
       home: const ChecklistScreen(),
       debugShowCheckedModeBanner: false,
     );

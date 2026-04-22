@@ -23,7 +23,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _autoSave = true;
   bool _isLoading = false;
 
-  // Kivy 버전과 동일한 로컬 저장 기본 경로
   final String _localBase = "/sdcard/Download/CheckSheet";
 
   @override
@@ -112,7 +111,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             title: const Text("PC 공유폴더 (SMB)"),
             onTap: () {
               Navigator.pop(ctx);
-              // TODO: SMB 브라우저 구현 시 연결
               _showError("알림", "SMB 연동은 다음 패치에서 제공됩니다.");
             },
           ),
@@ -165,10 +163,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_currentFileName, style: const TextStyle(fontSize: 14)),
-        backgroundColor: Colors.blueGrey[900],
+        backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
         foregroundColor: Colors.white,
         actions: [
           TextButton.icon(
@@ -204,7 +204,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ],
             ),
           ),
-          _buildHeader(),
+          _buildHeader(context),
           Expanded(
             child: _isLoading 
               ? const Center(child: CircularProgressIndicator())
@@ -213,7 +213,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   itemBuilder: (ctx, idx) {
                     final item = _items[idx];
                     return Container(
-                      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey[300]!))),
+                      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[300]!))),
                       height: 50,
                       child: Row(
                         children: [
@@ -230,16 +230,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                                 ),
                               )),
                               child: Container(
-                                color: Colors.blue[50],
+                                color: isDark ? Colors.blueGrey[900] : Colors.blue[50],
                                 alignment: Alignment.center,
-                                child: Text(item.itemCode, style: const TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                                child: Text(item.itemCode, style: TextStyle(fontSize: 10, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
                               ),
                             ),
                           ),
                           SizedBox(width: 30, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10))),
-                          _buildCheckBtn(item.complete, Colors.green, () => _toggleStatus(item, 'complete')),
-                          _buildCheckBtn(item.shortage, Colors.orange, () => _toggleStatus(item, 'shortage')),
-                          _buildCheckBtn(item.rework, Colors.red, () => _toggleStatus(item, 'rework')),
+                          _buildCheckBtn(context, item.complete, Colors.green, () => _toggleStatus(item, 'complete')),
+                          _buildCheckBtn(context, item.shortage, Colors.orange, () => _toggleStatus(item, 'shortage')),
+                          _buildCheckBtn(context, item.rework, Colors.red, () => _toggleStatus(item, 'rework')),
                           Expanded(
                             flex: 2,
                             child: Padding(
@@ -266,9 +266,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      color: Colors.grey[800],
+      color: isDark ? Colors.grey[900] : Colors.grey[800],
       height: 35,
       child: Row(
         children: [
@@ -295,13 +296,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  Widget _buildCheckBtn(bool val, Color color, VoidCallback onTap) {
+  Widget _buildCheckBtn(BuildContext context, bool val, Color color, VoidCallback onTap) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: onTap,
       child: Container(
         width: 45,
         alignment: Alignment.center,
-        decoration: BoxDecoration(color: val ? color.withOpacity(0.2) : Colors.transparent, border: Border.all(color: Colors.grey[200]!, width: 0.5)),
+        decoration: BoxDecoration(
+          color: val ? color.withOpacity(0.3) : Colors.transparent, 
+          border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!, width: 0.5)
+        ),
         child: val ? Icon(Icons.check, color: color, size: 16) : null,
       ),
     );
