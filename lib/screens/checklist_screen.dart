@@ -31,7 +31,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     _ensureBaseDirectory();
   }
 
-  // ❗ 기본 경로 보장: Download/CheckSheet
   Future<void> _ensureBaseDirectory() async {
     String downloadPath = await ExternalPath.getExternalStoragePublicDirectory(ExternalPath.DIRECTORY_DOWNLOADS);
     final baseDir = Directory("$downloadPath/CheckSheet");
@@ -59,7 +58,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setBool('autoSave', _autoSave);
   }
 
-  // ❗ 마지막 사용 폴더 저장 (폴더 기억용)
   Future<void> _saveLastDir(String path) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('lastDir', p.dirname(path));
@@ -94,10 +92,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     String? lastDir = prefs.getString('lastDir');
     String downloadPath = await ExternalPath.getExternalStoragePublicDirectory(ExternalPath.DIRECTORY_DOWNLOADS);
     
-    // 우선순위: 마지막 사용 폴더 -> Download/CheckSheet -> Download
     String startPath = lastDir ?? "$downloadPath/CheckSheet";
     if (!Directory(startPath).existsSync()) {
-      startPath = downloadPath;
+      startPath = Directory("$downloadPath/CheckSheet").existsSync() ? "$downloadPath/CheckSheet" : downloadPath;
     }
 
     if (!mounted) return;
@@ -178,7 +175,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Text(msg),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인", style: TextStyle(fontSize: 16)))],
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))],
       ),
     );
   }
@@ -213,11 +210,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
   }
 
+  // ❗ 스마트 숫자 정렬 로직 복구 (1, 2, 10...)
   void _sortBy(String col) {
     setState(() {
       if (col == 'itemCode') _items.sort((a, b) => a.itemCode.compareTo(b.itemCode));
-      else if (col == 'no') _items.sort((a, b) => (int.tryParse(a.no) ?? 0).compareTo(int.tryParse(b.no) ?? 0));
-      else if (col == 'quantity') _items.sort((a, b) => (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0));
+      else if (col == 'no') {
+        _items.sort((a, b) {
+          int? na = int.tryParse(a.no);
+          int? nb = int.tryParse(b.no);
+          if (na != null && nb != null) return na.compareTo(nb);
+          return a.no.compareTo(b.no);
+        });
+      }
+      else if (col == 'quantity') {
+        _items.sort((a, b) {
+          int? qa = int.tryParse(a.quantity);
+          int? qb = int.tryParse(b.quantity);
+          if (qa != null && qb != null) return qa.compareTo(qb);
+          return a.quantity.compareTo(b.quantity);
+        });
+      }
     });
   }
 
@@ -227,7 +239,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        // ❗ 현재 파일명 다시 표시
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(_currentFileName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
+          ],
+        ),
         backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
         foregroundColor: Colors.white,
         actions: [
@@ -241,17 +260,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(10.0),
+            padding: const EdgeInsets.all(8.0),
             child: Row(
               children: [
-                Expanded(child: ElevatedButton(onPressed: () => _openCustomPicker('file'), style: ElevatedButton.styleFrom(minimumSize: const Size(0, 55)), child: const Text("엑셀 선택", style: TextStyle(fontSize: 16)))),
-                const SizedBox(width: 6),
-                Expanded(child: ElevatedButton(onPressed: () => _openCustomPicker('dir'), style: ElevatedButton.styleFrom(minimumSize: const Size(0, 55)), child: const Text("PDF 폴더", style: TextStyle(fontSize: 16)))),
-                const SizedBox(width: 6),
+                Expanded(child: ElevatedButton(onPressed: () => _openCustomPicker('file'), style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)), child: const Text("엑셀 선택", style: TextStyle(fontSize: 15)))),
+                const SizedBox(width: 4),
+                Expanded(child: ElevatedButton(onPressed: () => _openCustomPicker('dir'), style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)), child: const Text("PDF 폴더", style: TextStyle(fontSize: 15)))),
+                const SizedBox(width: 4),
                 ElevatedButton(
                   onPressed: _manualSave,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(90, 55)),
-                  child: const Text("저장", style: TextStyle(fontSize: 16)),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(80, 48)),
+                  child: const Text("저장", style: TextStyle(fontSize: 15)),
                 ),
               ],
             ),
@@ -266,12 +285,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     final item = _items[idx];
                     return Container(
                       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[300]!))),
-                      height: 65,
+                      height: 45, // ❗ 행 높이 2/3 수준으로 축소 (기존 65 -> 45)
                       child: Row(
                         children: [
-                          SizedBox(width: 45, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15))),
+                          SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
                           Expanded(
-                            flex: 3,
+                            flex: 5, // ❗ 품목코드 너비 대폭 상향 (기존 3 -> 5)
                             child: InkWell(
                               onTap: () => Navigator.push(context, MaterialPageRoute(
                                 builder: (_) => PdfViewerScreen(
@@ -284,22 +303,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                               child: Container(
                                 color: isDark ? Colors.blueGrey[900] : Colors.blue[50],
                                 alignment: Alignment.center,
-                                child: Text(item.itemCode, style: TextStyle(fontSize: 15, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                                child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
                               ),
                             ),
                           ),
-                          SizedBox(width: 45, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15))),
+                          SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
                           _buildCheckBtn(context, item.complete, Colors.green, () => _toggleStatus(item, 'complete')),
                           _buildCheckBtn(context, item.shortage, Colors.orange, () => _toggleStatus(item, 'shortage')),
                           _buildCheckBtn(context, item.rework, Colors.red, () => _toggleStatus(item, 'rework')),
                           Expanded(
                             flex: 3,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
                               child: TextField(
                                 controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)),
-                                style: const TextStyle(fontSize: 15),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: '비고'),
+                                style: const TextStyle(fontSize: 13),
+                                decoration: const InputDecoration(
+                                  border: InputBorder.none, 
+                                  isDense: true, 
+                                  hintText: '', // ❗ 플레이스홀더 제거
+                                ),
                                 onSubmitted: (val) {
                                   item.remarks = val;
                                   if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
@@ -322,30 +345,44 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       color: isDark ? Colors.grey[900] : Colors.grey[800],
-      height: 45,
+      height: 40,
       child: Row(
         children: [
-          const SizedBox(width: 45, child: Center(child: Text("No", style: TextStyle(color: Colors.white, fontSize: 16)))),
-          const Expanded(flex: 3, child: Center(child: Text("품목코드", style: TextStyle(color: Colors.white, fontSize: 16)))),
-          const SizedBox(width: 45, child: Center(child: Text("Qty", style: TextStyle(color: Colors.white, fontSize: 16)))),
-          const SizedBox(width: 55, child: Center(child: Text("완료", style: TextStyle(color: Colors.white, fontSize: 16)))),
-          const SizedBox(width: 55, child: Center(child: Text("부족", style: TextStyle(color: Colors.white, fontSize: 16)))),
-          const SizedBox(width: 55, child: Center(child: Text("재작", style: TextStyle(color: Colors.white, fontSize: 16)))),
-          const Expanded(flex: 3, child: Center(child: Text("비고", style: TextStyle(color: Colors.white, fontSize: 16)))),
+          _buildHeaderBtn("No", 35, () => _sortBy('no')),
+          Expanded(flex: 5, child: _buildHeaderBtn("품목코드", null, () => _sortBy('itemCode'))),
+          _buildHeaderBtn("수량", 40, () => _sortBy('quantity')), // ❗ Qty -> 수량
+          _buildHeaderBtn("완료", 50, null),
+          _buildHeaderBtn("부족", 50, null),
+          _buildHeaderBtn("재작업", 50, null), // ❗ 재작 -> 재작업
+          const Expanded(flex: 3, child: Center(child: Text("비고", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)))),
         ],
       ),
     );
   }
 
-  Widget _buildCheckBtn(BuildContext context, bool val, Color color, VoidCallback onTap) {
+  Widget _buildHeaderBtn(String label, double? width, VoidCallback? onTap) {
     return InkWell(
       onTap: onTap,
       child: Container(
-        width: 55,
+        width: width,
         alignment: Alignment.center,
-        // ❗ 테두리(border) 제거 완료
-        decoration: BoxDecoration(color: val ? color.withOpacity(0.3) : Colors.transparent),
-        child: val ? Icon(Icons.check, color: color, size: 28) : null,
+        child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+      ),
+    );
+  }
+
+  Widget _buildCheckBtn(BuildContext context, bool val, Color color, VoidCallback onTap) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: 50,
+        alignment: Alignment.center,
+        // ❗ 테두리 대신 배경색 차별화 (미체크 시 연한 회색)
+        decoration: BoxDecoration(
+          color: val ? color.withOpacity(0.4) : (isDark ? Colors.white10 : Colors.grey[200]),
+        ),
+        child: val ? Icon(Icons.check, color: isDark ? Colors.white : color, size: 24) : null,
       ),
     );
   }
