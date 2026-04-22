@@ -24,17 +24,17 @@ class ExcelService {
 
       for (int i = 1; i < sheet.maxRows; i++) {
         var row = sheet.rows[i];
-        if (row.length <= idxCode || row[idxCode]?.value == null) continue;
+        if (row.length <= idxCode || row[idxCode] == null || row[idxCode]?.value == null) continue;
 
         items.add(ItemModel(
           realIndex: i,
           no: row[idxNo]?.value?.toString() ?? "",
           itemCode: row[idxCode]?.value?.toString() ?? "",
           quantity: row[idxQty]?.value?.toString() ?? "",
-          complete: row[idxComp]?.value?.toString() == "V",
-          shortage: row[idxShort]?.value?.toString() == "V",
-          rework: row[idxRew]?.value?.toString() == "V",
-          remarks: row[idxRem]?.value?.toString() ?? "",
+          complete: (row.length > idxComp && row[idxComp]?.value?.toString().toUpperCase() == "V"),
+          shortage: (row.length > idxShort && row[idxShort]?.value?.toString().toUpperCase() == "V"),
+          rework: (row.length > idxRew && row[idxRew]?.value?.toString().toUpperCase() == "V"),
+          remarks: (row.length > idxRem ? row[idxRem]?.value?.toString() ?? "" : ""),
         ));
       }
       break;

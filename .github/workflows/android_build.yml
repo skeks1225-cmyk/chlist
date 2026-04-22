@@ -22,23 +22,22 @@ jobs:
           channel: 'stable'
           flutter-version: '3.22.3'
 
-      - name: Reconstruct Standard Flutter Project
+      - name: Initialize Flutter Project Structure
         run: |
-          # 1. 기존 코드 임시 저장
-          mkdir -p ../temp_project/lib
-          cp -r lib/* ../temp_project/lib/
-          cp pubspec.yaml ../temp_project/
-          
-          # 2. 현재 폴더 비우기 (단, .git 폴더와 backup_kivy는 유지)
+          mkdir temp_project
+          mv lib pubspec.yaml temp_project/
           find . -maxdepth 1 ! -name "." ! -name ".." ! -name ".git" ! -name "backup_kivy" -exec rm -rf {} +
-          
-          # 3. 깨끗한 상태에서 프로젝트 생성 (overwrite 옵션 사용)
           flutter create . --org org.example --project-name checksheet_final --overwrite
-          
-          # 4. 내 코드 덮어쓰기
           rm -rf lib/*
-          cp -r ../temp_project/lib/* lib/
-          cp ../temp_project/pubspec.yaml .
+          cp -r temp_project/lib/* lib/
+          cp temp_project/pubspec.yaml .
+
+      # ❗ 핵심: 안드로이드 권한 강제 주입 (Manifest 수정)
+      - name: Inject Android Permissions
+        run: |
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
+          # 안드로이드 11 이상 지원을 위한 requestLegacyExternalStorage 설정 추가
+          sed -i 's/<application/<application android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
           
       - name: Install dependencies
         run: flutter pub get

@@ -2406,8 +2406,16 @@ Error: Process completed with exit code 1.
 
 
 
-D:\VSCODE\backup_kivy
+D:\VSCODE\backup_kivy 백업자료
 원래 kivy+android-pdf-viewer 의 안드로이드프로그램을
 Flutter+pdfx 의 안드로이드 프로그램으로 이식하려고해.
 이유는 기존 방식으로 환경문제로 인해 빌드가 계속 실패하기 때문이야.
 
+이식 후 빌드를 몇번 시도 했는데, 계속 실패중이야.
+다시 한 번 꼼꼼히 점검 후 빌드 시도해줘.
+
+
+엑셀선택을 하니까
+null check operator used on a null value 이렇게 나와.
+그래서 pdf뷰어는 테스트를 못했어.
+그리고 어플 설치 후 읽기/쓰기 권한요청이 없는데, 없어도 되는거야?
