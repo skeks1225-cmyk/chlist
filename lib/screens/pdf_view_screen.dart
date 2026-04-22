@@ -91,13 +91,11 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 ? PdfViewPinch(
                     key: ValueKey(_currentPdfPath),
                     controller: _pdfController!,
-                    // ❗ 핵심: minScale을 0.1로 낮춰 화면에 완전히 핏되게 축소 가능하게 함
-                    minScale: 0.1,
-                    maxScale: 4.0,
                     builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
                       options: const DefaultBuilderOptions(),
                       documentLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
                       pageLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                      errorBuilder: (_, error) => Center(child: Text("PDF 로드 오류: $error", style: const TextStyle(color: Colors.white))),
                     ),
                   )
                 : const Center(child: Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: Colors.white, fontSize: 16))),
