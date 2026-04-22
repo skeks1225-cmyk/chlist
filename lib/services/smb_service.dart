@@ -10,21 +10,18 @@ class SmbService {
     _ip = ip; _user = user; _pass = pass;
   }
 
-  // ❗ 라이브러리 규격에 맞게 접속 테스트 로직 수정
+  // ❗ 라이브러리 실제 규격(0.0.9)에 맞춰 수정
   Future<bool> testConnection(String ip, String user, String pass) async {
     try {
-      // smb_connect 0.0.9 버전 표준 연결 방식
-      final config = SMBConfiguration();
-      final connection = SMBConnection(
-        ip,
-        user,
-        pass,
-        "", // domain
-        config,
+      // SmbConnect.connectAuth 정석 사용법
+      final connection = await SmbConnect.connectAuth(
+        host: ip,
+        username: user,
+        password: pass,
+        domain: "", // 일반적인 Windows 공유폴더는 비워둠
       );
       
-      await connection.connect();
-      await connection.login();
+      // 연결 확인 후 즉시 해제
       await connection.disconnect();
       return true;
     } catch (e) {
@@ -33,17 +30,27 @@ class SmbService {
     }
   }
 
-  // 향후 구현될 파일 리스트/다운로드 기능의 기반
+  // 공유폴더 목록 가져오기 (실제 로직)
   Future<List<String>> listShares() async {
     try {
-      final config = SMBConfiguration();
-      final connection = SMBConnection(_ip, _user, _pass, "", config);
-      await connection.connect();
-      await connection.login();
-      final shares = await connection.listShares();
+      final connection = await SmbConnect.connectAuth(
+        host: _ip,
+        username: _user,
+        password: _pass,
+        domain: "",
+      );
+      
+      // 공유폴더 리스트 조회
+      List<SmbFile> shares = await connection.listShares();
       await connection.disconnect();
-      return shares.map((s) => s.name).toList();
+      
+      // 특수 목적용 폴더($로 끝나는 것) 제외
+      return shares
+          .map((s) => s.name)
+          .where((name) => !name.endsWith('$'))
+          .toList();
     } catch (e) {
+      print("공유폴더 목록 조회 실패: $e");
       return [];
     }
   }
