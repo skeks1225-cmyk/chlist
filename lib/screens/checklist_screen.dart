@@ -69,7 +69,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       });
       _saveSettings();
     } catch (e) {
-      _showError("로드 오류", "엑셀 파일을 읽을 수 없습니다.");
+      _showError("로드 오류", "엑셀 파일을 읽을 수 없습니다.\n권한이나 파일 구조를 확인해 주세요.");
     } finally {
       setState(() => _isLoading = false);
     }
@@ -92,6 +92,20 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
+  Future<void> _manualSave({bool silent = false}) async {
+    if (_excelPath.isEmpty) return;
+    try {
+      bool ok = await _excelService.saveExcel(_excelPath, _items);
+      if (ok) {
+        if (!silent) _showSnackBar("저장 완료");
+      } else {
+        _showError("저장 실패", "파일에 접근할 수 없습니다.\n다른 앱에서 사용 중인지 확인해 주세요.");
+      }
+    } catch (e) {
+      _showError("저장 오류", e.toString());
+    }
+  }
+
   Future<void> _pickSource(String mode) async {
     showModalBottomSheet(
       context: context,
@@ -111,7 +125,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             title: const Text("PC 공유폴더 (SMB)"),
             onTap: () {
               Navigator.pop(ctx);
-              _showError("알림", "SMB 연동은 다음 패치에서 제공됩니다.");
+              _showError("알림", "SMB 연동은 곧 제공됩니다.");
             },
           ),
         ],
@@ -150,7 +164,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         if (item.rework) { item.complete = false; item.shortage = false; }
       }
     });
-    if (_autoSave && _excelPath.isNotEmpty) _excelService.saveExcel(_excelPath, _items);
+    if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
   }
 
   void _sortBy(String col) {
@@ -192,12 +206,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 Expanded(child: ElevatedButton(onPressed: () => _pickSource('dir'), child: const Text("PDF 폴더"))),
                 const SizedBox(width: 4),
                 ElevatedButton(
-                  onPressed: () async {
-                    if (_excelPath.isNotEmpty) {
-                      bool ok = await _excelService.saveExcel(_excelPath, _items);
-                      if (ok) _showSnackBar("저장 완료");
-                    }
-                  },
+                  onPressed: () => _manualSave(),
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white),
                   child: const Text("저장"),
                 ),
@@ -247,10 +256,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                               child: TextField(
                                 controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)),
                                 style: const TextStyle(fontSize: 10),
-                                decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 8)),
+                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 8)),
                                 onSubmitted: (val) {
                                   item.remarks = val;
-                                  if (_autoSave && _excelPath.isNotEmpty) _excelService.saveExcel(_excelPath, _items);
+                                  if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
                                 },
                               ),
                             ),
