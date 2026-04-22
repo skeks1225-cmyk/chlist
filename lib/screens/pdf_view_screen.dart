@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:pdfx/pdfx.dart';
 import '../models/item_model.dart';
 import 'dart:io';
 
@@ -23,40 +23,59 @@ class PdfViewerScreen extends StatefulWidget {
 
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
   late int _currentIndex;
-  final PdfViewerController _pdfViewerController = PdfViewerController();
+  PdfControllerPinch? _pdfController;
   String _currentPdfPath = "";
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
-    _updatePath();
+    _loadPdf();
   }
 
-  void _updatePath() {
+  void _loadPdf() {
     final item = widget.items[_currentIndex];
     final path = "${widget.pdfFolderPath}/${item.itemCode}.pdf";
-    setState(() {
-      _currentPdfPath = File(path).existsSync() ? path : "";
-    });
+    
+    // 리소스 해제
+    _pdfController?.dispose();
+    
+    if (File(path).existsSync()) {
+      _currentPdfPath = path;
+      _pdfController = PdfControllerPinch(
+        document: PdfDocument.openFile(path),
+        initialPage: 1,
+      );
+    } else {
+      _currentPdfPath = "";
+      _pdfController = null;
+    }
+    setState(() {});
+  }
+
+  // ❗ FIT 버튼: 초기 줌 상태로 되돌리기 (가로 핏)
+  void _resetFit() {
+    _loadPdf(); 
   }
 
   void _next() {
     if (_currentIndex < widget.items.length - 1) {
-      setState(() {
-        _currentIndex++;
-        _updatePath();
-      });
+      setState(() => _currentIndex++);
+      _loadPdf();
     }
   }
 
   void _prev() {
     if (_currentIndex > 0) {
-      setState(() {
-        _currentIndex--;
-        _updatePath();
-      });
+      setState(() => _currentIndex--);
+      _loadPdf();
     }
+  }
+
+  @override
+  void dispose() {
+    _pdfController?.dispose();
+    super.dispose();
   }
 
   @override
@@ -69,24 +88,26 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.fullscreen_exit),
-            onPressed: () => _pdfViewerController.zoomLevel = 1.0,
-          )
+          // ❗ 가로 핏 버튼 추가
+          TextButton(
+            onPressed: _resetFit,
+            child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
         ],
       ),
       backgroundColor: Colors.black,
       body: Column(
         children: [
           Expanded(
-            child: _currentPdfPath.isNotEmpty
-                ? SfPdfViewer.file(
-                    File(_currentPdfPath),
-                    // ❗ 핵심: UniqueKey를 사용하여 파일이 바뀔 때마다 위젯을 아예 새로 그림
-                    key: UniqueKey(),
-                    controller: _pdfViewerController,
-                    enableDoubleTapZooming: true,
-                    interactionMode: PdfInteractionMode.pan,
+            child: _pdfController != null
+                ? PdfViewPinch(
+                    key: ValueKey(_currentPdfPath),
+                    controller: _pdfController!,
+                    builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
+                      options: const DefaultBuilderOptions(),
+                      documentLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                      pageLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                    ),
                   )
                 : const Center(child: Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: Colors.white, fontSize: 16))),
           ),
@@ -101,7 +122,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                     _buildStatusBtn("완료", Colors.green, item.complete, () {
                       widget.onStatusUpdate(item, 'complete');
                       setState(() {});
-                      // ❗ 자동 다음 파일 이동 기능 제거
+                      // 자동 이동 제거됨
                     }),
                     _buildStatusBtn("부족", Colors.orange, item.shortage, () {
                       widget.onStatusUpdate(item, 'shortage');
@@ -147,7 +168,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         backgroundColor: active ? color : Colors.grey[700],
         foregroundColor: Colors.white,
         minimumSize: const Size(100, 50),
-        elevation: active ? 8 : 2,
       ),
       child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
     );

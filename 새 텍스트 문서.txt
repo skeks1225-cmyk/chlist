@@ -2479,4 +2479,250 @@ no/품목코드/수량/완료/부족/재작업/수량부족/비고
 smb통해서 열었을 때는 내 폰으로 복사 후 저장.
 
 
-지금은 배경이 흰색인데, 폰의 테마에 따라서 라이트모드, 다크모드 따라가게 해줘.
+그리고 지금은 배경이 흰색인데, 폰의 테마에 따라서 라이트모드, 다크모드 따라가게 해줘.
+
+저장이 여전히 안돼.
+그리고 비고란에 밑줄 없애줘.
+
+
+엑셀파일 저장이 여전히 안돼.
+그리고 pdf뷰어 에서 다음/이전을 누르면
+중간에 로딩을 뜻하는 로고만 나오고 정작 화면은 나오지 않아.
+그리고 pdf뷰어에서 완료를 눌러도 빈화면에 로딩의미하는 로고가 나와.
+그래서 뒤로가기해서 리스트로 나오면 완료가 되어있긴 한데, 문제가 있어.
+부족, 재작업은 정상적으로 바로 적용이 돼.
+
+
+여전히 리스트에서 저장을 하면, 엑셀파일에 저장이 안돼.
+그리고 글자크기가 너무 작아. 조금 더 키워줘.
+
+pdf뷰어에서 완료를 누르면 어떨때는 바로 녹색으로 글자가 바뀌고, 어떨때는 바뀌지 않아.
+무언가 문제가 있어.
+pdf뷰어에서 축소가 여전히 안돼. 최대치로 축소를 했을 때, pdf 모든 내용이 화면이 핏되어야해.
+
+
+
+
+
+
+1. pdf뷰어에서 완료를 누르면 자동으로 다음파일이 열리는데, 그렇게 되지않고 현재파일에 머루르게 해줘.
+2. 비고란에 비고입력 글자 업애줘. 그냥 빈칸으로 나타내줘.
+3. 엑셀파일 저장이 여전히 안되고 있어. 이건 아주 중요해. 기껏 체크하고 저장이 되지 않으면 이 프로그램의 의미가 없어져.
+
+
+
+
+
+
+
+
+
+엑셀 저장 안되는 문제 (핵심)
+
+이건 단순 UI 문제가 아니라
+Android 저장 권한 + 경로 문제다.
+
+지금 코드 보면:
+
+final file = File(path);
+file.writeAsBytesSync(fileBytes, flush: true);
+
+👉 이 방식은 Android 11 이상에서 실패할 확률 매우 높음
+
+🚨 문제 원인 (중요)
+
+너 상황 정확히 말해주면:
+
+👉 /sdcard/... 직접 접근
+👉 Android 11+ → Scoped Storage 막힘
+👉 WRITE_EXTERNAL_STORAGE 거의 무용지물
+
+그래서 저장은 실패하지만 에러 없이 지나가는 경우 많음
+
+
+
+
+💡 추가 (진짜 중요한 팁)
+
+지금 저장 안되는 이유 90%는 이거다:
+
+👉 엑셀 파일이 다른 앱에서 열려있음
+
+그래서 이것도 반드시 확인:
+
+if (file.existsSync()) {
+  try {
+    file.deleteSync();
+  } catch (e) {
+    print("삭제 실패 = 다른 앱 사용중");
+    return false;
+  }
+}
+
+
+
+Flutter에서 저장이 안 되는 이유
+
+Flutter는 완전히 반대다.
+
+👉 Flutter 는
+
+✔ Android 공식 API만 사용
+✔ Scoped Storage 100% 적용
+✔ 보안 정책 강제
+
+🔒 핵심 개념: Scoped Storage
+
+Android 10 이후:
+
+👉 앱이 다른 폴더 마음대로 못 건드림
+
+특히:
+
+/sdcard/Download/
+
+👉 여기는 “공용 영역”이라서
+Flutter는 기본적으로 쓰기 금지
+
+
+
+위와같은 의견이 있는데, 저장이 불가능한거니? 아니면 다른 방법이 있는거야?
+
+
+엑셀저장이 여전히 되지 않고, pdf뷰어는 내용이 보이지 않아.
+그리고 pdf뷰어에서 완료 눌렀을 때, 자동으로 다음파일로 넘어가는데, 넘어가지 않고, 부족/재작업 눌렀을 때 처럼 현재파일 그대로 유지하게해줘.
+
+
+
+
+
+
+
+엑셀저장 안되는 것에 대한 아래와 같은 의견이 있어.
+
+👉 Flutter에서도 기존 엑셀 파일 “덮어쓰기 저장” 가능하다
+❗ 단, 지금 네 방식(File(path))으로는 거의 막힌다
+
+🎯 왜 지금 안 되냐
+
+너 현재 방식:
+
+File(path).writeAsBytesSync(...)
+
+👉 이건 Android 정책상:
+
+❌ 공용 폴더(/Download 등) 직접 쓰기 차단
+❌ Android 11+ 거의 실패
+
+✅ Flutter에서 “정상적으로 덮어쓰기” 하는 방법
+방법 1️⃣ (정석, 100% 성공)
+
+👉 Android Storage Access Framework
+
+✔ 사용자가 파일 선택
+✔ URI 권한 획득
+✔ 그 파일에 그대로 덮어쓰기 가능
+
+👉 이건 진짜 “정식 덮어쓰기”다
+
+
+이전버젼에서 수정전에 pdf뷰어는 다음/이전 눌렀을 때, 안나오는게 아니라.
+픔목코드 눌러서 들어갈때부터 빈화면만 나왔었어.
+그리고 빌드 실패했어. 아래는 빌드 로고야.
+Run flutter build apk --release
+
+Running Gradle task 'assembleRelease'...                        
+Warning: The plugin flutter_pdfview requires Android SDK version 35 or higher.
+For more information about build configuration, see https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
+One or more plugins require a higher Android SDK version.
+Fix this issue by adding the following to /home/runner/work/chlist/chlist/android/app/build.gradle:
+android {
+  compileSdkVersion 35
+  ...
+}
+
+Checking the license for package Android SDK Build-Tools 30.0.3 in /usr/local/lib/android/sdk/licenses
+License for package Android SDK Build-Tools 30.0.3 accepted.
+Preparing "Install Android SDK Build-Tools 30.0.3 (revision: 30.0.3)".
+"Install Android SDK Build-Tools 30.0.3 (revision: 30.0.3)" ready.
+Installing Android SDK Build-Tools 30.0.3 in /usr/local/lib/android/sdk/build-tools/30.0.3
+"Install Android SDK Build-Tools 30.0.3 (revision: 30.0.3)" complete.
+"Install Android SDK Build-Tools 30.0.3 (revision: 30.0.3)" finished.
+Error: Couldn't resolve the package 'syncfusion_flutter_pdfviewer' in 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart'.
+lib/screens/pdf_view_screen.dart:2:8: Error: Not found: 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart'
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+       ^
+lib/screens/pdf_view_screen.dart:26:9: Error: Type 'PdfViewerController' not found.
+  final PdfViewerController _pdfViewerController = PdfViewerController();
+        ^^^^^^^^^^^^^^^^^^^
+lib/screens/pdf_view_screen.dart:26:9: Error: 'PdfViewerController' isn't a type.
+  final PdfViewerController _pdfViewerController = PdfViewerController();
+        ^^^^^^^^^^^^^^^^^^^
+lib/screens/pdf_view_screen.dart:26:52: Error: Method not found: 'PdfViewerController'.
+  final PdfViewerController _pdfViewerController = PdfViewerController();
+                                                   ^^^^^^^^^^^^^^^^^^^
+lib/screens/pdf_view_screen.dart:83:19: Error: The getter 'SfPdfViewer' isn't defined for the class '_PdfViewerScreenState'.
+ - '_PdfViewerScreenState' is from 'package:checksheet_final/screens/pdf_view_screen.dart' ('lib/screens/pdf_view_screen.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'SfPdfViewer'.
+                ? SfPdfViewer.file(
+                  ^^^^^^^^^^^
+lib/screens/pdf_view_screen.dart:89:38: Error: The getter 'PdfInteractionMode' isn't defined for the class '_PdfViewerScreenState'.
+ - '_PdfViewerScreenState' is from 'package:checksheet_final/screens/pdf_view_screen.dart' ('lib/screens/pdf_view_screen.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'PdfInteractionMode'.
+                    interactionMode: PdfInteractionMode.pan,
+                                     ^^^^^^^^^^^^^^^^^^
+Unhandled exception:
+FileSystemException(uri=org-dartlang-untranslatable-uri:package%3Asyncfusion_flutter_pdfviewer%2Fpdfviewer.dart; message=StandardFileSystem only supports file:* and data:* URIs)
+#0      StandardFileSystem.entityForUri (package:front_end/src/api_prototype/standard_file_system.dart:34)
+#1      asFileUri (package:vm/kernel_front_end.dart:752)
+#2      writeDepfile (package:vm/kernel_front_end.dart:892)
+<asynchronous suspension>
+#3      FrontendCompiler.compile (package:frontend_server/frontend_server.dart:680)
+<asynchronous suspension>
+#4      starter (package:frontend_server/starter.dart:101)
+<asynchronous suspension>
+#5      main (file:///b/s/w/ir/x/w/sdk/pkg/frontend_server/bin/frontend_server_starter.dart:13)
+<asynchronous suspension>
+
+Target kernel_snapshot failed: Exception
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileFlutterBuildRelease'.
+> Process 'command '/opt/hostedtoolcache/flutter/stable-3.22.3-x64/flutter/bin/flutter'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+
+* Get more help at https://help.gradle.org
+
+BUILD FAILED in 2m 5s
+Running Gradle task 'assembleRelease'...                          126.5s
+Gradle task assembleRelease failed with exit code 1
+Error: Process completed with exit code 1.
+
+
+
+수정 전과 같은 상황이야.
+여전히 리스트저장해도 엑셀파일에 저장이 되지 않아.
+PDF뷰어 여전히 아무 내용도 표시되지 않아. 빈화면만 나와.
+
+무작정 수정하지 말고, 해결방법을 논의해보자.
+현재의 상황 정리해줘.
+
+
+
+  1. 엑셀 저장 실패 원인: "안드로이드의 보이지 않는 벽"
+   * 현상: 저장 버튼을 눌러도 파일에 변화가 없고, 알림조차 뜨지 않는 경우가 발생.
+> 아니야, 저장성공 알림은 나타나고있어. 실제 저장이 되지 않는거야.
+
+
+PDF뷰어는 다시 PDFX로 돌아가줘.
+그리고 FIT버튼을 만들어줘. 그걸 누르면 처음 열었을 때처럼 화면에 핏되게 하면 되겠어.
+
+그리고 PFDX 축소할 때, 기준을 fitHeight말고 fitWidth로 해줘.
+이전에 축소가 높이기준으로 되었는데, 가로로 긴 내용이 많으니 가로 기준으로 바꾸고 싶은거야. 이해하지?
