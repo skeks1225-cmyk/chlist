@@ -17,6 +17,8 @@ dependencies:
   path: ^1.9.0
   permission_handler: ^11.3.1
   external_path: ^1.0.3
+  # ❗ 전문가 추천: 순수 Dart 기반의 안정적인 SMB 라이브러리
+  smb_connect: ^1.0.1 
 
 dev_dependencies:
   flutter_test:
