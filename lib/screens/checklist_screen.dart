@@ -53,12 +53,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       final items = await _excelService.loadExcel(path);
       setState(() {
         _items = items;
-        _currentFileName = path.split(Platform.pathSeparator).last;
+        // 경로 구분자 문제 해결을 위해 path lib 사용 고려 (여기서는 간단히 처리)
+        _currentFileName = path.split('/').last.split('\\').last;
         _excelPath = path;
       });
       _saveSettings();
     } catch (e) {
-      _showError("로드 오류", e.toString());
+      _showError("로드 오류", "엑셀 파일을 읽을 수 없습니다.\n구조를 확인해 주세요.");
     } finally {
       setState(() => _isLoading = false);
     }

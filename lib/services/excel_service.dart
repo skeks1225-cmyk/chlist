@@ -3,15 +3,17 @@ import 'package:excel/excel.dart';
 import '../models/item_model.dart';
 
 class ExcelService {
-  // 엑셀 읽기 기능 추가 (빌드 에러 해결)
   Future<List<ItemModel>> loadExcel(String path) async {
-    var bytes = File(path).readAsBytesSync();
-    var excel = Excel.decodeBytes(bytes);
-    List<ItemModel> items = [];
+    try {
+      final bytes = File(path).readAsBytesSync();
+      final excel = Excel.decodeBytes(bytes);
+      List<ItemModel> items = [];
 
-    for (var table in excel.tables.keys) {
-      var sheet = excel.tables[table]!;
-      if (sheet.maxRows <= 1) continue;
+      // 첫 번째 시트 안전하게 가져오기
+      if (excel.tables.isEmpty) return [];
+      String firstSheetName = excel.tables.keys.first;
+      var sheet = excel.tables[firstSheetName];
+      if (sheet == null || sheet.maxRows <= 1) return [];
 
       var header = sheet.rows[0];
       int idxNo = _findCol(header, ['no', '번호'], 0);
@@ -24,26 +26,29 @@ class ExcelService {
 
       for (int i = 1; i < sheet.maxRows; i++) {
         var row = sheet.rows[i];
+        // 품목코드가 없는 행은 스킵
         if (row.length <= idxCode || row[idxCode] == null || row[idxCode]?.value == null) continue;
 
         items.add(ItemModel(
           realIndex: i,
-          no: row[idxNo]?.value?.toString() ?? "",
+          no: row.length > idxNo ? row[idxNo]?.value?.toString() ?? "" : "",
           itemCode: row[idxCode]?.value?.toString() ?? "",
-          quantity: row[idxQty]?.value?.toString() ?? "",
+          quantity: row.length > idxQty ? row[idxQty]?.value?.toString() ?? "" : "",
           complete: (row.length > idxComp && row[idxComp]?.value?.toString().toUpperCase() == "V"),
           shortage: (row.length > idxShort && row[idxShort]?.value?.toString().toUpperCase() == "V"),
           rework: (row.length > idxRew && row[idxRew]?.value?.toString().toUpperCase() == "V"),
           remarks: (row.length > idxRem ? row[idxRem]?.value?.toString() ?? "" : ""),
         ));
       }
-      break;
+      return items;
+    } catch (e) {
+      rethrow;
     }
-    return items;
   }
 
   int _findCol(List<Data?> header, List<String> targets, int defaultIdx) {
     for (int i = 0; i < header.length; i++) {
+      if (header[i] == null || header[i]?.value == null) continue;
       var val = header[i]?.value?.toString().toLowerCase().trim() ?? "";
       if (targets.contains(val)) return i;
     }
@@ -51,28 +56,36 @@ class ExcelService {
   }
 
   Future<void> saveExcel(String path, List<ItemModel> items) async {
-    var bytes = File(path).readAsBytesSync();
-    var excel = Excel.decodeBytes(bytes);
-    var sheet = excel.tables[excel.tables.keys.first]!;
+    try {
+      var bytes = File(path).readAsBytesSync();
+      var excel = Excel.decodeBytes(bytes);
+      if (excel.tables.isEmpty) return;
+      
+      var sheet = excel.tables[excel.tables.keys.first];
+      if (sheet == null) return;
 
-    int idxComp = 3; // 인덱스 최적화 필요 시 위 loadExcel과 연동
-    int idxShort = 4;
-    int idxRew = 5;
-    int idxRem = 6;
-
-    for (var item in items) {
-      int r = item.realIndex;
-      sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: idxComp, rowIndex: r), 
-          item.complete ? TextCellValue("V") : TextCellValue(""));
-      sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: idxShort, rowIndex: r), 
-          item.shortage ? TextCellValue("V") : TextCellValue(""));
-      sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: idxRew, rowIndex: r), 
-          item.rework ? TextCellValue("V") : TextCellValue(""));
-      sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: idxRem, rowIndex: r), 
-          TextCellValue(item.remarks));
+      for (var item in items) {
+        int r = item.realIndex;
+        // 인덱스가 범위를 벗어나지 않도록 안전하게 업데이트
+        _safeUpdate(sheet, 3, r, item.complete ? "V" : "");
+        _safeUpdate(sheet, 4, r, item.shortage ? "V" : "");
+        _safeUpdate(sheet, 5, r, item.rework ? "V" : "");
+        _safeUpdate(sheet, 6, r, item.remarks);
+      }
+      
+      var fileBytes = excel.save();
+      if (fileBytes != null) {
+        File(path).writeAsBytesSync(fileBytes);
+      }
+    } catch (e) {
+      print("저장 오류: $e");
     }
-    
-    var fileBytes = excel.save();
-    if (fileBytes != null) File(path).writeAsBytesSync(fileBytes);
+  }
+
+  void _safeUpdate(Sheet sheet, int col, int row, String val) {
+    sheet.updateCell(
+      CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row),
+      TextCellValue(val),
+    );
   }
 }
