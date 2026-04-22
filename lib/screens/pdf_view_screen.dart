@@ -37,36 +37,32 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     final item = widget.items[_currentIndex];
     final path = "${widget.pdfFolderPath}/${item.itemCode}.pdf";
     
-    // 1. 기존 컨트롤러와 리소스 확실히 해제
+    // 이전 리소스 완전 해제
     _pdfController?.dispose();
     
     if (File(path).existsSync()) {
-      setState(() {
-        _currentPdfPath = path;
-        // 2. 새 경로로 컨트롤러 생성
-        _pdfController = PdfControllerPinch(
-          document: PdfDocument.openFile(path),
-          initialPage: 1,
-        );
-      });
+      _currentPdfPath = path;
+      _pdfController = PdfControllerPinch(
+        document: PdfDocument.openFile(path),
+        initialPage: 1,
+      );
     } else {
-      setState(() {
-        _pdfController = null;
-        _currentPdfPath = "";
-      });
+      _currentPdfPath = "";
+      _pdfController = null;
     }
+    setState(() {});
   }
 
   void _next() {
     if (_currentIndex < widget.items.length - 1) {
-      setState(() => _currentIndex++);
+      _currentIndex++;
       _loadPdf();
     }
   }
 
   void _prev() {
     if (_currentIndex > 0) {
-      setState(() => _currentIndex--);
+      _currentIndex--;
       _loadPdf();
     }
   }
@@ -83,7 +79,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(item.itemCode, style: const TextStyle(fontSize: 16)),
+        title: Text(item.itemCode, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
       ),
@@ -93,20 +89,22 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           Expanded(
             child: _pdfController != null
                 ? PdfViewPinch(
-                    // ❗ 핵심: ValueKey를 사용하여 파일이 바뀔 때마다 뷰어 위젯을 강제로 새로고침함
                     key: ValueKey(_currentPdfPath),
                     controller: _pdfController!,
+                    // ❗ 핵심: minScale을 0.1로 낮춰 화면에 완전히 핏되게 축소 가능하게 함
                     builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
-                      options: const DefaultBuilderOptions(),
+                      options: const DefaultBuilderOptions(
+                        minScale: 0.1,
+                        maxScale: 4.0,
+                      ),
                       documentLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
                       pageLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-                      errorBuilder: (_, error) => Center(child: Text("PDF 로드 오류: $error", style: const TextStyle(color: Colors.white))),
                     ),
                   )
-                : const Center(child: Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: Colors.white))),
+                : const Center(child: Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: Colors.white, fontSize: 16))),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             color: Colors.grey[900],
             child: Column(
               children: [
@@ -115,9 +113,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   children: [
                     _buildStatusBtn("완료", Colors.green, item.complete, () {
                       widget.onStatusUpdate(item, 'complete');
-                      setState(() {});
-                      // '완료' 시에만 자동으로 다음으로 넘어가며 뷰어 갱신
-                      Future.delayed(const Duration(milliseconds: 200), () => _next());
+                      setState(() {}); // 즉시 색상 갱신
+                      Future.delayed(const Duration(milliseconds: 300), () => _next());
                     }),
                     _buildStatusBtn("부족", Colors.orange, item.shortage, () {
                       widget.onStatusUpdate(item, 'shortage');
@@ -129,13 +126,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                     }),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    ElevatedButton.icon(onPressed: _prev, icon: const Icon(Icons.arrow_back), label: const Text("이전")),
-                    Text("${_currentIndex + 1} / ${widget.items.length}", style: const TextStyle(color: Colors.white)),
-                    ElevatedButton.icon(onPressed: _next, icon: const Icon(Icons.arrow_forward), label: const Text("다음")),
+                    ElevatedButton.icon(
+                      onPressed: _prev, 
+                      icon: const Icon(Icons.arrow_back), 
+                      label: const Text("이전", style: TextStyle(fontSize: 15)),
+                      style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45)),
+                    ),
+                    Text("${_currentIndex + 1} / ${widget.items.length}", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ElevatedButton.icon(
+                      onPressed: _next, 
+                      icon: const Icon(Icons.arrow_forward), 
+                      label: const Text("다음", style: TextStyle(fontSize: 15)),
+                      style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45)),
+                    ),
                   ],
                 )
               ],
@@ -152,9 +159,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       style: ElevatedButton.styleFrom(
         backgroundColor: active ? color : Colors.grey[700],
         foregroundColor: Colors.white,
-        minimumSize: const Size(90, 45),
+        minimumSize: const Size(100, 50),
+        elevation: active ? 8 : 2,
       ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
     );
   }
 }

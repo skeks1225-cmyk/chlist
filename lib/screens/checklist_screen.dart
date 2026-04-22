@@ -79,16 +79,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(title),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Text(msg),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))],
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인", style: TextStyle(fontSize: 16)))],
       ),
     );
   }
 
   void _showSnackBar(String msg) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(milliseconds: 800), behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Center(child: Text(msg, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), 
+        duration: const Duration(seconds: 1), 
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.blueGrey[800],
+      ),
     );
   }
 
@@ -97,7 +103,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     try {
       bool ok = await _excelService.saveExcel(_excelPath, _items);
       if (ok) {
-        if (!silent) _showSnackBar("저장 완료");
+        if (!silent) _showSnackBar("💾 저장 성공!");
       } else {
         _showError("저장 실패", "파일에 접근할 수 없습니다.\n다른 앱에서 사용 중인지 확인해 주세요.");
       }
@@ -113,21 +119,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
-            leading: const Icon(Icons.phone_android),
-            title: const Text("내 휴대폰"),
-            onTap: () {
-              Navigator.pop(ctx);
-              _pickLocal(mode);
-            },
+            leading: const Icon(Icons.phone_android, size: 28),
+            title: const Text("내 휴대폰", style: TextStyle(fontSize: 18)),
+            onTap: () { Navigator.pop(ctx); _pickLocal(mode); },
           ),
           ListTile(
-            leading: const Icon(Icons.computer),
-            title: const Text("PC 공유폴더 (SMB)"),
-            onTap: () {
-              Navigator.pop(ctx);
-              _showError("알림", "SMB 연동은 곧 제공됩니다.");
-            },
+            leading: const Icon(Icons.computer, size: 28),
+            title: const Text("PC 공유폴더 (SMB)", style: TextStyle(fontSize: 18)),
+            onTap: () { Navigator.pop(ctx); _showError("알림", "SMB 연동은 곧 제공됩니다."); },
           ),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -135,19 +136,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _pickLocal(String mode) async {
     if (mode == 'file') {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['xlsx', 'xls'],
-      );
+      FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xls']);
       if (result != null && result.files.single.path != null) {
         _loadExcelData(result.files.single.path!);
       }
     } else {
       String? result = await FilePicker.platform.getDirectoryPath();
-      if (result != null) {
-        setState(() => _pdfFolderPath = result);
-        _saveSettings();
-      }
+      if (result != null) { setState(() => _pdfFolderPath = result); _saveSettings(); }
     }
   }
 
@@ -181,17 +176,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_currentFileName, style: const TextStyle(fontSize: 14)),
+        title: Text(_currentFileName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
         foregroundColor: Colors.white,
         actions: [
           TextButton.icon(
-            onPressed: () {
-              setState(() => _autoSave = !_autoSave);
-              _saveSettings();
-            },
-            icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red),
-            label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white, fontSize: 12)),
+            onPressed: () { setState(() => _autoSave = !_autoSave); _saveSettings(); },
+            icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red, size: 24),
+            label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white, fontSize: 14)),
           )
         ],
       ),
@@ -201,14 +193,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             padding: const EdgeInsets.all(8.0),
             child: Row(
               children: [
-                Expanded(child: ElevatedButton(onPressed: () => _pickSource('file'), child: const Text("엑셀 선택"))),
+                Expanded(child: ElevatedButton(onPressed: () => _pickSource('file'), style: ElevatedButton.styleFrom(minimumSize: const Size(0, 45)), child: const Text("엑셀 선택", style: TextStyle(fontSize: 14)))),
                 const SizedBox(width: 4),
-                Expanded(child: ElevatedButton(onPressed: () => _pickSource('dir'), child: const Text("PDF 폴더"))),
+                Expanded(child: ElevatedButton(onPressed: () => _pickSource('dir'), style: ElevatedButton.styleFrom(minimumSize: const Size(0, 45)), child: const Text("PDF 폴더", style: TextStyle(fontSize: 14)))),
                 const SizedBox(width: 4),
                 ElevatedButton(
                   onPressed: () => _manualSave(),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white),
-                  child: const Text("저장"),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(80, 45)),
+                  child: const Text("저장", style: TextStyle(fontSize: 14)),
                 ),
               ],
             ),
@@ -223,12 +215,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     final item = _items[idx];
                     return Container(
                       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[300]!))),
-                      height: 50,
+                      height: 55, // 행 높이 상향
                       child: Row(
                         children: [
-                          SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10))),
+                          SizedBox(width: 40, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
                           Expanded(
-                            flex: 2,
+                            flex: 3,
                             child: InkWell(
                               onTap: () => Navigator.push(context, MaterialPageRoute(
                                 builder: (_) => PdfViewerScreen(
@@ -241,22 +233,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                               child: Container(
                                 color: isDark ? Colors.blueGrey[900] : Colors.blue[50],
                                 alignment: Alignment.center,
-                                child: Text(item.itemCode, style: TextStyle(fontSize: 10, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                                child: Text(item.itemCode, style: TextStyle(fontSize: 14, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
                               ),
                             ),
                           ),
-                          SizedBox(width: 30, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10))),
+                          SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
                           _buildCheckBtn(context, item.complete, Colors.green, () => _toggleStatus(item, 'complete')),
                           _buildCheckBtn(context, item.shortage, Colors.orange, () => _toggleStatus(item, 'shortage')),
                           _buildCheckBtn(context, item.rework, Colors.red, () => _toggleStatus(item, 'rework')),
                           Expanded(
-                            flex: 2,
+                            flex: 3,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 4),
                               child: TextField(
                                 controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)),
-                                style: const TextStyle(fontSize: 10),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 8)),
+                                style: const TextStyle(fontSize: 13),
+                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: '비고 입력', hintStyle: TextStyle(fontSize: 12)),
                                 onSubmitted: (val) {
                                   item.remarks = val;
                                   if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
@@ -279,16 +271,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       color: isDark ? Colors.grey[900] : Colors.grey[800],
-      height: 35,
+      height: 40,
       child: Row(
         children: [
-          _buildHeaderBtn("No", 35, () => _sortBy('no')),
-          Expanded(flex: 2, child: _buildHeaderBtn("품목코드", null, () => _sortBy('itemCode'))),
-          _buildHeaderBtn("Qty", 30, () => _sortBy('quantity')),
-          _buildHeaderBtn("완료", 45, null),
-          _buildHeaderBtn("부족", 45, null),
-          _buildHeaderBtn("재작", 45, null),
-          const Expanded(flex: 2, child: Center(child: Text("비고", style: TextStyle(color: Colors.white, fontSize: 11)))),
+          _buildHeaderBtn("No", 40, () => _sortBy('no')),
+          Expanded(flex: 3, child: _buildHeaderBtn("품목코드", null, () => _sortBy('itemCode'))),
+          _buildHeaderBtn("Qty", 40, () => _sortBy('quantity')),
+          _buildHeaderBtn("완료", 50, null),
+          _buildHeaderBtn("부족", 50, null),
+          _buildHeaderBtn("재작", 50, null),
+          const Expanded(flex: 3, child: Center(child: Text("비고", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)))),
         ],
       ),
     );
@@ -300,7 +292,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       child: Container(
         width: width,
         alignment: Alignment.center,
-        child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+        child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
       ),
     );
   }
@@ -310,13 +302,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     return InkWell(
       onTap: onTap,
       child: Container(
-        width: 45,
+        width: 50,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: val ? color.withOpacity(0.3) : Colors.transparent, 
           border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!, width: 0.5)
         ),
-        child: val ? Icon(Icons.check, color: color, size: 16) : null,
+        child: val ? Icon(Icons.check, color: color, size: 22) : null,
       ),
     );
   }

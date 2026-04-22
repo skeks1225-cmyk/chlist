@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:excel/excel.dart';
 import '../models/item_model.dart';
-import 'package:path_provider/path_provider.dart';
 
 class ExcelService {
   final List<String> _fixedHeader = ['no', '품목코드', '수량', '완료', '부족', '재작업', '비고'];
@@ -16,7 +15,6 @@ class ExcelService {
       var sheet = excel.tables[excel.tables.keys.first];
       if (sheet == null || sheet.maxRows <= 1) return [];
 
-      // 1. 헤더 맵핑 (위치 기반이 아닌 이름 기반 감지 시도 후 실패 시 기본값)
       Map<String, int> colMap = {'no': 0, 'code': 1, 'qty': 2, 'comp': 3, 'short': 4, 'rew': 5, 'rem': 6};
       var headerRow = sheet.rows[0];
       for (int i = 0; i < headerRow.length; i++) {
@@ -31,7 +29,6 @@ class ExcelService {
         else if (val.contains('비고')) colMap['rem'] = i;
       }
 
-      // 2. 데이터 추출
       for (int i = 1; i < sheet.maxRows; i++) {
         var row = sheet.rows[i];
         int codeIdx = colMap['code'] ?? 1;
@@ -66,12 +63,10 @@ class ExcelService {
       excel.rename(excel.getDefaultSheet()!, sheetName);
       var sheet = excel[sheetName];
 
-      // 1. 헤더 쓰기
       for (int i = 0; i < _fixedHeader.length; i++) {
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0), TextCellValue(_fixedHeader[i]));
       }
 
-      // 2. 데이터 쓰기
       for (int i = 0; i < items.length; i++) {
         var item = items[i];
         int r = i + 1;
@@ -84,13 +79,12 @@ class ExcelService {
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: r), TextCellValue(item.remarks));
       }
 
-      // 3. 물리적 파일 저장 (임시 파일을 이용한 덮어쓰기 전략)
       var fileBytes = excel.save();
       if (fileBytes != null) {
-        final originalFile = File(path);
-        // 안드로이드 11 이상 Scoped Storage 대응: 
-        // 기존 파일을 열어 둔 상태에서 쓰기 에러를 방지하기 위해 bytes를 직접 flush하며 씁니다.
-        await originalFile.writeAsBytes(fileBytes, mode: FileMode.writeOnly, flush: true);
+        final file = File(path);
+        // ❗ 파일 존재 시 삭제 후 동기식(Sync)으로 즉시 기록하여 안정성 확보
+        if (file.existsSync()) file.deleteSync();
+        file.writeAsBytesSync(fileBytes, flush: true);
         return true;
       }
       return false;
