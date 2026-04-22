@@ -37,34 +37,33 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     final item = widget.items[_currentIndex];
     final path = "${widget.pdfFolderPath}/${item.itemCode}.pdf";
     
-    setState(() {
+    // 이전 컨트롤러 해제 필수 (메모리 및 갱신 에러 방지)
+    _pdfController?.dispose();
+    
+    if (File(path).existsSync()) {
+      _pdfController = PdfControllerPinch(
+        document: PdfDocument.openFile(path),
+        initialPage: 1,
+      );
       _currentPdfPath = path;
-      _pdfController?.dispose();
-      if (File(path).existsSync()) {
-        _pdfController = PdfControllerPinch(
-          document: PdfDocument.openFile(path),
-        );
-      } else {
-        _pdfController = null;
-      }
-    });
+    } else {
+      _pdfController = null;
+      _currentPdfPath = "";
+    }
+    setState(() {}); // UI 강제 갱신
   }
 
   void _next() {
     if (_currentIndex < widget.items.length - 1) {
-      setState(() {
-        _currentIndex++;
-        _loadPdf();
-      });
+      _currentIndex++;
+      _loadPdf();
     }
   }
 
   void _prev() {
     if (_currentIndex > 0) {
-      setState(() {
-        _currentIndex--;
-        _loadPdf();
-      });
+      _currentIndex--;
+      _loadPdf();
     }
   }
 
@@ -89,7 +88,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         children: [
           Expanded(
             child: _pdfController != null
-                ? PdfViewPinch(controller: _pdfController!)
+                ? PdfViewPinch(
+                    controller: _pdfController!,
+                    // 핏 옵션: 축소 시 화면에 맞게 조절되도록 설정
+                    builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
+                      options: const DefaultBuilderOptions(),
+                      documentLoaderBuilder: (_) => const Center(child: CircularProgressIndicator()),
+                      pageLoaderBuilder: (_) => const Center(child: CircularProgressIndicator()),
+                    ),
+                  )
                 : const Center(child: Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: Colors.white))),
           ),
           Container(
@@ -138,9 +145,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       style: ElevatedButton.styleFrom(
         backgroundColor: active ? color : Colors.grey[700],
         foregroundColor: Colors.white,
-        minimumSize: const Size(100, 45),
+        minimumSize: const Size(90, 45),
       ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
     );
   }
 }

@@ -53,7 +53,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       final items = await _excelService.loadExcel(path);
       setState(() {
         _items = items;
-        // 경로 구분자 문제 해결을 위해 path lib 사용 고려 (여기서는 간단히 처리)
         _currentFileName = path.split('/').last.split('\\').last;
         _excelPath = path;
       });
@@ -96,78 +95,41 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
+  void _showInfo(String title, String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 1)));
+  }
+
+  Future<void> _manualSave() async {
+    if (_excelPath.isEmpty) return;
+    bool success = await _excelService.saveExcel(_excelPath, _items);
+    if (success) {
+      _showInfo("알림", "저장 완료");
+    } else {
+      _showError("오류", "저장에 실패했습니다.");
+    }
+  }
+
   void _toggleStatus(ItemModel item, String type) {
     setState(() {
       if (type == 'complete') {
         item.complete = !item.complete;
-        if (item.complete) {
-          item.shortage = false;
-          item.rework = false;
-        }
+        if (item.complete) { item.shortage = false; item.rework = false; }
       } else if (type == 'shortage') {
         item.shortage = !item.shortage;
-        if (item.shortage) {
-          item.complete = false;
-          item.rework = false;
-        }
+        if (item.shortage) { item.complete = false; item.rework = false; }
       } else if (type == 'rework') {
         item.rework = !item.rework;
-        if (item.rework) {
-          item.complete = false;
-          item.shortage = false;
-        }
+        if (item.rework) { item.complete = false; item.shortage = false; }
       }
     });
     if (_autoSave && _excelPath.isNotEmpty) _excelService.saveExcel(_excelPath, _items);
   }
 
-  void _showResetConfirm() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("데이터 리셋"),
-        content: const Text("모든 체크와 비고를 지우시겠습니까?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                for (var item in _items) {
-                  item.complete = false;
-                  item.shortage = false;
-                  item.rework = false;
-                  item.remarks = "";
-                }
-              });
-              if (_autoSave && _excelPath.isNotEmpty) _excelService.saveExcel(_excelPath, _items);
-              Navigator.pop(ctx);
-            },
-            child: const Text("예"),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _sortBy(String col) {
     setState(() {
-      if (col == 'itemCode') {
-        _items.sort((a, b) => a.itemCode.compareTo(b.itemCode));
-      } else if (col == 'no') {
-        _items.sort((a, b) {
-          int? na = int.tryParse(a.no);
-          int? nb = int.tryParse(b.no);
-          if (na == null || nb == null) return a.no.compareTo(b.no);
-          return na.compareTo(nb);
-        });
-      } else if (col == 'quantity') {
-        _items.sort((a, b) {
-          int? qa = int.tryParse(a.quantity);
-          int? qb = int.tryParse(b.quantity);
-          if (qa == null || qb == null) return a.quantity.compareTo(b.quantity);
-          return qa.compareTo(qb);
-        });
-      }
+      if (col == 'itemCode') _items.sort((a, b) => a.itemCode.compareTo(b.itemCode));
+      else if (col == 'no') _items.sort((a, b) => (int.tryParse(a.no) ?? 0).compareTo(int.tryParse(b.no) ?? 0));
+      else if (col == 'quantity') _items.sort((a, b) => (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0));
     });
   }
 
@@ -185,7 +147,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               _saveSettings();
             },
             icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red),
-            label: Text(_autoSave ? "자동저장 ON" : "자동저장 OFF", style: const TextStyle(color: Colors.white, fontSize: 12)),
+            label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white, fontSize: 12)),
           )
         ],
       ),
@@ -195,22 +157,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             padding: const EdgeInsets.all(8.0),
             child: Row(
               children: [
-                Expanded(child: ElevatedButton(onPressed: _pickExcel, child: const Text("엑셀 선택", style: TextStyle(fontSize: 12)))),
+                Expanded(child: ElevatedButton(onPressed: _pickExcel, child: const Text("엑셀 선택", style: TextStyle(fontSize: 11)))),
                 const SizedBox(width: 4),
-                Expanded(child: ElevatedButton(onPressed: _pickPdfFolder, child: const Text("PDF 폴더", style: TextStyle(fontSize: 12)))),
-                const SizedBox(width: 4),
-                ElevatedButton(
-                  onPressed: _showResetConfirm,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white),
-                  child: const Text("리셋", style: TextStyle(fontSize: 12)),
-                ),
+                Expanded(child: ElevatedButton(onPressed: _pickPdfFolder, child: const Text("PDF 폴더", style: TextStyle(fontSize: 11)))),
                 const SizedBox(width: 4),
                 ElevatedButton(
-                  onPressed: () {
-                    if (_excelPath.isNotEmpty) _excelService.saveExcel(_excelPath, _items);
-                  },
+                  onPressed: _manualSave,
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white),
-                  child: const Text("저장", style: TextStyle(fontSize: 12)),
+                  child: const Text("저장", style: TextStyle(fontSize: 11)),
                 ),
               ],
             ),
@@ -225,34 +179,50 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     final item = _items[idx];
                     return Container(
                       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey[300]!))),
-                      height: 45,
-                      child: Row(
-                        children: [
-                          SizedBox(width: 40, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11))),
-                          Expanded(
-                            flex: 3,
-                            child: InkWell(
-                              onTap: () => Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => PdfViewerScreen(
-                                  items: _items,
-                                  initialIndex: idx,
-                                  pdfFolderPath: _pdfFolderPath,
-                                  onStatusUpdate: (it, type) => _toggleStatus(it, type),
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: IntrinsicHeight(
+                        child: Row(
+                          children: [
+                            SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10))),
+                            Expanded(
+                              flex: 2,
+                              child: InkWell(
+                                onTap: () => Navigator.push(context, MaterialPageRoute(
+                                  builder: (_) => PdfViewerScreen(
+                                    items: _items,
+                                    initialIndex: idx,
+                                    pdfFolderPath: _pdfFolderPath,
+                                    onStatusUpdate: (it, type) => _toggleStatus(it, type),
+                                  ),
+                                )),
+                                child: Container(
+                                  color: Colors.blue[50],
+                                  alignment: Alignment.center,
+                                  child: Text(item.itemCode, style: const TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
                                 ),
-                              )),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 4),
-                                color: Colors.blue[50],
-                                alignment: Alignment.center,
-                                child: Text(item.itemCode, style: const TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
                               ),
                             ),
-                          ),
-                          Expanded(flex: 1, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11))),
-                          _buildCheckBtn(item.complete, Colors.green, () => _toggleStatus(item, 'complete')),
-                          _buildCheckBtn(item.shortage, Colors.orange, () => _toggleStatus(item, 'shortage')),
-                          _buildCheckBtn(item.rework, Colors.red, () => _toggleStatus(item, 'rework')),
-                        ],
+                            SizedBox(width: 30, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10))),
+                            _buildCheckBtn(item.complete, Colors.green, () => _toggleStatus(item, 'complete')),
+                            _buildCheckBtn(item.shortage, Colors.orange, () => _toggleStatus(item, 'shortage')),
+                            _buildCheckBtn(item.rework, Colors.red, () => _toggleStatus(item, 'rework')),
+                            Expanded(
+                              flex: 2,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                child: TextField(
+                                  controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)),
+                                  style: const TextStyle(fontSize: 10),
+                                  decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.all(4)),
+                                  onChanged: (val) {
+                                    item.remarks = val;
+                                    if (_autoSave && _excelPath.isNotEmpty) _excelService.saveExcel(_excelPath, _items);
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -266,15 +236,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Widget _buildHeader() {
     return Container(
       color: Colors.grey[800],
-      height: 35,
+      height: 30,
       child: Row(
         children: [
-          _buildHeaderBtn("No", 40, () => _sortBy('no')),
-          Expanded(flex: 3, child: _buildHeaderBtn("품목코드", null, () => _sortBy('itemCode'))),
-          Expanded(flex: 1, child: _buildHeaderBtn("수량", null, () => _sortBy('quantity'))),
-          _buildHeaderBtn("완료", 50, null),
-          _buildHeaderBtn("부족", 50, null),
-          _buildHeaderBtn("재작", 50, null),
+          _buildHeaderBtn("No", 35, () => _sortBy('no')),
+          Expanded(flex: 2, child: _buildHeaderBtn("품목코드", null, () => _sortBy('itemCode'))),
+          _buildHeaderBtn("Qty", 30, () => _sortBy('quantity')),
+          _buildHeaderBtn("완료", 45, null),
+          _buildHeaderBtn("부족", 45, null),
+          _buildHeaderBtn("재작", 45, null),
+          const Expanded(flex: 2, child: Center(child: Text("비고", style: TextStyle(color: Colors.white, fontSize: 11)))),
         ],
       ),
     );
@@ -286,7 +257,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       child: Container(
         width: width,
         alignment: Alignment.center,
-        child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+        child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
       ),
     );
   }
@@ -295,13 +266,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     return InkWell(
       onTap: onTap,
       child: Container(
-        width: 50,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          color: val ? color.withOpacity(0.2) : Colors.transparent,
-          border: Border.all(color: Colors.grey[200]!),
-        ),
-        child: val ? Icon(Icons.check, color: color, size: 20) : null,
+        width: 45,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: val ? color.withOpacity(0.2) : Colors.transparent, border: Border.all(color: Colors.grey[200]!, width: 0.5)),
+        child: val ? Icon(Icons.check, color: color, size: 16) : null,
       ),
     );
   }
