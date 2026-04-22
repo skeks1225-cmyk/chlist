@@ -32,8 +32,8 @@ jobs:
           cp -r /tmp/checksheet_code/lib/* lib/
           cp /tmp/checksheet_code/pubspec.yaml .
 
-      # ❗ 핵심: 모든 파일 접근 권한(MANAGE_EXTERNAL_STORAGE) 강제 주입
-      - name: Inject Master Permissions
+      # ❗ 전문가 조언 1, 2번 반영: 마스터 권한 및 레거시 저장소 허용
+      - name: Inject Android Permissions
         run: |
           sed -i '/<application/i \    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/<application android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml

@@ -10,13 +10,13 @@ dependencies:
   flutter:
     sdk: flutter
   excel: ^4.0.6
-  file_picker: ^8.0.5
   shared_preferences: ^2.2.3
-  pdfx: ^2.4.0
+  pdfx: ^2.6.0
   path_provider: ^2.1.2
   intl: ^0.19.0
   path: ^1.9.0
   permission_handler: ^11.3.1
+  external_path: ^1.0.3  # ❗ 진짜 경로 확보를 위한 필수 패키지 추가
 
 dev_dependencies:
   flutter_test:
