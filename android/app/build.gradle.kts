@@ -10,7 +10,7 @@ android {
     compileSdk = flutter.compileSdkVersion
 
     defaultConfig {
-        // ❗ 앱의 고유 ID도 정석대로 통일
+        // ❗ 앱의 진짜 고유 ID 고정 (ClassNotFoundException 해결 핵심)
         applicationId = "org.example.checksheet"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
