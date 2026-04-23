@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.util.EnumSet
 
 class SmbHandler(private val context: Context) {
     private var client: SMBClient = SMBClient()
@@ -33,11 +34,8 @@ class SmbHandler(private val context: Context) {
         }
     }
 
-    // ❗ SMBJ에서 공유 목록 조회는 기본 지원되지 않으므로, 연결 성공 시 빈 리스트 대신 더미 또는 직접 입력 유도
     suspend fun listShares(): List<String> = withContext(Dispatchers.IO) {
         try {
-            // 현재는 엑셀/PDF가 들어있는 실제 공유 폴더명을 UI에서 바로 쓰도록 하거나,
-            // 기본적으로 많이 쓰이는 명칭들을 테스트용으로 제공합니다.
             listOf("Shared", "Public", "Users", "Documents") 
         } catch (e: Exception) {
             emptyList<String>()
@@ -53,8 +51,8 @@ class SmbHandler(private val context: Context) {
                 for (file in list) {
                     if (file.fileName == "." || file.fileName == "..") continue
                     
-                    // ❗ 정석 API: 디렉토리 여부를 판단하는 가장 안전한 방식
-                    val isDir = (file.fileAttributes and 0x10L) != 0L
+                    // ❗ 지피티가 제안한 가장 안전한 비트 연산 방식으로 교체
+                    val isDir = (file.fileAttributes and 0x00000010L) != 0L
                     
                     result.add(mapOf(
                         "name" to file.fileName,
@@ -74,9 +72,9 @@ class SmbHandler(private val context: Context) {
             share?.let { s ->
                 val remoteFile = s.openFile(
                     remotePath,
-                    setOf(AccessMask.GENERIC_READ),
+                    EnumSet.of(AccessMask.GENERIC_READ),
                     null,
-                    setOf(SMB2ShareAccess.FILE_SHARE_READ),
+                    EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ),
                     SMB2CreateDisposition.FILE_OPEN,
                     null
                 )
