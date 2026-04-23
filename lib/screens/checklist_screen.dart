@@ -363,6 +363,43 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     return Expanded(child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(minimumSize: const Size(0, 45), padding: EdgeInsets.zero), child: Text(label, style: const TextStyle(fontSize: 12))));
   }
 
+  // ❗ [품목코드 클릭 시 스마트 동기화 수행]
+  Future<void> _handleItemClick(ItemModel item) async {
+    String finalPdfPath = "$_baseDownloadPath/CheckSheet";
+    
+    // 만약 PDF 폴더가 SMB(PC)라면, 클릭하는 순간 스마트 동기화(다운로드) 시도
+    if (_pdfFolderPath.startsWith("smb://")) {
+      setState(() => _isLoading = true);
+      try {
+        String shareWithRest = _pdfFolderPath.replaceFirst("smb://", "");
+        int firstSlash = shareWithRest.indexOf("/");
+        String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
+        String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
+        String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf";
+        String localFilePath = "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf";
+        
+        await _smbService.downloadFile(share, remoteFilePath, localFilePath);
+      } catch (e) {
+        debugPrint("SMB Sync Error: $e");
+      } finally {
+        setState(() => _isLoading = false);
+      }
+    } else {
+      // 로컬 폴더라면 설정된 폴더 경로를 그대로 사용
+      finalPdfPath = _pdfFolderPath;
+    }
+
+    if (!mounted) return;
+    
+    // 뷰어는 무조건 로컬 경로를 바라봄
+    Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(
+      items: _displayItems.where((i) => !i.isSubheading).toList(),
+      initialIndex: _displayItems.where((i) => !i.isSubheading).toList().indexOf(item),
+      pdfFolderPath: finalPdfPath,
+      onStatusUpdate: (it, type) => _toggleStatus(it, type),
+    )));
+  }
+
   Widget _buildDataRow(ItemModel item, bool isDark) {
     return Container(
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))),
@@ -371,7 +408,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         children: [
           SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
           Expanded(flex: 5, child: InkWell(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(items: _displayItems.where((i) => !i.isSubheading).toList(), initialIndex: _displayItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, onStatusUpdate: (it, type) => _toggleStatus(it, type)))),
+            onTap: () => _handleItemClick(item), // ❗ 통합 클릭 핸들러 사용
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               alignment: Alignment.centerLeft,
