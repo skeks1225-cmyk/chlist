@@ -199,6 +199,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     List<String> shares = await _smbService.listShares();
     setState(() => _isLoading = false);
     if (!mounted) return;
+
+    if (shares.isNotEmpty && shares[0].startsWith("ERROR:")) {
+      _showError("탐색 실패", shares[0].replaceFirst("ERROR:", "").trim());
+      return;
+    }
+
     if (shares.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다."); return; }
     showDialog(
       context: context,

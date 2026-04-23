@@ -3332,3 +3332,360 @@ pdf뷰어에서 비고도 입력할 수 있도록 해줘.
 접속실패
 MissingPluginException(No implementation found for method connectSMB on channel org.example.checksheet/smb
 
+
+접속성공 했어.
+그리고 내휴대폰의 pdf파일을 바꾸엇는데, 품목코드를 누르면 pdf파일을 찾을 수 없습니다. 라고 나오는데 왜그러는거야?
+
+
+확장자는 소문자/대문자 모두 인식하게 해줘.
+그리고 위치 정확해.
+예를들어 a.pdf파일이 있는데, 삭제 후 다시 a.pdf파일을 넣었어.
+그 후에 품목코드를 누르면 pdf파일을 찾을 수 없다고 나와.
+바로 수정하지 말고 의논해보자.
+
+
+리스트에서 비고란에 이력을 했는데, 한번씩 자동저장이 안될때가 있는데, 이유가 뭐야?
+차이점이라면 입력을 할때, 클릭 후 입력, 다른칸 클릭 후 입력, 다른 칸 클릭 후 키패드 완료를 눌렀는데, 마지막 것만 저장이 되었어.
+입력 후 클릭으로 다른 칸 클릭을 했을 때에도 자동저장이 on 되어있으면 저장이 되어야해.
+구현가능하니?
+
+
+
+fix: stabilized build by reverting SmbHandler with dummy listShares
+Flutter Android Build #123: Commit 188909c pushed by skeks1225-cmyk
+이건 빌드 성공했어.
+외부설정 후 엑셀선택에서  pc공유폴더 선택하면
+shared/public/users/download 나와
+
+fix: finalized immutable MethodChannel contract and stabilized Kotlin…
+Flutter Android Build #124: Commit 038bdce pushed by skeks1225-cmyk
+이건 빌드 실패했어. 아래는 로그와 지피티 의견이야.
+
+Run flutter build apk --release
+Running Gradle task 'assembleRelease'...                        
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 2504 bytes (99.8% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Checking the license for package CMake 3.22.1 in /usr/local/lib/android/sdk/licenses
+License for package CMake 3.22.1 accepted.
+Preparing "Install CMake 3.22.1 v.3.22.1".
+"Install CMake 3.22.1 v.3.22.1" ready.
+Installing CMake 3.22.1 in /usr/local/lib/android/sdk/cmake/3.22.1
+"Install CMake 3.22.1 v.3.22.1" complete.
+"Install CMake 3.22.1 v.3.22.1" finished.
+Caught exception: Already watching path: /home/runner/work/chlist/chlist/android
+e: file:///home/runner/work/chlist/chlist/android/app/src/main/kotlin/org/example/checksheet/SmbHandler.kt:13:34 Unresolved reference 'FileIdBothDirectoryInformation'.
+e: file:///home/runner/work/chlist/chlist/android/app/src/main/kotlin/org/example/checksheet/SmbHandler.kt:47:35 Unresolved reference 'listShares'.
+e: file:///home/runner/work/chlist/chlist/android/app/src/main/kotlin/org/example/checksheet/SmbHandler.kt:47:51 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///home/runner/work/chlist/chlist/android/app/src/main/kotlin/org/example/checksheet/SmbHandler.kt:49:26 Unresolved reference 'it'.
+e: file:///home/runner/work/chlist/chlist/android/app/src/main/kotlin/org/example/checksheet/SmbHandler.kt:49:45 Unresolved reference 'not' for operator '!'.
+e: file:///home/runner/work/chlist/chlist/android/app/src/main/kotlin/org/example/checksheet/SmbHandler.kt:49:46 Unresolved reference 'it'.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileReleaseKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 4m 17s
+Running Gradle task 'assembleRelease'...                          258.1s
+Gradle task assembleRelease failed with exit code 1
+Error: Process completed with exit code 1.
+
+
+
+
+지금 로그는 이전보다 더 명확하게 원인이 딱 2개로 줄어들었어.
+
+🔴 1. SMBJ 내부 클래스 잘못 사용
+Unresolved reference 'FileIdBothDirectoryInformation'
+
+👉 이건 100% 확정으로 이거야:
+
+SMBJ 내부 구현용 클래스/구조를 잘못 import 했거나
+Windows SMB low-level 구조를 Android에서 직접 쓰려고 함
+
+📌 결론:
+
+❌ Android에서 직접 쓰는 타입이 아님
+❌ SMB 파일 리스트용 API가 아님
+
+🔴 2. listShares / it / not 오류 (계속 반복)
+Unresolved reference 'listShares'
+Unresolved reference 'it'
+Unresolved reference 'not'
+
+👉 이건 완전히 같은 문제 반복:
+
+Kotlin 파일이 여전히 “섞여 있음”
+이전 코드 + 새 코드 + Gemini 수정본이 동시에 존재
+함수 정의와 호출이 서로 다름
+💣 핵심 본질 (진짜 문제)
+
+지금 상태는 SMB 문제가 아니라 이거야:
+
+🔥 “SmbHandler.kt가 더 이상 단일 버전이 아니라 3~4개 버전이 섞인 상태”
+
+그래서 계속 이런 현상 발생:
+
+어떤 줄은 old API 기준
+어떤 줄은 new API 기준
+어떤 줄은 Gemini 수정 기준
+
+👉 결과:
+
+Kotlin 컴파일러가 “존재하지 않는 함수 / 타입”이라고 판단
+
+⚠️ 특히 위험한 부분
+❌ FileIdBothDirectoryInformation
+
+이건:
+
+Windows SMB low-level 구조체
+Android SMBJ에서 직접 쓰는 구조 아님
+잘못 들어가면 무조건 빌드 깨짐
+🧠 지금 상태 한줄 요약
+
+“SMB 기능 문제가 아니라 Kotlin 파일이 서로 다른 버전으로 덮여서 API가 붕괴된 상태”
+
+🔥 해결 방향 (중요)
+
+지금은 기능 추가 절대 금지
+
+해야 할 건 단 하나:
+
+✅ 1. SmbHandler.kt “완전 단일화”
+
+👉 규칙:
+
+listShares 반드시 존재
+connect / list / download 4개만 유지
+SMB low-level 클래스 제거
+FileIdBothDirectoryInformation 같은 내부 구조 금지
+✅ 2. 절대 금지
+SMBJ 내부 구조체 직접 사용
+계속 함수 추가/삭제
+더미 ↔ 실제 반복 변경
+✅ 3. 목표
+Flutter ↔ Kotlin 계약 고정
+
+connectSMB
+listShares
+listFiles
+downloadFile
+🚨 현재 가장 위험한 상태
+
+지금은:
+
+“코드 수정할수록 더 깨지는 전형적인 API 혼합 상태”
+
+👍 현실적인 판단
+SMB 연결 자체: ✔ 이미 성공 경험 있음
+문제: ❌ 코드 구조 안정화 실패
+원인: ❌ API 버전 혼재
+👉 다음 단계 추천 (중요)
+
+지금은 “수정”이 아니라:
+
+🔒 SmbHandler.kt 초기화 + 고정
+
+해야 빌드가 안정됨
+
+
+
+
+
+
+
+
+fix: stabilized build by reverting SmbHandler with dummy listShares
+Flutter Android Build #123: Commit 188909c pushed by skeks1225-cmyk
+이건 빌드 성공했어.
+외부설정 후 엑셀선택에서  pc공유폴더 선택하면
+shared/public/users/download 나와
+이게 의미하는것이 뭐야?
+이제 다음단계(방금 한 푸시)에서 실제 공유폴더에 접근해서 파일읽기/다운이 가능한거야?
+이건 질문이야. 코드 수정등 하지 말고 답변만해줘.
+
+
+
+
+
+
+
+
+
+
+ip는 100.68.5.122
+폴더명은 '체크시트'야
+
+그리고 아래는 지피티의 의견이야.
+읽고 바로 수정하지 말고 의논해보자.
+
+
+
+좋아, 이번 Gemini 분석은 절반은 맞고, 절반은 위험한 방향 제안이 섞여 있어. 핵심만 정확히 짚어줄게.
+
+🔴 1. 빌드 실패 “진짜 원인” 분석
+
+로그 기준 핵심 에러는 3개야:
+
+❌ (1) listShares 없음
+Unresolved reference 'listShares'
+
+👉 이건 Gemini 말이 맞는 부분
+
+SMBJ Session에는 listShares() 없음
+즉 존재하지 않는 API 호출
+
+📌 결론:
+
+✔ 맞는 분석
+
+❌ (2) iterator() 에러
+For-loop range must have an 'iterator()' method
+
+👉 이건 의미가 명확함
+
+어떤 객체를 for (x in something) 했는데
+그 “something”이 List/Iterable이 아님
+
+📌 원인:
+
+listShares / listFiles 중 하나가 잘못된 타입 반환
+
+❌ (3) not 연산자 에러
+Unresolved reference 'not'
+
+👉 이건 거의 100% 코드 혼란 상태
+
+Kotlin에서 !it 쓰려다 잘못된 타입에서 발생
+또는 null/boolean 아닌 값에 적용됨
+
+📌 결론:
+
+✔ “코드 구조 꼬임 증상”
+
+🔴 2. Gemini의 해석 중 “틀린 부분”
+❌ “Session에 listShares가 없어서 복잡하다”
+
+이건 맞지만 결론이 잘못됨
+
+Gemini 제안:
+
+공유폴더 자동 탐색은 어렵다 → 폴더 이름을 직접 넣자
+
+👉 이건 편법 해결이지 구조 해결이 아님
+
+💣 핵심 진짜 문제 (중요)
+
+이번 실패의 본질은 이거야:
+
+❗ SMB 문제가 아니라 “SMBHandler API가 계속 바뀌면서 Flutter와 Kotlin이 계속 불일치 상태”
+
+즉:
+
+Flutter → listShares 기대
+Kotlin → listShares 없음 / 또는 다른 구조
+
+또는
+
+Kotlin 내부에서도
+listShares / session / share 접근 방식이 계속 변경됨
+🧠 중요한 판단 포인트
+
+Gemini가 말한 것 중:
+
+✔ 맞는 부분
+SMBJ에서 share list는 단순 API 아님
+자동 탐색은 제한적
+지금 상태는 구조 불안정
+❌ 위험한 부분
+“폴더 이름 하나 고정해서 가자”
+
+👉 이건 임시 해결이지
+👉 지금 문제의 본질 해결 아님
+
+🔥 핵심 정리
+지금 상황은 이거야:
+
+❗ “SMB 기능 문제가 아니라 API 설계가 계속 흔들리는 상태”
+
+⚠️ 현재 가장 위험한 패턴
+
+지금까지 반복된 흐름:
+
+connect 성공
+listShares 추가
+안됨 → 삭제
+다시 추가
+또 수정
+또 타입 변경
+
+👉 결과:
+
+💥 Kotlin 코드가 “버전 3~4개 섞인 상태”
+
+🟡 진짜 중요한 결론
+Gemini 방향:
+
+“일단 고정 폴더 쓰자”
+
+👉 이건:
+
+✔ 빌드 성공은 빨라짐
+❌ 구조는 더 기술 부채됨
+
+🟢 내가 보는 올바른 방향
+
+지금 단계는 둘 중 하나 선택해야 함:
+
+✅ A. 안정화 우선 (추천)
+listShares 제거
+고정 share name 사용
+SMB 연결만 유지
+파일 탐색은 path 기반
+
+👉 즉 “단순화”
+
+❌ B. 기능 유지하면서 수정
+listShares 구현 유지
+SMBJ 구조 맞게 재설계
+대신 시간 오래 걸림
+💬 핵심 질문
+
+Gemini가 너한테 묻는 질문:
+
+“공유폴더 이름 하나만 넣고 진행할까요?”
+
+👉 이건 기술적으로는 “맞는 임시 해결”
+
+하지만 구조적으로는:
+
+🔴 장기적으로는 비추천
+
+👍 내 의견 (중립 + 현실)
+
+지금 단계에서는:
+
+✔ “폴더 고정 방식으로 먼저 안정화”
+✔ “listShares는 나중에”
+
+이게 현실적으로 가장 빠른 성공 루트야.
+
+
+
+
+적용했을 때, 문제되는 것은 없는거야?
+현재 smb말고는 다른 모든 기능은 정상적으로 작동하는 상태야. 적용 후 기존의 기능에 문제가 생기지는 않는거야?
+계속 의논해보자.
+
+
+지금 수정을 하게되면, 키비버전이나 다른 탐색기에서 smb실행했을 때처럼 내pc의 공유폴더에 접근이 가능한거야?
+아니면 특정 폴더 하나에만 접근이 가능한거야?
+계속 의논해보자.
