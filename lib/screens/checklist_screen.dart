@@ -30,7 +30,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _isLoading = false;
   bool _isSorted = false;
 
-  // ❗ 안드로이드 표준 다운로드 폴더 경로 확보
+  // ❗ 정렬 상태 관리 변수 추가
+  String _currentSortCol = ""; // 현재 정렬된 컬럼
+  bool _isAscending = true;   // 오름차순 여부
+
   final String _baseDownloadPath = "/storage/emulated/0/Download";
 
   @override
@@ -41,7 +44,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Future<void> _ensureBaseDirectory() async {
-    // ❗ external_path 없이 표준 경로 사용
     final baseDir = Directory("$_baseDownloadPath/CheckSheet");
     if (!baseDir.existsSync()) baseDir.createSync(recursive: true);
   }
@@ -78,6 +80,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         _currentFileName = p.basename(path);
         _excelPath = path;
         _isSorted = false;
+        _currentSortCol = "";
       });
       _saveSettings();
       _saveLastDir(path);
@@ -97,28 +100,50 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     setState(() {
       _displayItems = List.from(_originalItems);
       _isSorted = false;
+      _currentSortCol = "";
     });
   }
 
+  // ❗ 개선된 스마트 정렬 로직 (오름/내림 토글 지원)
   void _sortBy(String col) {
     setState(() {
-      _isSorted = true;
-      _displayItems = _originalItems.where((i) => !i.isSubheading).toList();
-      if (col == 'itemCode') {
-        _displayItems.sort((a, b) => a.itemCode.compareTo(b.itemCode));
-      } else if (col == 'no') {
-        _displayItems.sort((a, b) {
-          int na = int.tryParse(a.no) ?? 0;
-          int nb = int.tryParse(b.no) ?? 0;
-          return na.compareTo(nb);
-        });
-      } else if (col == 'quantity') {
-        _displayItems.sort((a, b) {
-          int qa = int.tryParse(a.quantity) ?? 0;
-          int qb = int.tryParse(b.quantity) ?? 0;
-          return qa.compareTo(qb);
-        });
+      if (_currentSortCol == col) {
+        _isAscending = !_isAscending; // 이미 선택된 열이면 방향 전환
+      } else {
+        _currentSortCol = col;
+        _isAscending = true; // 새로운 열이면 오름차순 시작
       }
+      _isSorted = true;
+      
+      // 소제목을 제외한 순수 데이터만 추출하여 정렬
+      List<ItemModel> dataOnly = _originalItems.where((i) => !i.isSubheading).toList();
+      
+      dataOnly.sort((a, b) {
+        int cmp = 0;
+        switch (col) {
+          case 'no':
+            cmp = (int.tryParse(a.no) ?? 0).compareTo(int.tryParse(b.no) ?? 0);
+            break;
+          case 'itemCode':
+            cmp = a.itemCode.compareTo(b.itemCode);
+            break;
+          case 'quantity':
+            cmp = (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0);
+            break;
+          case 'complete':
+            cmp = (a.complete ? 1 : 0).compareTo(b.complete ? 1 : 0);
+            break;
+          case 'shortage':
+            cmp = (a.shortage ? 1 : 0).compareTo(b.shortage ? 1 : 0);
+            break;
+          case 'rework':
+            cmp = (a.rework ? 1 : 0).compareTo(b.rework ? 1 : 0);
+            break;
+        }
+        return _isAscending ? cmp : -cmp; // 방향에 따라 반전
+      });
+      
+      _displayItems = dataOnly;
     });
   }
 
@@ -154,7 +179,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             const SizedBox(height: 10),
             ElevatedButton(
               onPressed: () async {
-                // ❗ 반환 타입 불일치 해결 (bool -> String?)
                 String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
                 _showError(err == null ? "성공" : "접속 실패", err ?? "✅ 접속 성공!");
               },
@@ -222,7 +246,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _downloadAndLoad(String share, String remotePath) async {
     setState(() => _isLoading = true);
-    // ❗ 표준 다운로드 경로 사용
     String localPath = "$_baseDownloadPath/CheckSheet/${p.basename(remotePath)}";
     File? file = await _smbService.downloadFile(share, remotePath, localPath);
     setState(() => _isLoading = false);
@@ -233,7 +256,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Future<void> _openCustomPicker(String mode) async {
     if (Platform.isAndroid) { if (!await Permission.manageExternalStorage.isGranted) await Permission.manageExternalStorage.request(); }
     final prefs = await SharedPreferences.getInstance();
-    // ❗ 표준 다운로드 경로 사용
     String startPath = prefs.getString('lastDir') ?? "$_baseDownloadPath/CheckSheet";
     if (!Directory(startPath).existsSync()) startPath = _baseDownloadPath;
     if (!mounted) return;
@@ -333,7 +355,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   void _resetAllData() {
-    setState(() { for (var item in _originalItems) { item.complete = false; item.shortage = false; item.rework = false; item.remarks = ""; } _displayItems = List.from(_originalItems); _isSorted = false; });
+    setState(() { for (var item in _originalItems) { item.complete = false; item.shortage = false; item.rework = false; item.remarks = ""; } _displayItems = List.from(_originalItems); _isSorted = false; _currentSortCol = ""; });
     if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
   }
 
@@ -384,6 +406,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
   }
 
+  // ❗ 개선된 헤더 빌더 (정렬 상태 아이콘 포함)
   Widget _buildHeader(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
@@ -391,22 +414,53 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       height: 40,
       child: Row(
         children: [
-          _headerBtn("No", 35, () => _sortBy('no')),
-          Expanded(flex: 5, child: _headerBtn("품목코드", null, () => _sortBy('itemCode'))),
-          _headerBtn("수량", 40, () => _sortBy('quantity')),
-          Container(color: isDark ? Colors.white10 : Colors.black12, child: Row(children: [_headerBtn("완료", 50, null), _headerBtn("부족", 50, null), _headerBtn("재작업", 50, null)])),
+          _headerBtn("No", "no", 35),
+          Expanded(flex: 5, child: _headerBtn("품목코드", "itemCode", null)),
+          _headerBtn("수량", "quantity", 40),
+          Container(
+            color: isDark ? Colors.white10 : Colors.black12,
+            child: Row(children: [
+              _headerBtn("완료", "complete", 50),
+              _headerBtn("부족", "shortage", 50),
+              _headerBtn("재작업", "rework", 50),
+            ]),
+          ),
           const Expanded(flex: 3, child: Center(child: Text("비고", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)))),
         ],
       ),
     );
   }
 
-  Widget _headerBtn(String label, double? width, VoidCallback? onTap) {
-    return InkWell(onTap: onTap, child: Container(width: width, alignment: Alignment.center, child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13))));
+  // ❗ 정렬 상태 아이콘이 포함된 헤더 버튼 위젯
+  Widget _headerBtn(String label, String colKey, double? width) {
+    bool isTarget = _currentSortCol == colKey;
+    return InkWell(
+      onTap: () => _sortBy(colKey),
+      child: Container(
+        width: width,
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+            if (isTarget)
+              Icon(_isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: Colors.yellow, size: 18),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _checkBtn(bool val, Color color, VoidCallback onTap, bool isDark) {
-    return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: val ? color.withOpacity(0.4) : (isDark ? Colors.white10 : Colors.grey[100]), child: val ? Icon(Icons.check, color: isDark ? Colors.white : color, size: 24) : null));
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: 50,
+        alignment: Alignment.center,
+        color: val ? color.withOpacity(0.4) : (isDark ? Colors.white10 : Colors.grey[100]),
+        child: val ? Icon(Icons.check, color: isDark ? Colors.white : color, size: 24) : null,
+      ),
+    );
   }
 
   void _showError(String title, String msg) {
