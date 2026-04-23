@@ -53,8 +53,8 @@ class SmbHandler(private val context: Context) {
                 for (file in list) {
                     if (file.fileName == "." || file.fileName == "..") continue
                     
-                    // ❗ 정석 API: fileAttributes를 통해 디렉토리 판별
-                    val isDir = file.fileAttributes.contains(FileAttributes.FILE_ATTRIBUTE_DIRECTORY)
+                    // ❗ 정석 API: 디렉토리 여부를 판단하는 가장 안전한 방식
+                    val isDir = (file.fileAttributes and 0x10L) != 0L
                     
                     result.add(mapOf(
                         "name" to file.fileName,
