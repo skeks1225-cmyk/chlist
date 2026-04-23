@@ -12,17 +12,17 @@ class SmbService {
     _ip = ip; _user = user; _pass = pass;
   }
 
-  // ❗ 3개의 인자(IP, ID, PW)만 사용하여 네이티브 접속
-  Future<bool> testConnection(String ip, String user, String pass) async {
+  // ❗ 결과가 "SUCCESS"이면 통과, 아니면 에러 메시지 반환
+  Future<String?> testConnection(String ip, String user, String pass) async {
     try {
-      final bool ok = await _channel.invokeMethod('connectSMB', {
+      final String result = await _channel.invokeMethod('connectSMB', {
         'ip': ip,
         'user': user,
         'pass': pass,
       });
-      return ok;
+      return result == "SUCCESS" ? null : result;
     } catch (e) {
-      return false;
+      return e.toString();
     }
   }
 
