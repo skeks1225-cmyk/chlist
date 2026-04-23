@@ -3123,3 +3123,88 @@ No	품목코드	수량	완료	부족	재작업	비고
 그냥 리셋 버튼도 있어야해.
 이 버튼은 완료/부족/재작업/비고란의 내용을 모두 지울 수 있어야해.
 실수로 누를 수도 있으니 확인창이 한 번 더 나와야해.
+
+
+
+
+
+지금 계속 빌드실패만 하고 있는데, 도대체 원인이 뭐야?
+그냥 부작정 조금의 수정과 빌드시도는 무의미해보이는데?
+연속으로 4번 빌드실패했어.
+
+Run flutter build apk --release
+
+Running Gradle task 'assembleRelease'...                        
+Checking the license for package Android SDK Build-Tools 30.0.3 in /usr/local/lib/android/sdk/licenses
+License for package Android SDK Build-Tools 30.0.3 accepted.
+Preparing "Install Android SDK Build-Tools 30.0.3 (revision: 30.0.3)".
+"Install Android SDK Build-Tools 30.0.3 (revision: 30.0.3)" ready.
+Installing Android SDK Build-Tools 30.0.3 in /usr/local/lib/android/sdk/build-tools/30.0.3
+"Install Android SDK Build-Tools 30.0.3 (revision: 30.0.3)" complete.
+"Install Android SDK Build-Tools 30.0.3 (revision: 30.0.3)" finished.
+Checking the license for package Android SDK Platform 31 in /usr/local/lib/android/sdk/licenses
+License for package Android SDK Platform 31 accepted.
+Preparing "Install Android SDK Platform 31 (revision: 1)".
+"Install Android SDK Platform 31 (revision: 1)" ready.
+Installing Android SDK Platform 31 in /usr/local/lib/android/sdk/platforms/android-31
+"Install Android SDK Platform 31 (revision: 1)" complete.
+"Install Android SDK Platform 31 (revision: 1)" finished.
+Checking the license for package Android SDK Platform 33 in /usr/local/lib/android/sdk/licenses
+License for package Android SDK Platform 33 accepted.
+Preparing "Install Android SDK Platform 33 (revision: 3)".
+"Install Android SDK Platform 33 (revision: 3)" ready.
+Installing Android SDK Platform 33 in /usr/local/lib/android/sdk/platforms/android-33
+"Install Android SDK Platform 33 (revision: 3)" complete.
+"Install Android SDK Platform 33 (revision: 3)" finished.
+lib/services/smb_service.dart:50:45: Error: A '$' has special meaning inside a string, and must be followed by an identifier or an expression in curly braces ({}).
+Try adding a backslash (\) to escape the '$'.
+          .where((name) => !name.endsWith('$'))
+                                            ^
+lib/services/smb_service.dart:25:24: Error: The method 'disconnect' isn't defined for the class 'SmbConnect'.
+ - 'SmbConnect' is from 'package:smb_connect/src/connect/smb_connect.dart' ('../../../.pub-cache/hosted/pub.dev/smb_connect-0.0.9/lib/src/connect/smb_connect.dart').
+Try correcting the name to the name of an existing method, or defining a method named 'disconnect'.
+      await connection.disconnect();
+                       ^^^^^^^^^^
+lib/services/smb_service.dart:45:24: Error: The method 'disconnect' isn't defined for the class 'SmbConnect'.
+ - 'SmbConnect' is from 'package:smb_connect/src/connect/smb_connect.dart' ('../../../.pub-cache/hosted/pub.dev/smb_connect-0.0.9/lib/src/connect/smb_connect.dart').
+Try correcting the name to the name of an existing method, or defining a method named 'disconnect'.
+      await connection.disconnect();
+                       ^^^^^^^^^^
+Target kernel_snapshot failed: Exception
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileFlutterBuildRelease'.
+> Process 'command '/opt/hostedtoolcache/flutter/stable-3.22.3-x64/flutter/bin/flutter'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+
+* Get more help at https://help.gradle.org
+
+BUILD FAILED in 2m 49s
+Running Gradle task 'assembleRelease'...                          170.4s
+Gradle task assembleRelease failed with exit code 1
+Error: Process completed with exit code 1.
+
+
+외부접속에 올바른 ip, id, pw를 넣었는데,
+계속 접속실패가 나와.
+그리고 엑셀선택/pdf폴더 선택에서 공유폴더 선택이 사라졌어.
+이건 외부접속을 해야 나타나게 바뀐거야? 아니면 수정중에 사라진거야?
+키비버젼은 외부접속에 아무 문제가 없었어.
+올바른 정보를 기입해도 왜 접속실패가 나오는지 이유를 분석해야해.
+다른기능은 지금 내가 원하는대로 구현이 되고 있어.
+오직 외부접속만 문제야.
+의논해보자.
+
+
+다른 기능은 원하는대로 구현되고 있는데, 갑자기 pdfx관련 내용이 왜 나오는거야?
+
+키비방식이나, 다른 일반 안드로이드 탐색기에서는 smb접속에
+ip, id, pw만 넣으면 되는데, 갑자기 도매인이 왜나오는거야?
+

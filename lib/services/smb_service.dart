@@ -10,25 +10,23 @@ class SmbService {
     _ip = ip; _user = user; _pass = pass;
   }
 
-  // ❗ 라이브러리 규격(0.0.9) 실시간 재교정
-  Future<bool> testConnection(String ip, String user, String pass) async {
+  // ❗ 상세 에러를 반환하여 접속 실패 원인을 분석함
+  Future<String?> testConnection(String ip, String user, String pass) async {
     try {
       final connection = await SmbConnect.connectAuth(
         host: ip,
         username: user,
         password: pass,
-        domain: "",
+        domain: "", // 도메인은 빈 값으로 처리
       );
-      
-      // ❗ 'disconnect'가 아니라 'close'가 정석 메서드임
       await connection.close();
-      return true;
+      return null; // 성공
     } catch (e) {
-      print("SMB 접속 테스트 실패: $e");
-      return false;
+      return e.toString(); // 실패 시 구체적인 시스템 에러 메시지 반환
     }
   }
 
+  // 공유폴더 목록 가져오기
   Future<List<String>> listShares() async {
     try {
       final connection = await SmbConnect.connectAuth(
@@ -37,17 +35,52 @@ class SmbService {
         password: _pass,
         domain: "",
       );
-      
       List<SmbFile> shares = await connection.listShares();
-      await connection.close(); // ❗ 메서드 명칭 수정
-      
-      return shares
-          .map((s) => s.name)
-          .where((name) => !name.endsWith('\$')) // ❗ '$' 기호 이스케이프 처리 완료
-          .toList();
+      await connection.close();
+      return shares.map((s) => s.name).where((n) => !n.endsWith('\$')).toList();
     } catch (e) {
-      print("공유폴더 목록 조회 실패: $e");
+      print("SMB 목록 에러: $e");
       return [];
+    }
+  }
+
+  // 파일 목록 가져오기
+  Future<List<SmbFile>> listFiles(String shareName, String path) async {
+    try {
+      final connection = await SmbConnect.connectAuth(
+        host: _ip,
+        username: _user,
+        password: _pass,
+        domain: "",
+      );
+      final dir = await connection.file("/$shareName/$path");
+      final files = await connection.listFiles(dir);
+      await connection.close();
+      return files;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // 파일 다운로드
+  Future<File?> downloadFile(String shareName, String remotePath, String localPath) async {
+    try {
+      final connection = await SmbConnect.connectAuth(
+        host: _ip,
+        username: _user,
+        password: _pass,
+        domain: "",
+      );
+      final smbFile = await connection.file("/$shareName/$remotePath");
+      final bytes = await connection.read(smbFile);
+      await connection.close();
+
+      final file = File(localPath);
+      if (file.existsSync()) file.deleteSync();
+      await file.writeAsBytes(bytes, flush: true);
+      return file;
+    } catch (e) {
+      return null;
     }
   }
 }

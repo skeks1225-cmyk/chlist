@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pdfx/pdfx.dart';
 import '../models/item_model.dart';
 import 'dart:io';
+import 'dart:typed_data';
 
 class PdfViewerScreen extends StatefulWidget {
   final List<ItemModel> items;
@@ -25,7 +26,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   late int _currentIndex;
   PdfControllerPinch? _pdfController;
   String _currentPdfPath = "";
-  // ❗ 정석 리셋을 위한 고유 키
   Key _viewerKey = UniqueKey();
 
   @override
@@ -35,41 +35,52 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _loadPdf();
   }
 
-  void _loadPdf() {
+  // ❗ 경로 대신 '바이트 데이터'를 메모리로 읽어와서 로드 (100% 화면 표시 보장)
+  Future<void> _loadPdf() async {
     final item = widget.items[_currentIndex];
     final path = "${widget.pdfFolderPath}/${item.itemCode}.pdf";
     
     _pdfController?.dispose();
     
     if (File(path).existsSync()) {
-      _currentPdfPath = path;
-      _pdfController = PdfControllerPinch(
-        document: PdfDocument.openFile(path),
-        initialPage: 1,
-      );
+      try {
+        final Uint8List bytes = await File(path).readAsBytes();
+        setState(() {
+          _currentPdfPath = path;
+          _pdfController = PdfControllerPinch(
+            document: PdfDocument.openData(bytes), // ❗ 메모리 로드 방식
+            initialPage: 1,
+          );
+          _viewerKey = UniqueKey();
+        });
+      } catch (e) {
+        _showError("파일 읽기 실패", e.toString());
+      }
     } else {
-      _currentPdfPath = "";
-      _pdfController = null;
+      setState(() {
+        _currentPdfPath = "";
+        _pdfController = null;
+        _viewerKey = UniqueKey();
+      });
     }
-    // ❗ 키를 새로 발급하여 위젯을 강제로 처음부터 다시 그림 (가로 핏 적용 시점)
-    _viewerKey = UniqueKey();
-    setState(() {});
   }
 
-  void _resetFit() {
-    _loadPdf(); // 파일을 다시 열어 초기 핏 상태로 복구
+  void _showError(String title, String msg) {
+    showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(title), content: Text(msg), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
   }
+
+  void _resetFit() => _loadPdf();
 
   void _next() {
     if (_currentIndex < widget.items.length - 1) {
-      _currentIndex++;
+      setState(() => _currentIndex++);
       _loadPdf();
     }
   }
 
   void _prev() {
     if (_currentIndex > 0) {
-      _currentIndex--;
+      setState(() => _currentIndex--);
       _loadPdf();
     }
   }
@@ -104,7 +115,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 ? PdfViewPinch(
                     key: _viewerKey,
                     controller: _pdfController!,
-                    // ❗ 가로 핏(Fit Width)을 위해 세로 스크롤 모드로 설정
                     scrollDirection: Axis.vertical, 
                     builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
                       options: const DefaultBuilderOptions(),
@@ -122,38 +132,18 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildStatusBtn("완료", Colors.green, item.complete, () {
-                      widget.onStatusUpdate(item, 'complete');
-                      setState(() {});
-                      // 자동 다음 이동 없음
-                    }),
-                    _buildStatusBtn("부족", Colors.orange, item.shortage, () {
-                      widget.onStatusUpdate(item, 'shortage');
-                      setState(() {});
-                    }),
-                    _buildStatusBtn("재작업", Colors.red, item.rework, () {
-                      widget.onStatusUpdate(item, 'rework');
-                      setState(() {});
-                    }),
+                    _statusBtn("완료", Colors.green, item.complete, () { widget.onStatusUpdate(item, 'complete'); setState(() {}); }),
+                    _statusBtn("부족", Colors.orange, item.shortage, () { widget.onStatusUpdate(item, 'shortage'); setState(() {}); }),
+                    _statusBtn("재작업", Colors.red, item.rework, () { widget.onStatusUpdate(item, 'rework'); setState(() {}); }),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    ElevatedButton.icon(
-                      onPressed: _prev, 
-                      icon: const Icon(Icons.arrow_back), 
-                      label: const Text("이전", style: TextStyle(fontSize: 15)),
-                      style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45)),
-                    ),
+                    ElevatedButton.icon(onPressed: _prev, icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45))),
                     Text("${_currentIndex + 1} / ${widget.items.length}", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                    ElevatedButton.icon(
-                      onPressed: _next, 
-                      icon: const Icon(Icons.arrow_forward), 
-                      label: const Text("다음", style: TextStyle(fontSize: 15)),
-                      style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45)),
-                    ),
+                    ElevatedButton.icon(onPressed: _next, icon: const Icon(Icons.arrow_forward), label: const Text("다음", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45))),
                   ],
                 )
               ],
@@ -164,14 +154,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     );
   }
 
-  Widget _buildStatusBtn(String label, Color color, bool active, VoidCallback onTap) {
+  Widget _statusBtn(String label, Color color, bool active, VoidCallback onTap) {
     return ElevatedButton(
       onPressed: onTap,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: active ? color : Colors.grey[700],
-        foregroundColor: Colors.white,
-        minimumSize: const Size(100, 50),
-      ),
+      style: ElevatedButton.styleFrom(backgroundColor: active ? color : Colors.grey[700], foregroundColor: Colors.white, minimumSize: const Size(100, 50)),
       child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
     );
   }
