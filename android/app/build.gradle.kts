@@ -10,7 +10,6 @@ android {
 
     defaultConfig {
         applicationId = "org.example.checksheet"
-        // ❗ 플러터 설정값을 따르는 순정 방식 복구
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -18,13 +17,11 @@ android {
     }
 
     compileOptions {
-        // ❗ 최신 표준인 Java 17로 복구
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        // ❗ 코틀린도 Java 17 규격에 맞춤
         jvmTarget = "17"
     }
 
@@ -35,8 +32,12 @@ android {
     }
 }
 
+// ❗ 이 블록이 없으면 io.flutter 패키지를 찾지 못해 빌드가 터집니다.
+flutter {
+    source = "../.."
+}
+
 dependencies {
-    // ❗ 순정 뼈대 위에 딱 필요한 엔진만 추가
     implementation("com.hierynomus:smbj:0.13.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
