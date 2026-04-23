@@ -17,8 +17,7 @@ dependencies:
   path: ^1.9.0
   permission_handler: ^11.3.1
   external_path: ^1.0.3
-  # ❗ 빌드 시스템 권장 버전에 맞춰 수정
-  smb_connect: ^0.0.9 
+  # ❗ smb_connect 삭제 (네이티브 SMBJ 사용으로 더 이상 불필요)
 
 dev_dependencies:
   flutter_test:

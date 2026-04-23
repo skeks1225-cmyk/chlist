@@ -104,38 +104,21 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       if (col == 'itemCode') {
         _displayItems.sort((a, b) => a.itemCode.compareTo(b.itemCode));
       } else if (col == 'no') {
-        _displayItems.sort((a, b) {
-          int na = int.tryParse(a.no) ?? 0;
-          int nb = int.tryParse(b.no) ?? 0;
-          return na.compareTo(nb);
-        });
+        _displayItems.sort((a, b) => (int.tryParse(a.no) ?? 0).compareTo(int.tryParse(b.no) ?? 0));
       } else if (col == 'quantity') {
-        _displayItems.sort((a, b) {
-          int qa = int.tryParse(a.quantity) ?? 0;
-          int qb = int.tryParse(b.quantity) ?? 0;
-          return qa.compareTo(qb);
-        });
+        _displayItems.sort((a, b) => (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0));
       }
     });
   }
 
-  // ❗ 네이티브 전용 SMB 소스 선택 메뉴
   Future<void> _pickSource(String mode) async {
     showModalBottomSheet(
       context: context,
       builder: (ctx) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ListTile(
-            leading: const Icon(Icons.phone_android),
-            title: const Text("내 휴대폰"),
-            onTap: () { Navigator.pop(ctx); _openCustomPicker(mode); },
-          ),
-          ListTile(
-            leading: const Icon(Icons.computer),
-            title: const Text("PC 공유폴더 (SMB)"),
-            onTap: () { Navigator.pop(ctx); _openSmbShares(mode); },
-          ),
+          ListTile(leading: const Icon(Icons.phone_android), title: const Text("내 휴대폰"), onTap: () { Navigator.pop(ctx); _openCustomPicker(mode); }),
+          ListTile(leading: const Icon(Icons.computer), title: const Text("PC 공유폴더 (SMB)"), onTap: () { Navigator.pop(ctx); _openSmbShares(mode); }),
           const SizedBox(height: 20),
         ],
       ),
@@ -147,17 +130,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final ipController = TextEditingController(text: prefs.getString('smbIp'));
     final userController = TextEditingController(text: prefs.getString('smbUser'));
     final passController = TextEditingController(text: prefs.getString('smbPass'));
-
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("외부설정 (SMB)", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("외부설정 (SMB)"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: ipController, decoration: const InputDecoration(labelText: "IP 주소")),
-            TextField(controller: userController, decoration: const InputDecoration(labelText: "사용자 ID")),
-            TextField(controller: passController, decoration: const InputDecoration(labelText: "비밀번호"), obscureText: true),
+            TextField(controller: userController, decoration: const InputDecoration(labelText: "ID")),
+            TextField(controller: passController, decoration: const InputDecoration(labelText: "PW"), obscureText: true),
             const SizedBox(height: 10),
             ElevatedButton(
               onPressed: () async {
@@ -170,16 +152,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
-          TextButton(
-            onPressed: () async {
-              await prefs.setString('smbIp', ipController.text);
-              await prefs.setString('smbUser', userController.text);
-              await prefs.setString('smbPass', passController.text);
-              _smbService.setConfig(ipController.text, userController.text, passController.text);
-              Navigator.pop(ctx);
-            },
-            child: const Text("저장"),
-          ),
+          TextButton(onPressed: () async {
+            await prefs.setString('smbIp', ipController.text);
+            await prefs.setString('smbUser', userController.text);
+            await prefs.setString('smbPass', passController.text);
+            _smbService.setConfig(ipController.text, userController.text, passController.text);
+            Navigator.pop(ctx);
+          }, child: const Text("저장")),
         ],
       ),
     );
@@ -189,72 +168,38 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     setState(() => _isLoading = true);
     List<String> shares = await _smbService.listShares();
     setState(() => _isLoading = false);
-
     if (!mounted) return;
-    if (shares.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다. 설정을 확인하세요."); return; }
-
+    if (shares.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다."); return; }
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("공유폴더 선택"),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: shares.length,
-            itemBuilder: (c, i) => ListTile(
-              leading: const Icon(Icons.folder_shared),
-              title: Text(shares[i]),
-              onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i], "", mode); },
-            ),
-          ),
-        ),
+        content: SizedBox(width: double.maxFinite, child: ListView.builder(shrinkWrap: true, itemCount: shares.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.folder_shared), title: Text(shares[i]), onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i], "", mode); }))),
       ),
     );
   }
 
-  // ❗ SmbFile 타입 대신 Map<String, dynamic> 사용
   void _showSmbFiles(String share, String path, String mode) async {
     setState(() => _isLoading = true);
     List<Map<String, dynamic>> files = await _smbService.listFiles(share, path);
     setState(() => _isLoading = false);
-
     if (!mounted) return;
-
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text("$share/$path"),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 400,
-          child: Column(
-            children: [
-              if (path != "") ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showSmbFiles(share, p.dirname(path) == "." ? "" : p.dirname(path), mode); }),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: files.length,
-                  itemBuilder: (c, i) {
-                    final f = files[i];
-                    bool isDir = f['isDirectory'] as bool;
-                    String name = f['name'] as String;
-                    return ListTile(
-                      leading: Icon(isDir ? Icons.folder : Icons.description),
-                      title: Text(name),
-                      onTap: () async {
-                        if (isDir) { Navigator.pop(ctx); _showSmbFiles(share, "${path == "" ? "" : "$path/"}$name", mode); }
-                        else if (mode == 'file') {
-                          Navigator.pop(ctx);
-                          _downloadAndLoad(share, "${path == "" ? "" : "$path/"}$name");
-                        }
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
+        content: SizedBox(width: double.maxFinite, height: 400, child: Column(children: [
+          if (path != "") ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showSmbFiles(share, p.dirname(path) == "." ? "" : p.dirname(path), mode); }),
+          Expanded(child: ListView.builder(itemCount: files.length, itemBuilder: (c, i) {
+            final f = files[i];
+            bool isDir = f['isDirectory'] as bool;
+            String name = f['name'] as String;
+            return ListTile(leading: Icon(isDir ? Icons.folder : Icons.description), title: Text(name), onTap: () {
+              if (isDir) { Navigator.pop(ctx); _showSmbFiles(share, "${path == "" ? "" : "$path/"}$name", mode); }
+              else if (mode == 'file') { Navigator.pop(ctx); _downloadAndLoad(share, "${path == "" ? "" : "$path/"}$name"); }
+            });
+          })),
+        ])),
         actions: [
           if (mode == 'dir') TextButton(onPressed: () { setState(() => _pdfFolderPath = "smb://$share/$path"); _saveSettings(); Navigator.pop(ctx); }, child: const Text("현재 폴더 선택")),
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
@@ -269,7 +214,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     String localPath = "$downloadPath/CheckSheet/${p.basename(remotePath)}";
     File? file = await _smbService.downloadFile(share, remotePath, localPath);
     setState(() => _isLoading = false);
-
     if (file != null) _loadExcelData(file.path);
     else _showError("오류", "파일 다운로드 실패");
   }
@@ -301,27 +245,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           } catch (_) {}
           return AlertDialog(
             title: Text(p.basename(initialPath)),
-            content: SizedBox(
-              width: double.maxFinite,
-              height: 400,
-              child: Column(
-                children: [
-                  ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showFileBrowser(mode, p.dirname(initialPath)); }),
-                  Expanded(child: ListView.builder(itemCount: entities.length, itemBuilder: (c, i) {
-                    final e = entities[i];
-                    final isDir = e is Directory;
-                    return ListTile(
-                      leading: Icon(isDir ? Icons.folder : Icons.description, color: isDir ? Colors.amber : Colors.blue),
-                      title: Text(p.basename(e.path)),
-                      onTap: () {
-                        if (isDir) { Navigator.pop(ctx); _showFileBrowser(mode, e.path); }
-                        else if (mode == 'file') { Navigator.pop(ctx); _loadExcelData(e.path); }
-                      },
-                    );
-                  })),
-                ],
-              ),
-            ),
+            content: SizedBox(width: double.maxFinite, height: 400, child: Column(children: [
+              ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showFileBrowser(mode, p.dirname(initialPath)); }),
+              Expanded(child: ListView.builder(itemCount: entities.length, itemBuilder: (c, i) {
+                final e = entities[i];
+                final isDir = e is Directory;
+                return ListTile(leading: Icon(isDir ? Icons.folder : Icons.description, color: isDir ? Colors.amber : Colors.blue), title: Text(p.basename(e.path)), onTap: () {
+                  if (isDir) { Navigator.pop(ctx); _showFileBrowser(mode, e.path); }
+                  else if (mode == 'file') { Navigator.pop(ctx); _loadExcelData(e.path); }
+                });
+              })),
+            ])),
             actions: [
               if (mode == 'dir') TextButton(onPressed: () { setState(() => _pdfFolderPath = initialPath); _saveSettings(); _saveLastDir(initialPath + "/f.pdf"); Navigator.pop(ctx); }, child: const Text("현재 폴더 선택")),
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
@@ -332,7 +266,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ 지피티와 약속한 완전한 build() 메서드 복구
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -420,6 +353,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ],
       ),
     );
+  }
+
+  void _toggleStatus(ItemModel item, String type) {
+    setState(() {
+      if (type == 'complete') { item.complete = !item.complete; if (item.complete) { item.shortage = false; item.rework = false; } }
+      else if (type == 'shortage') { item.shortage = !item.shortage; if (item.shortage) { item.complete = false; item.rework = false; } }
+      else if (type == 'rework') { item.rework = !item.rework; if (item.rework) { item.complete = false; item.shortage = false; } }
+    });
+    if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
   }
 
   Widget _buildHeader(BuildContext context) {
