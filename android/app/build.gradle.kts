@@ -6,23 +6,26 @@ plugins {
 
 android {
     namespace = "org.example.checksheet"
-    compileSdk = 34
+    compileSdk = flutter.compileSdkVersion
 
     defaultConfig {
         applicationId = "org.example.checksheet"
-        minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "16.3.0"
+        // ❗ 플러터 설정값을 따르는 순정 방식 복구
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        // ❗ 최신 표준인 Java 17로 복구
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = "1.8"
+        // ❗ 코틀린도 Java 17 규격에 맞춤
+        jvmTarget = "17"
     }
 
     buildTypes {
@@ -33,7 +36,7 @@ android {
 }
 
 dependencies {
-    // ❗ 최신 v2 뼈대에 SMBJ 엔진 라이브러리 주입
+    // ❗ 순정 뼈대 위에 딱 필요한 엔진만 추가
     implementation("com.hierynomus:smbj:0.13.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
