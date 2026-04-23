@@ -283,7 +283,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
         foregroundColor: Colors.white,
         actions: [
-          if (_isSorted) IconButton(onPressed: _resetSort, icon: const Icon(Icons.refresh)),
+          if (_isSorted) TextButton(onPressed: _resetSort, child: const Text("정렬리셋", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
           TextButton.icon(onPressed: () { setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
         ],
       ),
@@ -346,7 +346,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
           Expanded(flex: 5, child: InkWell(
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(items: _displayItems.where((i) => !i.isSubheading).toList(), initialIndex: _displayItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, onStatusUpdate: (it, type) => _toggleStatus(it, type)))),
-            child: Container(padding: const EdgeInsets.only(left: 8), alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              alignment: Alignment.centerLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)),
+              ),
+            ),
           )),
           SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
           _checkBtn(item.complete, Colors.green, () => _toggleStatus(item, 'complete'), isDark),
