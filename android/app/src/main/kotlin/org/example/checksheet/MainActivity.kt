@@ -16,25 +16,41 @@ class MainActivity: FlutterActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
+                // 1. connectSMB(ip, user, pass) -> String
                 "connectSMB" -> {
                     val ip = call.argument<String>("ip") ?: ""
                     val user = call.argument<String>("user") ?: ""
                     val pass = call.argument<String>("pass") ?: ""
-                    scope.launch { result.success(smbHandler.connect(ip, user, pass)) }
+                    scope.launch {
+                        val res = smbHandler.connect(ip, user, pass)
+                        result.success(res)
+                    }
                 }
+                // 2. listShares() -> List<String>
                 "listShares" -> {
-                    scope.launch { result.success(smbHandler.listShares()) }
+                    scope.launch {
+                        val shares = smbHandler.listShares()
+                        result.success(shares)
+                    }
                 }
+                // 3. listFiles(share, path) -> List<Map<String, Any>>
                 "listFiles" -> {
                     val share = call.argument<String>("share") ?: ""
                     val path = call.argument<String>("path") ?: ""
-                    scope.launch { result.success(smbHandler.listFiles(share, path)) }
+                    scope.launch {
+                        val files = smbHandler.listFiles(share, path)
+                        result.success(files)
+                    }
                 }
+                // 4. downloadFile(share, remotePath, localPath) -> String?
                 "downloadFile" -> {
                     val share = call.argument<String>("share") ?: ""
                     val remote = call.argument<String>("remotePath") ?: ""
                     val local = call.argument<String>("localPath") ?: ""
-                    scope.launch { result.success(smbHandler.downloadFile(share, remote, local)) }
+                    scope.launch {
+                        val localPath = smbHandler.downloadFile(share, remote, local)
+                        result.success(localPath)
+                    }
                 }
                 else -> result.notImplemented()
             }

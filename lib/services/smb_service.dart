@@ -12,7 +12,7 @@ class SmbService {
     _ip = ip; _user = user; _pass = pass;
   }
 
-  // ❗ 결과가 "SUCCESS"이면 통과, 아니면 에러 메시지 반환
+  // [1] connectSMB -> String
   Future<String?> testConnection(String ip, String user, String pass) async {
     try {
       final String result = await _channel.invokeMethod('connectSMB', {
@@ -26,6 +26,7 @@ class SmbService {
     }
   }
 
+  // [2] listShares -> List<String>
   Future<List<String>> listShares() async {
     try {
       final List<dynamic> result = await _channel.invokeMethod('listShares');
@@ -35,6 +36,7 @@ class SmbService {
     }
   }
 
+  // [3] listFiles -> List<Map<String, Any>>
   Future<List<Map<String, dynamic>>> listFiles(String share, String path) async {
     try {
       final List<dynamic> result = await _channel.invokeMethod('listFiles', {
@@ -47,6 +49,7 @@ class SmbService {
     }
   }
 
+  // [4] downloadFile -> String?
   Future<File?> downloadFile(String share, String remotePath, String localPath) async {
     try {
       final String? path = await _channel.invokeMethod('downloadFile', {
