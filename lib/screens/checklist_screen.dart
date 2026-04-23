@@ -34,14 +34,29 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   String _smbShareName = "체크시트"; 
 
-  // ❗ 안드로이드 표준 다운로드 폴더 경로 (외부 라이브러리 없이 직접 사용)
   final String _baseDownloadPath = "/storage/emulated/0/Download";
 
   @override
   void initState() {
     super.initState();
-    _loadSettings();
-    _ensureBaseDirectory();
+    _initApp();
+  }
+
+  // ❗ 앱 시작 시 설정 로드 및 SMB 자동 접속 시도
+  Future<void> _initApp() async {
+    await _loadSettings();
+    await _ensureBaseDirectory();
+    _autoConnectSMB(); // ❗ 백그라운드 자동 접속
+  }
+
+  Future<void> _autoConnectSMB() async {
+    final prefs = await SharedPreferences.getInstance();
+    String ip = prefs.getString('smbIp') ?? "";
+    String user = prefs.getString('smbUser') ?? "";
+    String pass = prefs.getString('smbPass') ?? "";
+    if (ip.isNotEmpty && user.isNotEmpty) {
+      await _smbService.testConnection(ip, user, pass);
+    }
   }
 
   Future<void> _ensureBaseDirectory() async {
@@ -215,13 +230,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       return;
     }
 
-    if (!shares.contains(_smbShareName)) shares.insert(0, _smbShareName);
+    // ❗ 중복 제거 및 가짜 데이터 정리
+    Set<String> uniqueShares = {};
+    if (_smbShareName.isNotEmpty) uniqueShares.add(_smbShareName);
+    for (var s in shares) {
+      if (s != "설정된 공유폴더" && s != "체크시트" && s != "Shared" && s != "Users" && s != "Public" && s != "Downloads") {
+        uniqueShares.add(s);
+      }
+    }
+    List<String> displayList = uniqueShares.toList();
 
+    if (displayList.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다."); return; }
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("공유폴더 선택"),
-        content: SizedBox(width: double.maxFinite, child: ListView.builder(shrinkWrap: true, itemCount: shares.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.folder_shared), title: Text(shares[i] == "설정된 공유폴더" ? _smbShareName : shares[i]), onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i] == "설정된 공유폴더" ? _smbShareName : shares[i], "", mode); }))),
+        content: SizedBox(width: double.maxFinite, child: ListView.builder(shrinkWrap: true, itemCount: displayList.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.folder_shared), title: Text(displayList[i]), onTap: () { Navigator.pop(ctx); _showSmbFiles(displayList[i], "", mode); }))),
       ),
     );
   }
@@ -257,7 +281,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _downloadAndLoad(String share, String remotePath) async {
     setState(() => _isLoading = true);
-    // ❗ _baseDownloadPath로 경로 통일 (컴파일 에러 해결)
     String localPath = "$_baseDownloadPath/CheckSheet/${p.basename(remotePath)}";
     File? file = await _smbService.downloadFile(share, remotePath, localPath);
     setState(() => _isLoading = false);
@@ -268,7 +291,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Future<void> _openCustomPicker(String mode) async {
     if (Platform.isAndroid) { if (!await Permission.manageExternalStorage.isGranted) await Permission.manageExternalStorage.request(); }
     final prefs = await SharedPreferences.getInstance();
-    // ❗ _baseDownloadPath로 경로 통일 (컴파일 에러 해결)
     String startPath = prefs.getString('lastDir') ?? "$_baseDownloadPath/CheckSheet";
     if (!Directory(startPath).existsSync()) startPath = _baseDownloadPath;
     if (!mounted) return;
