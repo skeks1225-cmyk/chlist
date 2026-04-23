@@ -142,7 +142,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       hintText: "비고 입력...",
                       hintStyle: TextStyle(color: Colors.grey[500]),
                       filled: true,
-                      fillColor: Colors.black24,
+                      fillColor: Colors.black26,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       suffixIcon: IconButton(
