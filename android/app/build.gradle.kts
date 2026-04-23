@@ -5,10 +5,12 @@ plugins {
 }
 
 android {
+    // ❗ 1. 네임스페이스 통일
     namespace = "org.example.checksheet"
     compileSdk = flutter.compileSdkVersion
 
     defaultConfig {
+        // ❗ 2. 애플리케이션 ID 통일 (실행 크래시 해결 핵심)
         applicationId = "org.example.checksheet"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
@@ -32,7 +34,6 @@ android {
     }
 }
 
-// ❗ 이 블록이 없으면 io.flutter 패키지를 찾지 못해 빌드가 터집니다.
 flutter {
     source = "../.."
 }

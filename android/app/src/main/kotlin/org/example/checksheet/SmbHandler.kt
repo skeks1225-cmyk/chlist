@@ -50,10 +50,7 @@ class SmbHandler(private val context: Context) {
                 val list = s.list(path)
                 for (file in list) {
                     if (file.fileName == "." || file.fileName == "..") continue
-                    
-                    // ❗ 지피티가 제안한 가장 안전한 비트 연산 방식으로 교체
                     val isDir = (file.fileAttributes and 0x00000010L) != 0L
-                    
                     result.add(mapOf(
                         "name" to file.fileName,
                         "isDirectory" to isDir
@@ -78,10 +75,8 @@ class SmbHandler(private val context: Context) {
                     SMB2CreateDisposition.FILE_OPEN,
                     null
                 )
-                
                 val localFile = File(localPath)
                 localFile.parentFile?.mkdirs()
-                
                 remoteFile.inputStream.use { input ->
                     FileOutputStream(localFile).use { output ->
                         input.copyTo(output)
