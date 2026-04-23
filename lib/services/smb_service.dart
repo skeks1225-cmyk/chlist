@@ -1,7 +1,9 @@
 import 'dart:io';
-import 'package:smb_connect/smb_connect.dart';
+import 'package:flutter/services.dart';
 
 class SmbService {
+  static const _channel = MethodChannel('org.example.checksheet/smb');
+  
   String _ip = "";
   String _user = "";
   String _pass = "";
@@ -10,75 +12,43 @@ class SmbService {
     _ip = ip; _user = user; _pass = pass;
   }
 
-  // ❗ 3개의 인자(IP, ID, PW)만 받도록 수정
+  // ❗ 네이티브 SMBJ를 통한 접속 테스트
   Future<String?> testConnection(String ip, String user, String pass) async {
     try {
-      final connection = await SmbConnect.connectAuth(
-        host: ip,
-        username: user,
-        password: pass,
-        domain: "",
-      );
-      await connection.close();
-      return null; // 성공
+      final bool ok = await _channel.invokeMethod('connectSMB', {
+        'ip': ip,
+        'user': user,
+        'pass': pass,
+      });
+      return ok ? null : "인증 실패 또는 네트워크 오류";
     } catch (e) {
       return e.toString();
     }
   }
 
-  Future<List<String>> listShares() async {
+  // ❗ 공유폴더 내 파일 리스트 조회
+  Future<List<Map<String, dynamic>>> listFiles(String share, String path) async {
     try {
-      final connection = await SmbConnect.connectAuth(
-        host: _ip,
-        username: _user,
-        password: _pass,
-        domain: "",
-      );
-      List<SmbFile> shares = await connection.listShares();
-      await connection.close();
-      return shares.map((s) => s.name).where((n) => !n.endsWith('\$')).toList();
+      final List<dynamic> result = await _channel.invokeMethod('listFiles', {
+        'share': share,
+        'path': path,
+      });
+      return result.map((e) => Map<String, dynamic>.from(e)).toList();
     } catch (e) {
       return [];
     }
   }
 
-  Future<List<SmbFile>> listFiles(String shareName, String path) async {
+  // ❗ 파일 다운로드
+  Future<File?> downloadFile(String share, String remotePath, String localPath) async {
     try {
-      final connection = await SmbConnect.connectAuth(
-        host: _ip,
-        username: _user,
-        password: _pass,
-        domain: "",
-      );
-      final dir = await connection.file("/$shareName/$path");
-      final files = await connection.listFiles(dir);
-      await connection.close();
-      return files;
+      final String? path = await _channel.invokeMethod('downloadFile', {
+        'share': share,
+        'remotePath': remotePath,
+        'localPath': localPath,
+      });
+      return path != null ? File(path) : null;
     } catch (e) {
-      return [];
-    }
-  }
-
-  Future<File?> downloadFile(String shareName, String remotePath, String localPath) async {
-    try {
-      final connection = await SmbConnect.connectAuth(
-        host: _ip,
-        username: _user,
-        password: _pass,
-        domain: "",
-      );
-      final smbFile = await connection.file("/$shareName/$remotePath");
-      
-      // ❗ 0.0.9 버전의 정석 읽기 방식: read 메서드 사용
-      final bytes = await connection.read(smbFile);
-      await connection.close();
-
-      final file = File(localPath);
-      if (!file.parent.existsSync()) file.parent.createSync(recursive: true);
-      await file.writeAsBytes(bytes, flush: true);
-      return file;
-    } catch (e) {
-      print("다운로드 에러: $e");
       return null;
     }
   }
