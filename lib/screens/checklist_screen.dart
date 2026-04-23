@@ -154,8 +154,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             const SizedBox(height: 10),
             ElevatedButton(
               onPressed: () async {
-                bool ok = await _smbService.testConnection(ipController.text, userController.text, passController.text);
-                _showSnackBar(ok ? "✅ 접속 성공!" : "❌ 접속 실패");
+                // ❗ 반환 타입 불일치 해결 (bool -> String?)
+                String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
+                _showError(err == null ? "성공" : "접속 실패", err ?? "✅ 접속 성공!");
               },
               child: const Text("접속 테스트"),
             ),

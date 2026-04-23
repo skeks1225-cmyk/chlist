@@ -5,12 +5,11 @@ plugins {
 }
 
 android {
-    // ❗ 주소에서 v163 완전 박멸
     namespace = "org.example.checksheet"
     compileSdk = flutter.compileSdkVersion
+    ndkVersion = "28.2.13676358" // ❗ 권장 NDK 버전 고정
 
     defaultConfig {
-        // ❗ 앱의 진짜 고유 ID 고정 (ClassNotFoundException 해결 핵심)
         applicationId = "org.example.checksheet"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
