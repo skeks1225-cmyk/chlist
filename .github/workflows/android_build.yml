@@ -20,11 +20,13 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          # ❗ 로컬 버전(3.41.7)과 일치시켜 Dart SDK 버전 충돌 해결
           flutter-version: '3.41.7'
 
-      - name: Install dependencies
-        run: flutter pub get
+      # ❗ 빌드 전 클린 작업 및 패키지 설치 강제
+      - name: Clean and Get dependencies
+        run: |
+          flutter clean
+          flutter pub get
         
       - name: Build APK
         run: flutter build apk --release
