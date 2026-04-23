@@ -9,7 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # ❗ 우리 앱의 심장부 패키지들 복구
   excel: ^4.0.6
   shared_preferences: ^2.2.3
   pdfx: ^2.6.0
@@ -17,7 +16,7 @@ dependencies:
   intl: ^0.19.0
   path: ^1.9.0
   permission_handler: ^11.3.1
-  external_path: ^1.0.3
+  # ❗ 빌드 실패의 주범 external_path 삭제 완료
 
 dev_dependencies:
   flutter_test:

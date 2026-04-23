@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:external_path/external_path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/item_model.dart';
 import '../services/excel_service.dart';
@@ -30,6 +30,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _isLoading = false;
   bool _isSorted = false;
 
+  // ❗ 안드로이드 표준 다운로드 폴더 경로 확보
+  final String _baseDownloadPath = "/storage/emulated/0/Download";
+
   @override
   void initState() {
     super.initState();
@@ -38,8 +41,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Future<void> _ensureBaseDirectory() async {
-    String downloadPath = await ExternalPath.getExternalStoragePublicDirectory(ExternalPath.DIRECTORY_DOWNLOADS);
-    final baseDir = Directory("$downloadPath/CheckSheet");
+    // ❗ external_path 없이 표준 경로 사용
+    final baseDir = Directory("$_baseDownloadPath/CheckSheet");
     if (!baseDir.existsSync()) baseDir.createSync(recursive: true);
   }
 
@@ -218,8 +221,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _downloadAndLoad(String share, String remotePath) async {
     setState(() => _isLoading = true);
-    String downloadPath = await ExternalPath.getExternalStoragePublicDirectory(ExternalPath.DIRECTORY_DOWNLOADS);
-    String localPath = "$downloadPath/CheckSheet/${p.basename(remotePath)}";
+    // ❗ 표준 다운로드 경로 사용
+    String localPath = "$_baseDownloadPath/CheckSheet/${p.basename(remotePath)}";
     File? file = await _smbService.downloadFile(share, remotePath, localPath);
     setState(() => _isLoading = false);
     if (file != null) _loadExcelData(file.path);
@@ -229,9 +232,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Future<void> _openCustomPicker(String mode) async {
     if (Platform.isAndroid) { if (!await Permission.manageExternalStorage.isGranted) await Permission.manageExternalStorage.request(); }
     final prefs = await SharedPreferences.getInstance();
-    String downloadPath = await ExternalPath.getExternalStoragePublicDirectory(ExternalPath.DIRECTORY_DOWNLOADS);
-    String startPath = prefs.getString('lastDir') ?? "$downloadPath/CheckSheet";
-    if (!Directory(startPath).existsSync()) startPath = downloadPath;
+    // ❗ 표준 다운로드 경로 사용
+    String startPath = prefs.getString('lastDir') ?? "$_baseDownloadPath/CheckSheet";
+    if (!Directory(startPath).existsSync()) startPath = _baseDownloadPath;
     if (!mounted) return;
     _showFileBrowser(mode, startPath);
   }
