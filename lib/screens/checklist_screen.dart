@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/item_model.dart';
 import '../services/excel_service.dart';
@@ -33,9 +32,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   String _currentSortCol = ""; 
   bool _isAscending = true;   
 
-  // ❗ 공유폴더명 설정 변수 추가
   String _smbShareName = "체크시트"; 
 
+  // ❗ 안드로이드 표준 다운로드 폴더 경로 (외부 라이브러리 없이 직접 사용)
   final String _baseDownloadPath = "/storage/emulated/0/Download";
 
   @override
@@ -56,7 +55,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _excelPath = prefs.getString('excelPath') ?? "";
       _pdfFolderPath = prefs.getString('pdfFolderPath') ?? "";
       _autoSave = prefs.getBool('autoSave') ?? true;
-      _smbShareName = prefs.getString('smbShareName') ?? "체크시트"; // ❗ 공유폴더명 로드
+      _smbShareName = prefs.getString('smbShareName') ?? "체크시트";
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -71,7 +70,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setString('excelPath', _excelPath);
     await prefs.setString('pdfFolderPath', _pdfFolderPath);
     await prefs.setBool('autoSave', _autoSave);
-    await prefs.setString('smbShareName', _smbShareName); // ❗ 공유폴더명 저장
+    await prefs.setString('smbShareName', _smbShareName);
   }
 
   Future<void> _loadExcelData(String path) async {
@@ -165,7 +164,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final ipController = TextEditingController(text: prefs.getString('smbIp'));
     final userController = TextEditingController(text: prefs.getString('smbUser'));
     final passController = TextEditingController(text: prefs.getString('smbPass'));
-    final shareController = TextEditingController(text: _smbShareName); // ❗ 폴더명 컨트롤러 추가
+    final shareController = TextEditingController(text: _smbShareName);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -195,7 +194,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             await prefs.setString('smbIp', ipController.text);
             await prefs.setString('smbUser', userController.text);
             await prefs.setString('smbPass', passController.text);
-            setState(() => _smbShareName = shareController.text); // ❗ 폴더명 업데이트
+            setState(() => _smbShareName = shareController.text);
             await prefs.setString('smbShareName', _smbShareName);
             _smbService.setConfig(ipController.text, userController.text, passController.text);
             Navigator.pop(ctx);
@@ -216,7 +215,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       return;
     }
 
-    // ❗ 설정된 폴더명을 목록의 최상단에 배치
     if (!shares.contains(_smbShareName)) shares.insert(0, _smbShareName);
 
     showDialog(
@@ -259,8 +257,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _downloadAndLoad(String share, String remotePath) async {
     setState(() => _isLoading = true);
-    String downloadPath = await ExternalPath.getExternalStoragePublicDirectory(ExternalPath.DIRECTORY_DOWNLOADS);
-    String localPath = "$downloadPath/CheckSheet/${p.basename(remotePath)}";
+    // ❗ _baseDownloadPath로 경로 통일 (컴파일 에러 해결)
+    String localPath = "$_baseDownloadPath/CheckSheet/${p.basename(remotePath)}";
     File? file = await _smbService.downloadFile(share, remotePath, localPath);
     setState(() => _isLoading = false);
     if (file != null) _loadExcelData(file.path);
@@ -270,9 +268,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Future<void> _openCustomPicker(String mode) async {
     if (Platform.isAndroid) { if (!await Permission.manageExternalStorage.isGranted) await Permission.manageExternalStorage.request(); }
     final prefs = await SharedPreferences.getInstance();
-    String downloadPath = await ExternalPath.getExternalStoragePublicDirectory(ExternalPath.DIRECTORY_DOWNLOADS);
-    String startPath = prefs.getString('lastDir') ?? "$downloadPath/CheckSheet";
-    if (!Directory(startPath).existsSync()) startPath = downloadPath;
+    // ❗ _baseDownloadPath로 경로 통일 (컴파일 에러 해결)
+    String startPath = prefs.getString('lastDir') ?? "$_baseDownloadPath/CheckSheet";
+    if (!Directory(startPath).existsSync()) startPath = _baseDownloadPath;
     if (!mounted) return;
     _showFileBrowser(mode, startPath);
   }
