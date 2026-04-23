@@ -35,6 +35,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   void initState() {
     super.initState();
     _loadSettings();
+    _ensureBaseDirectory();
+  }
+
+  Future<void> _ensureBaseDirectory() async {
+    String downloadPath = await ExternalPath.getExternalStoragePublicDirectory(ExternalPath.DIRECTORY_DOWNLOADS);
+    final baseDir = Directory("$downloadPath/CheckSheet");
+    if (!baseDir.existsSync()) baseDir.createSync(recursive: true);
   }
 
   Future<void> _loadSettings() async {
@@ -47,7 +54,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
         prefs.getString('smbPass') ?? "",
-        "", // 도메인은 빈 값
       );
     });
     if (_excelPath.isNotEmpty && File(_excelPath).existsSync()) _loadExcelData(_excelPath);
@@ -58,6 +64,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setString('excelPath', _excelPath);
     await prefs.setString('pdfFolderPath', _pdfFolderPath);
     await prefs.setBool('autoSave', _autoSave);
+  }
+
+  Future<void> _saveLastDir(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('lastDir', p.dirname(path));
   }
 
   Future<void> _loadExcelData(String path) async {
@@ -80,11 +91,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
   }
 
-  Future<void> _saveLastDir(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('lastDir', p.dirname(path));
-  }
-
   void _resetSort() {
     setState(() {
       _displayItems = List.from(_originalItems);
@@ -99,22 +105,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       if (col == 'itemCode') {
         _displayItems.sort((a, b) => a.itemCode.compareTo(b.itemCode));
       } else if (col == 'no') {
-        _displayItems.sort((a, b) {
-          int na = int.tryParse(a.no) ?? 0;
-          int nb = int.tryParse(b.no) ?? 0;
-          return na.compareTo(nb);
-        });
+        _displayItems.sort((a, b) => (int.tryParse(a.no) ?? 0).compareTo(int.tryParse(b.no) ?? 0));
       } else if (col == 'quantity') {
-        _displayItems.sort((a, b) {
-          int qa = int.tryParse(a.quantity) ?? 0;
-          int qb = int.tryParse(b.quantity) ?? 0;
-          return qa.compareTo(qb);
-        });
+        _displayItems.sort((a, b) => (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0));
       }
     });
   }
 
-  // ❗ 소스 선택 메뉴 복구
   Future<void> _pickSource(String mode) async {
     showModalBottomSheet(
       context: context,
@@ -137,7 +134,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ SMB 설정 및 접속 테스트
   void _openExternalSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final ipController = TextEditingController(text: prefs.getString('smbIp'));
@@ -157,7 +153,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             const SizedBox(height: 10),
             ElevatedButton(
               onPressed: () async {
-                String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text, "");
+                // ❗ 인자 개수 3개로 교정
+                String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
                 _showError(err == null ? "성공" : "접속 실패", err ?? "✅ 접속 성공!");
               },
               child: const Text("접속 테스트"),
@@ -171,7 +168,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               await prefs.setString('smbIp', ipController.text);
               await prefs.setString('smbUser', userController.text);
               await prefs.setString('smbPass', passController.text);
-              _smbService.setConfig(ipController.text, userController.text, passController.text, "");
+              // ❗ 인자 개수 3개로 교정
+              _smbService.setConfig(ipController.text, userController.text, passController.text);
               Navigator.pop(ctx);
             },
             child: const Text("저장"),
@@ -181,7 +179,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ SMB 브라우저 - 공유폴더 목록
   void _openSmbShares(String mode) async {
     setState(() => _isLoading = true);
     List<String> shares = await _smbService.listShares();
@@ -210,7 +207,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ SMB 브라우저 - 파일 목록
   void _showSmbFiles(String share, String path, String mode) async {
     setState(() => _isLoading = true);
     List<smb.SmbFile> files = await _smbService.listFiles(share, path);
@@ -233,11 +229,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   itemCount: files.length,
                   itemBuilder: (c, i) {
                     final f = files[i];
+                    // ❗ .isDirectory 를 함수형태인 .isDirectory() 로 수정
+                    bool isDir = f.isDirectory(); 
                     return ListTile(
-                      leading: Icon(f.isDirectory ? Icons.folder : Icons.description),
+                      leading: Icon(isDir ? Icons.folder : Icons.description),
                       title: Text(f.name),
                       onTap: () async {
-                        if (f.isDirectory) { Navigator.pop(ctx); _showSmbFiles(share, "${path == "/" ? "" : path}/${f.name}", mode); }
+                        if (isDir) { Navigator.pop(ctx); _showSmbFiles(share, "${path == "/" ? "" : path}/${f.name}", mode); }
                         else if (mode == 'file') {
                           Navigator.pop(ctx);
                           _downloadAndLoad(share, "${path == "/" ? "" : path}/${f.name}");
@@ -357,55 +355,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       }
     });
     if (_autoSave) _manualSave(silent: true);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(_currentFileName, style: const TextStyle(fontSize: 12))]),
-        backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
-        foregroundColor: Colors.white,
-        actions: [
-          if (_isSorted) IconButton(onPressed: _resetSort, icon: const Icon(Icons.refresh)),
-          TextButton.icon(onPressed: () { setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                _topBtn("외부설정", _openExternalSettings, isDark),
-                const SizedBox(width: 4),
-                _topBtn("엑셀선택", () => _pickSource('file'), isDark),
-                const SizedBox(width: 4),
-                _topBtn("PDF폴더", () => _pickSource('dir'), isDark),
-                const SizedBox(width: 4),
-                ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(60, 45)), child: const Text("리셋")),
-                const SizedBox(width: 4),
-                ElevatedButton(onPressed: _manualSave, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(60, 45)), child: const Text("저장")),
-              ],
-            ),
-          ),
-          _buildHeader(context),
-          Expanded(
-            child: _isLoading ? const Center(child: CircularProgressIndicator()) : ListView.builder(
-              itemCount: _displayItems.length,
-              itemBuilder: (ctx, idx) {
-                final item = _displayItems[idx];
-                if (item.isSubheading) {
-                  return Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), color: isDark ? Colors.white10 : Colors.grey[300], width: double.infinity, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)));
-                }
-                return _buildDataRow(item, isDark);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showResetConfirm() {

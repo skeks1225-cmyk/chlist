@@ -3208,3 +3208,99 @@ Error: Process completed with exit code 1.
 키비방식이나, 다른 일반 안드로이드 탐색기에서는 smb접속에
 ip, id, pw만 넣으면 되는데, 갑자기 도매인이 왜나오는거야?
 
+
+
+smb관련 코드만 정리해서 나타내줘.
+지피티에게 물어볼게.
+
+
+
+빌드실패했어. 아래는 로그야.
+
+
+
+Run flutter build apk --release
+
+Running Gradle task 'assembleRelease'...                        
+Checking the license for package Android SDK Build-Tools 30.0.3 in /usr/local/lib/android/sdk/licenses
+License for package Android SDK Build-Tools 30.0.3 accepted.
+Preparing "Install Android SDK Build-Tools 30.0.3 (revision: 30.0.3)".
+"Install Android SDK Build-Tools 30.0.3 (revision: 30.0.3)" ready.
+Installing Android SDK Build-Tools 30.0.3 in /usr/local/lib/android/sdk/build-tools/30.0.3
+"Install Android SDK Build-Tools 30.0.3 (revision: 30.0.3)" complete.
+"Install Android SDK Build-Tools 30.0.3 (revision: 30.0.3)" finished.
+Checking the license for package Android SDK Platform 31 in /usr/local/lib/android/sdk/licenses
+License for package Android SDK Platform 31 accepted.
+Preparing "Install Android SDK Platform 31 (revision: 1)".
+"Install Android SDK Platform 31 (revision: 1)" ready.
+Installing Android SDK Platform 31 in /usr/local/lib/android/sdk/platforms/android-31
+"Install Android SDK Platform 31 (revision: 1)" complete.
+"Install Android SDK Platform 31 (revision: 1)" finished.
+Checking the license for package Android SDK Platform 33 in /usr/local/lib/android/sdk/licenses
+License for package Android SDK Platform 33 accepted.
+Preparing "Install Android SDK Platform 33 (revision: 3)".
+"Install Android SDK Platform 33 (revision: 3)" ready.
+Installing Android SDK Platform 33 in /usr/local/lib/android/sdk/platforms/android-33
+"Install Android SDK Platform 33 (revision: 3)" complete.
+"Install Android SDK Platform 33 (revision: 3)" finished.
+lib/screens/checklist_screen.dart:46:28: Error: Too many positional arguments: 3 allowed, but 4 found.
+Try removing the extra positional arguments.
+      _smbService.setConfig(
+                           ^
+lib/screens/checklist_screen.dart:160:63: Error: Too many positional arguments: 3 allowed, but 4 found.
+Try removing the extra positional arguments.
+                String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text, "");
+                                                              ^
+lib/screens/checklist_screen.dart:174:36: Error: Too many positional arguments: 3 allowed, but 4 found.
+Try removing the extra positional arguments.
+              _smbService.setConfig(ipController.text, userController.text, passController.text, "");
+                                   ^
+lib/screens/checklist_screen.dart:237:39: Error: A value of type 'bool Function()' can't be assigned to a variable of type 'bool'.
+                      leading: Icon(f.isDirectory ? Icons.folder : Icons.description),
+                                      ^
+lib/screens/checklist_screen.dart:240:31: Error: A value of type 'bool Function()' can't be assigned to a variable of type 'bool'.
+                        if (f.isDirectory) { Navigator.pop(ctx); _showSmbFiles(share, "${path == "/" ? "" : path}/${f.name}", mode); }
+                              ^
+lib/services/smb_service.dart:75:38: Error: The method 'read' isn't defined for the class 'SmbConnect'.
+ - 'SmbConnect' is from 'package:smb_connect/src/connect/smb_connect.dart' ('../../../.pub-cache/hosted/pub.dev/smb_connect-0.0.9/lib/src/connect/smb_connect.dart').
+Try correcting the name to the name of an existing method, or defining a method named 'read'.
+      final bytes = await connection.read(smbFile);
+                                     ^^^^
+Target kernel_snapshot failed: Exception
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileFlutterBuildRelease'.
+> Process 'command '/opt/hostedtoolcache/flutter/stable-3.22.3-x64/flutter/bin/flutter'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+
+* Get more help at https://help.gradle.org
+
+BUILD FAILED in 2m 48s
+Running Gradle task 'assembleRelease'...                          169.0s
+Gradle task assembleRelease failed with exit code 1
+Error: Process completed with exit code 1.
+
+
+
+추가적인 요청이야. 지금 smb가 계속 실패하는데, ftp 방식으로 변경은 가능하니?
+어차피 공유파일을 열고 바로 저장하는 것이 아니잖아.
+지금도 공유폴더 파일을 선택하면 내 폰으로 복사 후 사용하는거니까 ftp방식을 사용해도 괜찮을 것 같은데?
+바로 수정하지 말고 의논해보자.
+
+
+
+지금 테일스케일을 사용 중이야.
+ftp설정을 따로 해줘야 한다고 했는데, 
+
+
+윈도우os에서 fpt설정을 따로 해줘야하면 사용하기에 문제가 있어.
+테일스케일만 사용하고 ip, id, pw만 입력해서 접속할 수 잇는 다른 방법은 없는거니?
+smb는 정말 불가능한거야?
+바로 수정하지 말고 의논해보자.
