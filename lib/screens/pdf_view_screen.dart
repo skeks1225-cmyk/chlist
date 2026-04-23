@@ -27,6 +27,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   PdfControllerPinch? _pdfController;
   String _currentPdfPath = "";
   Key _viewerKey = UniqueKey();
+  final TextEditingController _remarksController = TextEditingController();
 
   @override
   void initState() {
@@ -40,6 +41,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     final item = widget.items[_currentIndex];
     final path = "${widget.pdfFolderPath}/${item.itemCode}.pdf";
     
+    _remarksController.text = item.remarks; // ❗ 비고 데이터 동기화
     _pdfController?.dispose();
     
     if (File(path).existsSync()) {
@@ -48,7 +50,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         setState(() {
           _currentPdfPath = path;
           _pdfController = PdfControllerPinch(
-            document: PdfDocument.openData(bytes), // ❗ 메모리 로드 방식
+            document: PdfDocument.openData(bytes), 
             initialPage: 1,
           );
           _viewerKey = UniqueKey();
@@ -88,6 +90,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   @override
   void dispose() {
     _pdfController?.dispose();
+    _remarksController.dispose();
     super.dispose();
   }
 
@@ -129,6 +132,34 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             color: Colors.grey[900],
             child: Column(
               children: [
+                // ❗ 비고 입력란 추가
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: TextField(
+                    controller: _remarksController,
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: "비고 입력...",
+                      hintStyle: TextStyle(color: Colors.grey[500]),
+                      filled: true,
+                      fillColor: Colors.black24,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.check_circle, color: Colors.blue),
+                        onPressed: () {
+                          item.remarks = _remarksController.text;
+                          widget.onStatusUpdate(item, 'remarks'); // ❗ 메인에 알림
+                          FocusScope.of(context).unfocus();
+                        },
+                      ),
+                    ),
+                    onSubmitted: (val) {
+                      item.remarks = val;
+                      widget.onStatusUpdate(item, 'remarks');
+                    },
+                  ),
+                ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
