@@ -26,6 +26,7 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- ❗ v2 임베딩 명시적 보장 -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

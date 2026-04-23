@@ -33,7 +33,7 @@ android {
 }
 
 dependencies {
-    // ❗ 네이티브 SMBJ 엔진 의존성
+    // ❗ 정석 v2 환경에 SMBJ 라이브러리 안착
     implementation "com.hierynomus:smbj:0.13.0"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
 }

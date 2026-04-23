@@ -12,7 +12,7 @@ class SmbService {
     _ip = ip; _user = user; _pass = pass;
   }
 
-  // ❗ 네이티브 SMBJ를 통한 접속 테스트
+  // ❗ 3개의 인자(IP, ID, PW)만 사용하여 네이티브 접속
   Future<bool> testConnection(String ip, String user, String pass) async {
     try {
       final bool ok = await _channel.invokeMethod('connectSMB', {
@@ -26,7 +26,6 @@ class SmbService {
     }
   }
 
-  // ❗ 공유폴더 목록(Share List) 조회 추가
   Future<List<String>> listShares() async {
     try {
       final List<dynamic> result = await _channel.invokeMethod('listShares');
@@ -36,7 +35,6 @@ class SmbService {
     }
   }
 
-  // ❗ 특정 폴더 내 파일 목록 조회 (Map 기반)
   Future<List<Map<String, dynamic>>> listFiles(String share, String path) async {
     try {
       final List<dynamic> result = await _channel.invokeMethod('listFiles', {
@@ -49,7 +47,6 @@ class SmbService {
     }
   }
 
-  // ❗ 파일 다운로드
   Future<File?> downloadFile(String share, String remotePath, String localPath) async {
     try {
       final String? path = await _channel.invokeMethod('downloadFile', {

@@ -22,7 +22,6 @@ jobs:
           channel: 'stable'
           flutter-version: '3.22.3'
 
-      # ❗ 임시 주입 대신 소스코드의 설정을 그대로 사용하는 정석 빌드
       - name: Install dependencies
         run: flutter pub get
         

@@ -44,7 +44,6 @@ class SmbHandler(private val context: Context) {
     suspend fun listFiles(shareName: String, path: String): List<Map<String, Any>> = withContext(Dispatchers.IO) {
         val result = mutableListOf<Map<String, Any>>()
         try {
-            // ❗ DiskShare 타입 명시적 캐스팅으로 타입 추론 에러 해결
             val share = session?.connectShare(shareName) as? DiskShare
             share?.let { s ->
                 val list = s.list(path)

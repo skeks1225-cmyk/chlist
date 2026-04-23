@@ -104,9 +104,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       if (col == 'itemCode') {
         _displayItems.sort((a, b) => a.itemCode.compareTo(b.itemCode));
       } else if (col == 'no') {
-        _displayItems.sort((a, b) => (int.tryParse(a.no) ?? 0).compareTo(int.tryParse(b.no) ?? 0));
+        _displayItems.sort((a, b) {
+          int na = int.tryParse(a.no) ?? 0;
+          int nb = int.tryParse(b.no) ?? 0;
+          return na.compareTo(nb);
+        });
       } else if (col == 'quantity') {
-        _displayItems.sort((a, b) => (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0));
+        _displayItems.sort((a, b) {
+          int qa = int.tryParse(a.quantity) ?? 0;
+          int qb = int.tryParse(b.quantity) ?? 0;
+          return qa.compareTo(qb);
+        });
       }
     });
   }
