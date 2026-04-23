@@ -36,19 +36,34 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _loadPdf();
   }
 
-  // ❗ 경로 대신 '바이트 데이터'를 메모리로 읽어와서 로드 (100% 화면 표시 보장)
+  // ❗ 검색 로직 강화: 대소문자 무시 및 공백 제거
   Future<void> _loadPdf() async {
     final item = widget.items[_currentIndex];
-    final path = "${widget.pdfFolderPath}/${item.itemCode}.pdf";
+    final String cleanCode = item.itemCode.trim(); // ❗ 공백 제거
     
-    _remarksController.text = item.remarks; // ❗ 비고 데이터 동기화
+    // ❗ 여러 후보 경로 생성 (.pdf, .PDF)
+    final List<String> paths = [
+      "${widget.pdfFolderPath}/$cleanCode.pdf",
+      "${widget.pdfFolderPath}/$cleanCode.PDF",
+      "${widget.pdfFolderPath}/$cleanCode.Pdf",
+    ];
+
+    String? foundPath;
+    for (var p in paths) {
+      if (File(p).existsSync()) {
+        foundPath = p;
+        break;
+      }
+    }
+    
+    _remarksController.text = item.remarks;
     _pdfController?.dispose();
     
-    if (File(path).existsSync()) {
+    if (foundPath != null) {
       try {
-        final Uint8List bytes = await File(path).readAsBytes();
+        final Uint8List bytes = await File(foundPath).readAsBytes();
         setState(() {
-          _currentPdfPath = path;
+          _currentPdfPath = foundPath!;
           _pdfController = PdfControllerPinch(
             document: PdfDocument.openData(bytes), 
             initialPage: 1,
@@ -125,14 +140,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       pageLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
                     ),
                   )
-                : const Center(child: Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: Colors.white, fontSize: 16))),
+                : Center(child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.red, size: 50),
+                      const SizedBox(height: 10),
+                      Text("PDF 파일을 찾을 수 없습니다.", style: const TextStyle(color: Colors.white, fontSize: 16)),
+                      const SizedBox(height: 5),
+                      Text("경로: ${widget.pdfFolderPath}", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                      Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                    ],
+                  )),
           ),
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             color: Colors.grey[900],
             child: Column(
               children: [
-                // ❗ 비고 입력란 추가
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: TextField(
@@ -149,7 +173,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         icon: const Icon(Icons.check_circle, color: Colors.blue),
                         onPressed: () {
                           item.remarks = _remarksController.text;
-                          widget.onStatusUpdate(item, 'remarks'); // ❗ 메인에 알림
+                          widget.onStatusUpdate(item, 'remarks');
                           FocusScope.of(context).unfocus();
                         },
                       ),

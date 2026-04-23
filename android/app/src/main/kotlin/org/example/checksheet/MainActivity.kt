@@ -12,25 +12,29 @@ class MainActivity: FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-
-        // ❗ 엔진 초기화
         smbHandler = SmbHandler(this)
 
-        // ❗ 명령어 통로(MethodChannel) 연결
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
-                // ❗ 1단계: 접속 테스트 통로 복구
                 "connectSMB" -> {
                     val ip = call.argument<String>("ip") ?: ""
                     val user = call.argument<String>("user") ?: ""
                     val pass = call.argument<String>("pass") ?: ""
-                    
-                    scope.launch {
-                        // Kotlin 엔진 호출
-                        val res = smbHandler.connect(ip, user, pass)
-                        // Flutter UI로 결과 전송 (SUCCESS 또는 에러메시지)
-                        result.success(res)
-                    }
+                    scope.launch { result.success(smbHandler.connect(ip, user, pass)) }
+                }
+                "listShares" -> {
+                    scope.launch { result.success(smbHandler.listShares()) }
+                }
+                "listFiles" -> {
+                    val share = call.argument<String>("share") ?: ""
+                    val path = call.argument<String>("path") ?: ""
+                    scope.launch { result.success(smbHandler.listFiles(share, path)) }
+                }
+                "downloadFile" -> {
+                    val share = call.argument<String>("share") ?: ""
+                    val remote = call.argument<String>("remotePath") ?: ""
+                    val local = call.argument<String>("localPath") ?: ""
+                    scope.launch { result.success(smbHandler.downloadFile(share, remote, local)) }
                 }
                 else -> result.notImplemented()
             }

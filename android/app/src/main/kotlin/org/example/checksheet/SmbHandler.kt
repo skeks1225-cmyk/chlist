@@ -19,15 +19,14 @@ import java.util.concurrent.TimeUnit
 
 class SmbHandler(private val context: Context) {
     private val config = SmbConfig.builder()
-        .withTimeout(10, TimeUnit.SECONDS)
-        .withSoTimeout(10, TimeUnit.SECONDS)
+        .withTimeout(15, TimeUnit.SECONDS)
+        .withSoTimeout(15, TimeUnit.SECONDS)
         .build()
     
     private var client: SMBClient = SMBClient(config)
     private var connection: Connection? = null
     private var session: Session? = null
 
-    // ❗ 목표: SUCCESS 또는 진짜 에러 메시지 반환
     suspend fun connect(ip: String, user: String, pass: String): String = withContext(Dispatchers.IO) {
         try {
             disconnect()
@@ -40,9 +39,15 @@ class SmbHandler(private val context: Context) {
         }
     }
 
-    // ❗ 빌드 성공을 위해 더미 데이터로 복구 (연결 확인이 먼저임)
+    // ❗ 2단계: 실시간 공유폴더 목록 조회 활성화
     suspend fun listShares(): List<String> = withContext(Dispatchers.IO) {
-        listOf("Shared", "Public", "Download")
+        try {
+            val shares = session?.listShares() ?: emptyList()
+            // 숨김 공유폴더(C$, IPC$ 등)는 제외하고 일반 폴더만 필터링
+            shares.map { it.name }.filter { !it.endsWith("$") }
+        } catch (e: Exception) {
+            emptyList<String>()
+        }
     }
 
     suspend fun listFiles(shareName: String, path: String): List<Map<String, Any>> = withContext(Dispatchers.IO) {
