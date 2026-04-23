@@ -30,9 +30,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _isLoading = false;
   bool _isSorted = false;
 
-  // ❗ 정렬 상태 관리 변수 추가
-  String _currentSortCol = ""; // 현재 정렬된 컬럼
-  bool _isAscending = true;   // 오름차순 여부
+  String _currentSortCol = ""; 
+  bool _isAscending = true;   
 
   final String _baseDownloadPath = "/storage/emulated/0/Download";
 
@@ -104,20 +103,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     });
   }
 
-  // ❗ 개선된 스마트 정렬 로직 (오름/내림 토글 지원)
   void _sortBy(String col) {
     setState(() {
       if (_currentSortCol == col) {
-        _isAscending = !_isAscending; // 이미 선택된 열이면 방향 전환
+        _isAscending = !_isAscending;
       } else {
         _currentSortCol = col;
-        _isAscending = true; // 새로운 열이면 오름차순 시작
+        _isAscending = true;
       }
       _isSorted = true;
-      
-      // 소제목을 제외한 순수 데이터만 추출하여 정렬
       List<ItemModel> dataOnly = _originalItems.where((i) => !i.isSubheading).toList();
-      
       dataOnly.sort((a, b) {
         int cmp = 0;
         switch (col) {
@@ -140,9 +135,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             cmp = (a.rework ? 1 : 0).compareTo(b.rework ? 1 : 0);
             break;
         }
-        return _isAscending ? cmp : -cmp; // 방향에 따라 반전
+        return _isAscending ? cmp : -cmp;
       });
-      
       _displayItems = dataOnly;
     });
   }
@@ -390,7 +384,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)),
             style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: ''),
-            onSubmitted: (val) { item.remarks = val; if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); },
+            onChanged: (val) => item.remarks = val,
+            onTapOutside: (event) {
+              FocusScope.of(context).unfocus();
+              if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
+            },
+            onSubmitted: (val) {
+              item.remarks = val;
+              if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
+            },
           ))),
         ],
       ),
@@ -406,7 +408,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
   }
 
-  // ❗ 개선된 헤더 빌더 (정렬 상태 아이콘 포함)
   Widget _buildHeader(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
@@ -431,7 +432,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ 정렬 상태 아이콘이 포함된 헤더 버튼 위젯
   Widget _headerBtn(String label, String colKey, double? width) {
     bool isTarget = _currentSortCol == colKey;
     return InkWell(
