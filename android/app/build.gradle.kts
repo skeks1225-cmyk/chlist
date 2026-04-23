@@ -5,12 +5,12 @@ plugins {
 }
 
 android {
-    // ❗ 1. 네임스페이스 통일
+    // ❗ 주소에서 v163 완전 박멸
     namespace = "org.example.checksheet"
     compileSdk = flutter.compileSdkVersion
 
     defaultConfig {
-        // ❗ 2. 애플리케이션 ID 통일 (실행 크래시 해결 핵심)
+        // ❗ 앱의 고유 ID도 정석대로 통일
         applicationId = "org.example.checksheet"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion

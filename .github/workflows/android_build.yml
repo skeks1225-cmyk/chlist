@@ -22,7 +22,6 @@ jobs:
           channel: 'stable'
           flutter-version: '3.41.7'
 
-      # ❗ 빌드 전 클린 작업 및 패키지 설치 강제
       - name: Clean and Get dependencies
         run: |
           flutter clean
@@ -34,5 +33,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: CheckSheet-Flutter-Release
+          name: CheckSheet-Final-APK
           path: build/app/outputs/flutter-apk/app-release.apk
