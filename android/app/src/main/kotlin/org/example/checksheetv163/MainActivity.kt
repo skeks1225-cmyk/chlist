@@ -25,6 +25,12 @@ class MainActivity: FlutterActivity() {
                         result.success(ok)
                     }
                 }
+                "listShares" -> {
+                    scope.launch {
+                        val shares = smbHandler.listShares()
+                        result.success(shares)
+                    }
+                }
                 "listFiles" -> {
                     val share = call.argument<String>("share") ?: ""
                     val path = call.argument<String>("path") ?: ""

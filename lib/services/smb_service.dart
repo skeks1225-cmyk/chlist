@@ -13,20 +13,30 @@ class SmbService {
   }
 
   // ❗ 네이티브 SMBJ를 통한 접속 테스트
-  Future<String?> testConnection(String ip, String user, String pass) async {
+  Future<bool> testConnection(String ip, String user, String pass) async {
     try {
       final bool ok = await _channel.invokeMethod('connectSMB', {
         'ip': ip,
         'user': user,
         'pass': pass,
       });
-      return ok ? null : "인증 실패 또는 네트워크 오류";
+      return ok;
     } catch (e) {
-      return e.toString();
+      return false;
     }
   }
 
-  // ❗ 공유폴더 내 파일 리스트 조회
+  // ❗ 공유폴더 목록(Share List) 조회 추가
+  Future<List<String>> listShares() async {
+    try {
+      final List<dynamic> result = await _channel.invokeMethod('listShares');
+      return result.cast<String>();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ❗ 특정 폴더 내 파일 목록 조회 (Map 기반)
   Future<List<Map<String, dynamic>>> listFiles(String share, String path) async {
     try {
       final List<dynamic> result = await _channel.invokeMethod('listFiles', {

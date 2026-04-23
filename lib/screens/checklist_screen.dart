@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:external_path/external_path.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:smb_connect/smb_connect.dart' as smb;
 import '../models/item_model.dart';
 import '../services/excel_service.dart';
 import '../services/smb_service.dart';
@@ -66,11 +65,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setBool('autoSave', _autoSave);
   }
 
-  Future<void> _saveLastDir(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('lastDir', p.dirname(path));
-  }
-
   Future<void> _loadExcelData(String path) async {
     setState(() => _isLoading = true);
     try {
@@ -91,6 +85,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
   }
 
+  Future<void> _saveLastDir(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('lastDir', p.dirname(path));
+  }
+
   void _resetSort() {
     setState(() {
       _displayItems = List.from(_originalItems);
@@ -105,13 +104,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       if (col == 'itemCode') {
         _displayItems.sort((a, b) => a.itemCode.compareTo(b.itemCode));
       } else if (col == 'no') {
-        _displayItems.sort((a, b) => (int.tryParse(a.no) ?? 0).compareTo(int.tryParse(b.no) ?? 0));
+        _displayItems.sort((a, b) {
+          int na = int.tryParse(a.no) ?? 0;
+          int nb = int.tryParse(b.no) ?? 0;
+          return na.compareTo(nb);
+        });
       } else if (col == 'quantity') {
-        _displayItems.sort((a, b) => (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0));
+        _displayItems.sort((a, b) {
+          int qa = int.tryParse(a.quantity) ?? 0;
+          int qb = int.tryParse(b.quantity) ?? 0;
+          return qa.compareTo(qb);
+        });
       }
     });
   }
 
+  // ❗ 네이티브 전용 SMB 소스 선택 메뉴
   Future<void> _pickSource(String mode) async {
     showModalBottomSheet(
       context: context,
@@ -153,9 +161,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             const SizedBox(height: 10),
             ElevatedButton(
               onPressed: () async {
-                // ❗ 인자 개수 3개로 교정
-                String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
-                _showError(err == null ? "성공" : "접속 실패", err ?? "✅ 접속 성공!");
+                bool ok = await _smbService.testConnection(ipController.text, userController.text, passController.text);
+                _showSnackBar(ok ? "✅ 접속 성공!" : "❌ 접속 실패");
               },
               child: const Text("접속 테스트"),
             ),
@@ -168,7 +175,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               await prefs.setString('smbIp', ipController.text);
               await prefs.setString('smbUser', userController.text);
               await prefs.setString('smbPass', passController.text);
-              // ❗ 인자 개수 3개로 교정
               _smbService.setConfig(ipController.text, userController.text, passController.text);
               Navigator.pop(ctx);
             },
@@ -199,7 +205,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             itemBuilder: (c, i) => ListTile(
               leading: const Icon(Icons.folder_shared),
               title: Text(shares[i]),
-              onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i], "/", mode); },
+              onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i], "", mode); },
             ),
           ),
         ),
@@ -207,9 +213,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
+  // ❗ SmbFile 타입 대신 Map<String, dynamic> 사용
   void _showSmbFiles(String share, String path, String mode) async {
     setState(() => _isLoading = true);
-    List<smb.SmbFile> files = await _smbService.listFiles(share, path);
+    List<Map<String, dynamic>> files = await _smbService.listFiles(share, path);
     setState(() => _isLoading = false);
 
     if (!mounted) return;
@@ -217,28 +224,28 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("$share$path"),
+        title: Text("$share/$path"),
         content: SizedBox(
           width: double.maxFinite,
           height: 400,
           child: Column(
             children: [
-              if (path != "/") ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showSmbFiles(share, p.dirname(path), mode); }),
+              if (path != "") ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showSmbFiles(share, p.dirname(path) == "." ? "" : p.dirname(path), mode); }),
               Expanded(
                 child: ListView.builder(
                   itemCount: files.length,
                   itemBuilder: (c, i) {
                     final f = files[i];
-                    // ❗ .isDirectory 를 함수형태인 .isDirectory() 로 수정
-                    bool isDir = f.isDirectory(); 
+                    bool isDir = f['isDirectory'] as bool;
+                    String name = f['name'] as String;
                     return ListTile(
                       leading: Icon(isDir ? Icons.folder : Icons.description),
-                      title: Text(f.name),
+                      title: Text(name),
                       onTap: () async {
-                        if (isDir) { Navigator.pop(ctx); _showSmbFiles(share, "${path == "/" ? "" : path}/${f.name}", mode); }
+                        if (isDir) { Navigator.pop(ctx); _showSmbFiles(share, "${path == "" ? "" : "$path/"}$name", mode); }
                         else if (mode == 'file') {
                           Navigator.pop(ctx);
-                          _downloadAndLoad(share, "${path == "/" ? "" : path}/${f.name}");
+                          _downloadAndLoad(share, "${path == "" ? "" : "$path/"}$name");
                         }
                       },
                     );
@@ -249,7 +256,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           ),
         ),
         actions: [
-          if (mode == 'dir') TextButton(onPressed: () { setState(() => _pdfFolderPath = "smb://$share$path"); _saveSettings(); Navigator.pop(ctx); }, child: const Text("현재 폴더 선택")),
+          if (mode == 'dir') TextButton(onPressed: () { setState(() => _pdfFolderPath = "smb://$share/$path"); _saveSettings(); Navigator.pop(ctx); }, child: const Text("현재 폴더 선택")),
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
         ],
       ),
@@ -325,36 +332,54 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  void _showError(String title, String msg) {
-    showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)), content: Text(msg), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
-  }
-
-  void _showSnackBar(String msg) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Center(child: Text(msg)), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating));
-  }
-
-  Future<void> _manualSave({bool silent = false}) async {
-    if (_excelPath.isEmpty) return;
-    bool ok = await _excelService.saveExcel(_excelPath, _originalItems);
-    if (ok && !silent) _showSnackBar("💾 저장 성공!");
-    else if (!ok) _showError("저장 실패", "다른 앱에서 사용 중이거나 권한이 없습니다.");
-  }
-
-  void _toggleStatus(ItemModel item, String type) {
-    setState(() {
-      if (type == 'complete') {
-        item.complete = !item.complete;
-        if (item.complete) { item.shortage = false; item.rework = false; }
-      } else if (type == 'shortage') {
-        item.shortage = !item.shortage;
-        if (item.shortage) { item.complete = false; item.rework = false; }
-      } else if (type == 'rework') {
-        item.rework = !item.rework;
-        if (item.rework) { item.complete = false; item.shortage = false; }
-      }
-    });
-    if (_autoSave) _manualSave(silent: true);
+  // ❗ 지피티와 약속한 완전한 build() 메서드 복구
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(_currentFileName, style: const TextStyle(fontSize: 12))]),
+        backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
+        foregroundColor: Colors.white,
+        actions: [
+          if (_isSorted) IconButton(onPressed: _resetSort, icon: const Icon(Icons.refresh)),
+          TextButton.icon(onPressed: () { setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                _topBtn("외부설정", _openExternalSettings, isDark),
+                const SizedBox(width: 4),
+                _topBtn("엑셀선택", () => _pickSource('file'), isDark),
+                const SizedBox(width: 4),
+                _topBtn("PDF폴더", () => _pickSource('dir'), isDark),
+                const SizedBox(width: 4),
+                ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(60, 45)), child: const Text("리셋")),
+                const SizedBox(width: 4),
+                ElevatedButton(onPressed: _manualSave, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(60, 45)), child: const Text("저장")),
+              ],
+            ),
+          ),
+          _buildHeader(context),
+          Expanded(
+            child: _isLoading ? const Center(child: CircularProgressIndicator()) : ListView.builder(
+              itemCount: _displayItems.length,
+              itemBuilder: (ctx, idx) {
+                final item = _displayItems[idx];
+                if (item.isSubheading) {
+                  return Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), color: isDark ? Colors.white10 : Colors.grey[300], width: double.infinity, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)));
+                }
+                return _buildDataRow(item, isDark);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showResetConfirm() {
@@ -364,7 +389,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _resetAllData() {
     setState(() { for (var item in _originalItems) { item.complete = false; item.shortage = false; item.rework = false; item.remarks = ""; } _displayItems = List.from(_originalItems); _isSorted = false; });
-    if (_autoSave) _manualSave(silent: true);
+    if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
   }
 
   Widget _topBtn(String label, VoidCallback onTap, bool isDark) {
@@ -374,7 +399,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Widget _buildDataRow(ItemModel item, bool isDark) {
     return Container(
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))),
-      height: 48,
+      height: 45,
       child: Row(
         children: [
           SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
@@ -389,8 +414,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: TextField(
             controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)),
             style: const TextStyle(fontSize: 13),
-            decoration: const InputDecoration(border: InputBorder.none, isDense: true),
-            onSubmitted: (val) { item.remarks = val; if (_autoSave) _manualSave(silent: true); },
+            decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: ''),
+            onSubmitted: (val) { item.remarks = val; if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); },
           ))),
         ],
       ),
@@ -419,14 +444,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Widget _checkBtn(bool val, Color color, VoidCallback onTap, bool isDark) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        width: 50,
-        alignment: Alignment.center,
-        color: val ? color.withOpacity(0.4) : (isDark ? Colors.white10 : Colors.grey[100]),
-        child: val ? Icon(Icons.check, color: isDark ? Colors.white : color, size: 24) : null,
-      ),
-    );
+    return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: val ? color.withOpacity(0.4) : (isDark ? Colors.white10 : Colors.grey[100]), child: val ? Icon(Icons.check, color: isDark ? Colors.white : color, size: 24) : null));
+  }
+
+  void _showError(String title, String msg) {
+    showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)), content: Text(msg), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
+  }
+
+  void _showSnackBar(String msg) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Center(child: Text(msg)), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating));
+  }
+
+  Future<void> _manualSave({bool silent = false}) async {
+    if (_excelPath.isEmpty) return;
+    bool ok = await _excelService.saveExcel(_excelPath, _originalItems);
+    if (ok && !silent) _showSnackBar("💾 저장 성공!");
+    else if (!ok) _showError("저장 실패", "다른 앱에서 사용 중이거나 권한이 없습니다.");
   }
 }
