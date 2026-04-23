@@ -6,7 +6,6 @@
 
     <application
         android:label="CheckSheet"
-        // ❗ 지피티 조언대로 v2 정석 변수로 원복 (크래시 해결 핵심)
         android:name="${applicationName}"
         android:requestLegacyExternalStorage="true"
         android:icon="@mipmap/ic_launcher">
