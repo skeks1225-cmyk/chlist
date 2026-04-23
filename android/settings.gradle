@@ -18,10 +18,10 @@ pluginManagement {
 
 plugins {
     id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
-    // ❗ 8.1.0 -> 8.3.0으로 상향 (Flutter 3.41.7 요구사항 충족)
-    id "com.android.application" version "8.3.0" apply false
-    // ❗ 코틀린 버전도 최신 AGP에 맞춰 1.9.10으로 상향
-    id "org.jetbrains.kotlin.android" version "1.9.10" apply false
+    // ❗ Flutter 최신 권장 버전인 8.6.0으로 상향
+    id "com.android.application" version "8.6.0" apply false
+    // ❗ Kotlin 버전도 2.1.0으로 상향
+    id "org.jetbrains.kotlin.android" version "2.1.0" apply false
 }
 
 include ":app"
