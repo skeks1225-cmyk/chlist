@@ -10,7 +10,8 @@ import com.hierynomus.smbj.auth.AuthenticationContext
 import com.hierynomus.smbj.connection.Connection
 import com.hierynomus.smbj.session.Session
 import com.hierynomus.smbj.share.DiskShare
-import com.hierynomus.smbj.share.FileIdBothDirectoryInformation
+// ❗ 정석 위치: msfscc.fileinformation 패키지 참조
+import com.hierynomus.msfscc.fileinformation.FileIdBothDirectoryInformation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -28,7 +29,7 @@ class SmbHandler(private val context: Context) {
     private var connection: Connection? = null
     private var session: Session? = null
 
-    // [1] connectSMB
+    // [1] connectSMB (불변 계약 준수)
     suspend fun connect(ip: String, user: String, pass: String): String = withContext(Dispatchers.IO) {
         try {
             disconnect()
@@ -41,35 +42,17 @@ class SmbHandler(private val context: Context) {
         }
     }
 
-    // [2] listShares (SMBJ 정석 구현)
+    // [2] listShares (불변 계약 준수 - 람다 제거 버전)
     suspend fun listShares(): List<String> = withContext(Dispatchers.IO) {
+        val result = mutableListOf<String>()
         try {
-            val shares = session?.listShares() ?: emptyList()
-            // 숨김 공유($) 제외하고 일반 이름만 추출
-            shares.map { it.name }.filter { !it.endsWith("$") }
-        } catch (e: Exception) {
-            // 실패 시 계약에 따라 빈 리스트 반환
-            emptyList<String>()
-        }
-    }
-
-    // [3] listFiles
-    suspend fun listFiles(shareName: String, path: String): List<Map<String, Any>> = withContext(Dispatchers.IO) {
-        val result = mutableListOf<Map<String, Any>>()
-        try {
-            val share = session?.connectShare(shareName) as? DiskShare
-            share?.let { s ->
-                val list = s.list(path)
-                for (info in list) {
-                    if (info.fileName == "." || info.fileName == "..") continue
-                    
-                    // 비트 연산으로 디렉토리 여부 판단 (0x00000010L = FILE_ATTRIBUTE_DIRECTORY)
-                    val isDir = (info.fileAttributes and 0x00000010L) != 0L
-                    
-                    result.add(mapOf(
-                        "name" to info.fileName,
-                        "isDirectory" to isDir
-                    ))
+            val shares = session?.listShares()
+            if (shares != null) {
+                for (share in shares) {
+                    val name = share.name
+                    if (!name.endsWith("$")) {
+                        result.add(name)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -78,7 +61,33 @@ class SmbHandler(private val context: Context) {
         result
     }
 
-    // [4] downloadFile
+    // [3] listFiles (불변 계약 준수 - 람다 제거 버전)
+    suspend fun listFiles(shareName: String, path: String): List<Map<String, Any>> = withContext(Dispatchers.IO) {
+        val result = mutableListOf<Map<String, Any>>()
+        try {
+            val share = session?.connectShare(shareName) as? DiskShare
+            share?.let { s ->
+                val list = s.list(path)
+                for (info in list) {
+                    val fileName = info.fileName
+                    if (fileName == "." || fileName == "..") continue
+                    
+                    // 비트 연산으로 디렉토리 여부 판단
+                    val isDir = (info.fileAttributes and 0x00000010L) != 0L
+                    
+                    val fileMap = mutableMapOf<String, Any>()
+                    fileMap["name"] = fileName
+                    fileMap["isDirectory"] = isDir
+                    result.add(fileMap)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        result
+    }
+
+    // [4] downloadFile (불변 계약 준수)
     suspend fun downloadFile(shareName: String, remotePath: String, localPath: String): String? = withContext(Dispatchers.IO) {
         try {
             val share = session?.connectShare(shareName) as? DiskShare
