@@ -22,33 +22,7 @@ jobs:
           channel: 'stable'
           flutter-version: '3.22.3'
 
-      - name: Initialize Android-Only Project
-        run: |
-          # 1. 내 코드 대피 (lib, android 커스텀 코드 등)
-          mkdir -p /tmp/checksheet_code
-          cp -r lib pubspec.yaml android /tmp/checksheet_code/
-          
-          # 2. 현재 디렉토리 정리
-          find . -maxdepth 1 ! -name "." ! -name ".." ! -name ".git" ! -name "backup_kivy" -exec rm -rf {} +
-          
-          # 3. 안드로이드 전용 생성
-          flutter create . --platforms android --org org.example --project-name checksheet_final --overwrite
-          
-          # 4. 내 코드 복구 (중요: MainActivity.kt 등 커스텀 네이티브 코드 포함)
-          rm -rf lib android/app/src/main/kotlin/*
-          cp -r /tmp/checksheet_code/lib .
-          cp -r /tmp/checksheet_code/android/app/src/main/kotlin/* android/app/src/main/kotlin/
-          cp /tmp/checksheet_code/pubspec.yaml .
-
-      - name: Inject Master Permissions & SMBJ Dependencies
-        run: |
-          # Manifest 권한 주입
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
-          sed -i 's/<application/<application android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
-          
-          # ❗ SMBJ 라이브러리 의존성 주입 (build.gradle)
-          sed -i '/dependencies {/a \    implementation "com.hierynomus:smbj:0.13.0"\n    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"' android/app/build.gradle
-
+      # ❗ 임시 주입 대신 소스코드의 설정을 그대로 사용하는 정석 빌드
       - name: Install dependencies
         run: flutter pub get
         

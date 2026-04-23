@@ -21,7 +21,7 @@ class SmbHandler(private val context: Context) {
 
     suspend fun connect(ip: String, user: String, pass: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            disconnect() // 기존 연결 해제
+            disconnect()
             connection = client.connect(ip)
             val auth = AuthenticationContext(user, pass.toCharArray(), "")
             session = connection?.authenticate(auth)
@@ -32,22 +32,22 @@ class SmbHandler(private val context: Context) {
         }
     }
 
-    // ❗ 공유폴더 목록 조회 기능 추가
     suspend fun listShares(): List<String> = withContext(Dispatchers.IO) {
         try {
             val shares = session?.listShares() ?: emptyList()
             shares.map { it.name }.filter { !it.endsWith("$") }
         } catch (e: Exception) {
-            emptyList()
+            emptyList<String>()
         }
     }
 
     suspend fun listFiles(shareName: String, path: String): List<Map<String, Any>> = withContext(Dispatchers.IO) {
         val result = mutableListOf<Map<String, Any>>()
         try {
+            // ❗ DiskShare 타입 명시적 캐스팅으로 타입 추론 에러 해결
             val share = session?.connectShare(shareName) as? DiskShare
-            share?.let {
-                val list = it.list(path)
+            share?.let { s ->
+                val list = s.list(path)
                 for (file in list) {
                     if (file.fileName == "." || file.fileName == "..") continue
                     result.add(mapOf(
