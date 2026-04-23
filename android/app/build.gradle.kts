@@ -7,7 +7,7 @@ plugins {
 android {
     namespace = "org.example.checksheet"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "28.2.13676358" // ❗ 권장 NDK 버전 고정
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "org.example.checksheet"
@@ -28,6 +28,9 @@ android {
 
     buildTypes {
         release {
+            // ❗ R8(난독화/최적화)로 인해 SMBJ 라이브러리가 유실되는 문제 해결
+            isMinifyEnabled = false
+            isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
         }
     }
