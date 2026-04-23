@@ -15,16 +15,16 @@ class ExcelService {
       var sheet = excel.tables[excel.tables.keys.first];
       if (sheet == null || sheet.maxRows <= 1) return [];
 
-      // 전문가 조언: 이름이 달라도 "위치 기반"으로 읽어옴
       for (int i = 1; i < sheet.maxRows; i++) {
         var row = sheet.rows[i];
-        if (row.length <= 1) continue;
+        if (row.isEmpty) continue;
 
         String no = _getSafe(row, 0);
         String code = _getSafe(row, 1);
         String qty = _getSafe(row, 2);
 
-        // ❗ 소제목 판단: No와 Qty가 없고 코드만 있을 때
+        if (code.isEmpty && no.isEmpty && qty.isEmpty) continue;
+
         bool isSub = (no.isEmpty && qty.isEmpty && code.isNotEmpty);
 
         items.add(ItemModel(
@@ -61,7 +61,6 @@ class ExcelService {
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0), TextCellValue(_fixedHeader[i]));
       }
 
-      // ❗ 정렬과 상관없이 전달받은 리스트(원본 순서) 그대로 저장
       for (int i = 0; i < items.length; i++) {
         var item = items[i];
         int r = i + 1;

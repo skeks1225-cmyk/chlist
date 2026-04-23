@@ -6,7 +6,8 @@
 
     <application
         android:label="CheckSheet"
-        android:name="${applicationName}"
+        // ❗ 안드로이드가 플러터 앱임을 정확히 인식하게 함
+        android:name="io.flutter.app.FlutterApplication"
         android:requestLegacyExternalStorage="true"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -7,7 +7,7 @@ class ItemModel {
   bool shortage;
   bool rework;
   String remarks;
-  bool isSubheading; // ❗ 소제목 여부
+  bool isSubheading;
 
   ItemModel({
     required this.realIndex,
