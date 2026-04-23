@@ -33,6 +33,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   String _currentSortCol = ""; 
   bool _isAscending = true;   
 
+  // ❗ 공유폴더명 설정 변수 추가
+  String _smbShareName = "체크시트"; 
+
   final String _baseDownloadPath = "/storage/emulated/0/Download";
 
   @override
@@ -53,6 +56,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _excelPath = prefs.getString('excelPath') ?? "";
       _pdfFolderPath = prefs.getString('pdfFolderPath') ?? "";
       _autoSave = prefs.getBool('autoSave') ?? true;
+      _smbShareName = prefs.getString('smbShareName') ?? "체크시트"; // ❗ 공유폴더명 로드
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -67,6 +71,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setString('excelPath', _excelPath);
     await prefs.setString('pdfFolderPath', _pdfFolderPath);
     await prefs.setBool('autoSave', _autoSave);
+    await prefs.setString('smbShareName', _smbShareName); // ❗ 공유폴더명 저장
   }
 
   Future<void> _loadExcelData(String path) async {
@@ -160,25 +165,29 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final ipController = TextEditingController(text: prefs.getString('smbIp'));
     final userController = TextEditingController(text: prefs.getString('smbUser'));
     final passController = TextEditingController(text: prefs.getString('smbPass'));
+    final shareController = TextEditingController(text: _smbShareName); // ❗ 폴더명 컨트롤러 추가
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("외부설정 (SMB)"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: ipController, decoration: const InputDecoration(labelText: "IP 주소")),
-            TextField(controller: userController, decoration: const InputDecoration(labelText: "ID")),
-            TextField(controller: passController, decoration: const InputDecoration(labelText: "PW"), obscureText: true),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () async {
-                String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
-                _showError(err == null ? "성공" : "접속 실패", err ?? "✅ 접속 성공!");
-              },
-              child: const Text("접속 테스트"),
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: ipController, decoration: const InputDecoration(labelText: "IP 주소")),
+              TextField(controller: userController, decoration: const InputDecoration(labelText: "ID")),
+              TextField(controller: passController, decoration: const InputDecoration(labelText: "PW"), obscureText: true),
+              TextField(controller: shareController, decoration: const InputDecoration(labelText: "공유폴더명 (예: 체크시트)")),
+              const SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () async {
+                  String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
+                  _showError(err == null ? "성공" : "접속 실패", err ?? "✅ 접속 성공!");
+                },
+                child: const Text("접속 테스트"),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
@@ -186,6 +195,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             await prefs.setString('smbIp', ipController.text);
             await prefs.setString('smbUser', userController.text);
             await prefs.setString('smbPass', passController.text);
+            setState(() => _smbShareName = shareController.text); // ❗ 폴더명 업데이트
+            await prefs.setString('smbShareName', _smbShareName);
             _smbService.setConfig(ipController.text, userController.text, passController.text);
             Navigator.pop(ctx);
           }, child: const Text("저장")),
@@ -205,12 +216,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       return;
     }
 
-    if (shares.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다."); return; }
+    // ❗ 설정된 폴더명을 목록의 최상단에 배치
+    if (!shares.contains(_smbShareName)) shares.insert(0, _smbShareName);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("공유폴더 선택"),
-        content: SizedBox(width: double.maxFinite, child: ListView.builder(shrinkWrap: true, itemCount: shares.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.folder_shared), title: Text(shares[i]), onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i], "", mode); }))),
+        content: SizedBox(width: double.maxFinite, child: ListView.builder(shrinkWrap: true, itemCount: shares.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.folder_shared), title: Text(shares[i] == "설정된 공유폴더" ? _smbShareName : shares[i]), onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i] == "설정된 공유폴더" ? _smbShareName : shares[i], "", mode); }))),
       ),
     );
   }
@@ -246,7 +259,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _downloadAndLoad(String share, String remotePath) async {
     setState(() => _isLoading = true);
-    String localPath = "$_baseDownloadPath/CheckSheet/${p.basename(remotePath)}";
+    String downloadPath = await ExternalPath.getExternalStoragePublicDirectory(ExternalPath.DIRECTORY_DOWNLOADS);
+    String localPath = "$downloadPath/CheckSheet/${p.basename(remotePath)}";
     File? file = await _smbService.downloadFile(share, remotePath, localPath);
     setState(() => _isLoading = false);
     if (file != null) _loadExcelData(file.path);
@@ -256,8 +270,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Future<void> _openCustomPicker(String mode) async {
     if (Platform.isAndroid) { if (!await Permission.manageExternalStorage.isGranted) await Permission.manageExternalStorage.request(); }
     final prefs = await SharedPreferences.getInstance();
-    String startPath = prefs.getString('lastDir') ?? "$_baseDownloadPath/CheckSheet";
-    if (!Directory(startPath).existsSync()) startPath = _baseDownloadPath;
+    String downloadPath = await ExternalPath.getExternalStoragePublicDirectory(ExternalPath.DIRECTORY_DOWNLOADS);
+    String startPath = prefs.getString('lastDir') ?? "$downloadPath/CheckSheet";
+    if (!Directory(startPath).existsSync()) startPath = downloadPath;
     if (!mounted) return;
     _showFileBrowser(mode, startPath);
   }
@@ -363,11 +378,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     return Expanded(child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(minimumSize: const Size(0, 45), padding: EdgeInsets.zero), child: Text(label, style: const TextStyle(fontSize: 12))));
   }
 
-  // ❗ [품목코드 클릭 시 스마트 동기화 수행]
   Future<void> _handleItemClick(ItemModel item) async {
     String finalPdfPath = "$_baseDownloadPath/CheckSheet";
-    
-    // 만약 PDF 폴더가 SMB(PC)라면, 클릭하는 순간 스마트 동기화(다운로드) 시도
     if (_pdfFolderPath.startsWith("smb://")) {
       setState(() => _isLoading = true);
       try {
@@ -377,7 +389,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
         String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf";
         String localFilePath = "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf";
-        
         await _smbService.downloadFile(share, remoteFilePath, localFilePath);
       } catch (e) {
         debugPrint("SMB Sync Error: $e");
@@ -385,13 +396,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         setState(() => _isLoading = false);
       }
     } else {
-      // 로컬 폴더라면 설정된 폴더 경로를 그대로 사용
       finalPdfPath = _pdfFolderPath;
     }
-
     if (!mounted) return;
-    
-    // 뷰어는 무조건 로컬 경로를 바라봄
     Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(
       items: _displayItems.where((i) => !i.isSubheading).toList(),
       initialIndex: _displayItems.where((i) => !i.isSubheading).toList().indexOf(item),
@@ -408,7 +415,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         children: [
           SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
           Expanded(flex: 5, child: InkWell(
-            onTap: () => _handleItemClick(item), // ❗ 통합 클릭 핸들러 사용
+            onTap: () => _handleItemClick(item), 
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               alignment: Alignment.centerLeft,
