@@ -20,9 +20,9 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.22.3'
+          # ❗ 로컬 버전(3.41.7)과 일치시켜 Dart SDK 버전 충돌 해결
+          flutter-version: '3.41.7'
 
-      # ❗ 이미 로컬에서 정석 v2 뼈대를 생성했으므로, 더 이상의 추가 작업 없이 바로 빌드
       - name: Install dependencies
         run: flutter pub get
         
