@@ -4,27 +4,17 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('local.properties')
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader('UTF-8') { reader ->
-        localProperties.load(reader)
-    }
-}
-
-def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-if (flutterVersionCode == null) {
-    flutterVersionCode = '1'
-}
-
-def flutterVersionName = localProperties.getProperty('flutter.versionName')
-if (flutterVersionName == null) {
-    flutterVersionName = '1.0'
-}
-
 android {
     namespace "org.example.checksheetv163"
     compileSdk 34
+
+    defaultConfig {
+        applicationId "org.example.checksheetv163"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "16.3.0"
+    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -35,18 +25,6 @@ android {
         jvmTarget = '1.8'
     }
 
-    sourceSets {
-        main.java.srcDirs += 'src/main/kotlin'
-    }
-
-    defaultConfig {
-        applicationId "org.example.checksheetv163"
-        minSdk 24
-        targetSdk 34
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
-    }
-
     buildTypes {
         release {
             signingConfig signingConfigs.debug
@@ -55,7 +33,7 @@ android {
 }
 
 dependencies {
-    // ❗ 전문가의 조언대로 SMBJ 라이브러리 직접 고정
+    // ❗ 네이티브 SMBJ 엔진 의존성
     implementation "com.hierynomus:smbj:0.13.0"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
 }
