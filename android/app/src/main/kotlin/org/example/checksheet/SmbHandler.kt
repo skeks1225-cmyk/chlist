@@ -1,6 +1,15 @@
 package org.example.checksheet
 
 import android.content.Context
+import com.hierynomus.msdtyp.AccessMask
+import com.hierynomus.mssmb2.SMB2CreateDisposition
+import com.hierynomus.mssmb2.SMB2ShareAccess
+import com.hierynomus.smbj.SMBClient
+import com.hierynomus.smbj.SmbConfig
+import com.hierynomus.smbj.auth.AuthenticationContext
+import com.hierynomus.smbj.connection.Connection
+import com.hierynomus.smbj.session.Session
+import com.hierynomus.smbj.share.DiskShare
 import jcifs.context.BaseContext
 import jcifs.config.PropertyConfiguration
 import jcifs.smb.NtlmPasswordAuthenticator
@@ -13,63 +22,67 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 
 class SmbHandler(private val context: Context) {
-    private var baseContext: BaseContext? = null
-    
+    // --- 1. SMBJ 엔진 (고속 전송용) ---
+    private val smbjConfig = SmbConfig.builder()
+        .withTimeout(15, TimeUnit.SECONDS)
+        .withSoTimeout(15, TimeUnit.SECONDS)
+        .build()
+    private var smbjClient: SMBClient = SMBClient(smbjConfig)
+    private var smbjConnection: Connection? = null
+    private var smbjSession: Session? = null
+
+    // --- 2. jCIFS-ng 엔진 (똑똑한 정찰용) ---
+    private var jcifsBaseContext: BaseContext? = null
+
     private var lastIp: String? = null
     private var lastUser: String? = null
     private var lastPass: String? = null
 
-    // ❗ [수정] 생성자(init)에서 네트워크를 건드리는 초기화 로직 제거
-    // 대신 필요할 때 비동기적으로 초기화함
-
-    private suspend fun ensureContext(): BaseContext = withContext(Dispatchers.IO) {
-        if (baseContext != null) return@withContext baseContext!!
-        
+    init {
+        // jCIFS 환경 설정 (Tailscale 대응)
         val prop = Properties()
         prop.setProperty("jcifs.smb.client.minVersion", "SMB202")
         prop.setProperty("jcifs.smb.client.maxVersion", "SMB311")
         prop.setProperty("jcifs.smb.client.useExtendedSecurity", "true")
         prop.setProperty("jcifs.resolveOrder", "DNS")
-        prop.setProperty("jcifs.smb.client.ipcSigningEnforced", "false")
-        
         val config = PropertyConfiguration(prop)
-        val ctx = BaseContext(config)
-        baseContext = ctx
-        ctx
+        jcifsBaseContext = BaseContext(config)
+    }
+
+    // ❗ [중요] 모든 작업 전 SMBJ 연결 상태를 보장하는 자동 재접속 로직
+    private suspend fun ensureConnected(): Boolean {
+        if (smbjSession != null && smbjConnection?.isConnected == true) return true
+        val ip = lastIp ?: return false
+        return connect(ip, lastUser ?: "", lastPass ?: "") == "SUCCESS"
     }
 
     // [1] connect
     suspend fun connect(ip: String, user: String, pass: String): String = withContext(Dispatchers.IO) {
         try {
+            disconnect()
             lastIp = ip; lastUser = user; lastPass = pass
-            val ctx = ensureContext() // ❗ 비동기 초기화 보장
-            val auth = NtlmPasswordAuthenticator(null, user, pass)
-            val authenticatedCtx = ctx.withCredentials(auth)
             
-            val rootUrl = "smb://$ip/"
-            val server = SmbFile(rootUrl, authenticatedCtx)
+            // SMBJ 작업반장 출근
+            smbjConnection = smbjClient.connect(ip)
+            val auth = AuthenticationContext(user, pass.toCharArray(), "")
+            smbjSession = smbjConnection?.authenticate(auth)
             
-            server.list()
-            "SUCCESS"
+            if (smbjSession != null) "SUCCESS" else "인증 실패"
         } catch (e: Exception) {
             e.message ?: e.toString()
         }
     }
 
-    private suspend fun getAuthenticatedContext(): jcifs.CIFSContext? {
-        val ctx = ensureContext() // ❗ 비동기 초기화 보장
-        val auth = NtlmPasswordAuthenticator(null, lastUser ?: "", lastPass ?: "")
-        return ctx.withCredentials(auth)
-    }
-
-    // [2] listShares
+    // [2] listShares (똑똑한 jCIFS-ng 정찰병 투입)
     suspend fun listShares(): List<String> = withContext(Dispatchers.IO) {
         val result = mutableListOf<String>()
         try {
             val ip = lastIp ?: return@withContext result
-            val ctx = getAuthenticatedContext() ?: return@withContext result
+            val auth = NtlmPasswordAuthenticator(null, lastUser ?: "", lastPass ?: "")
+            val ctx = jcifsBaseContext?.withCredentials(auth)
+            
             val rootUrl = "smb://$ip/"
-            val server = SmbFile(rootUrl, ctx)
+            val server = SmbFile(rootUrl, ctx!!)
             val shares = server.list() ?: emptyArray()
             for (share in shares) {
                 val name = share.replace("/", "")
@@ -81,71 +94,69 @@ class SmbHandler(private val context: Context) {
         result
     }
 
-    // [3] listFiles
+    // [3] listFiles (고속 SMBJ 엔진 사용)
     suspend fun listFiles(shareName: String, path: String): List<Map<String, Any>> = withContext(Dispatchers.IO) {
         val result = mutableListOf<Map<String, Any>>()
         try {
-            val ip = lastIp ?: return@withContext result
-            val ctx = getAuthenticatedContext() ?: return@withContext result
-            val url = "smb://$ip/$shareName/${if (path.isEmpty()) "" else "$path/"}"
-            val dir = SmbFile(url, ctx)
-            val files = dir.listFiles() ?: emptyArray()
-            for (f in files) {
-                val name = f.name.replace("/", "")
-                if (name == "." || name == "..") continue
-                val map = mutableMapOf<String, Any>()
-                map["name"] = name
-                map["isDirectory"] = f.isDirectory
-                result.add(map)
+            if (!ensureConnected()) return@withContext result
+            val share = smbjSession?.connectShare(shareName) as? DiskShare
+            if (share != null) {
+                val list = share.list(path)
+                for (info in list) {
+                    val name = info.fileName
+                    if (name == "." || name == "..") continue
+                    val isDir = (info.fileAttributes and 0x00000010L) != 0L
+                    
+                    val map = mutableMapOf<String, Any>()
+                    map["name"] = name
+                    map["isDirectory"] = isDir
+                    result.add(map)
+                }
             }
-        } catch (e: Exception) {}
+        } catch (e: Exception) { e.printStackTrace() }
         result
     }
 
-    // [4] downloadFile
+    // [4] downloadFile (고속 SMBJ 엔진 사용 + 스마트 동기화)
     suspend fun downloadFile(shareName: String, remotePath: String, localPath: String): String? = withContext(Dispatchers.IO) {
         try {
-            val ip = lastIp ?: return@withContext null
-            val ctx = getAuthenticatedContext() ?: return@withContext null
-            
-            val parentPath = File(remotePath).parent?.replace("\\", "/") ?: ""
+            if (!ensureConnected()) return@withContext null
+            val share = smbjSession?.connectShare(shareName) as? DiskShare ?: return@withContext null
+
+            // 지능형 대소문자 무시 (SMBJ 방식)
+            val parentPath = File(remotePath).parent ?: ""
             val targetName = File(remotePath).name
-            val parentUrl = "smb://$ip/$shareName/${if (parentPath.isEmpty()) "" else "$parentPath/"}"
-            val parentDir = SmbFile(parentUrl, ctx)
-            val files = parentDir.list() ?: emptyArray()
-            
-            var actualName = targetName
-            for (f in files) {
-                val cleanF = f.replace("/", "")
-                if (cleanF.equals(targetName, ignoreCase = true)) {
-                    actualName = cleanF
+            val fileList = share.list(parentPath)
+            var actualRemotePath = remotePath
+            for (f in fileList) {
+                if (f.fileName.equals(targetName, ignoreCase = true)) {
+                    actualRemotePath = if (parentPath.isEmpty()) f.fileName else "$parentPath/${f.fileName}"
                     break
                 }
             }
 
-            val finalRemoteUrl = "smb://$ip/$shareName/${if (parentPath.isEmpty()) "" else "$parentPath/"}$actualName"
-            val remoteFile = SmbFile(finalRemoteUrl, ctx)
-            val localFile = File(localPath)
+            val remoteInfo = share.getFileInformation(actualRemotePath)
+            val remoteSize = remoteInfo.standardInformation.endOfFile
+            val remoteTime = remoteInfo.basicInformation.lastWriteTime.toEpoch(TimeUnit.MILLISECONDS)
 
+            val localFile = File(localPath)
             if (localFile.exists()) {
-                if (localFile.length() == remoteFile.length() && Math.abs(localFile.lastModified() - remoteFile.lastModified()) < 2000) {
+                if (localFile.length() == remoteSize && Math.abs(localFile.lastModified() - remoteTime) < 2000) {
                     return@withContext localPath
                 }
             }
 
             localFile.parentFile?.mkdirs()
-            remoteFile.inputStream.use { input ->
-                FileOutputStream(localFile).use { output ->
-                    input.copyTo(output)
-                }
-            }
-            localFile.setLastModified(remoteFile.lastModified())
+            val remoteFile = share.openFile(actualRemotePath, EnumSet.of(AccessMask.GENERIC_READ), null, EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ), SMB2CreateDisposition.FILE_OPEN, null)
+            remoteFile.inputStream.use { input -> FileOutputStream(localFile).use { output -> input.copyTo(output) } }
+            remoteFile.close()
+            localFile.setLastModified(remoteTime)
             return@withContext localPath
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (e: Exception) { e.printStackTrace() }
         null
     }
 
-    fun disconnect() {}
+    fun disconnect() {
+        try { smbjSession?.close(); smbjConnection?.close() } catch (e: Exception) {}
+    }
 }
