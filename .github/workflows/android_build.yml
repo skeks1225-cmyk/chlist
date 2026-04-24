@@ -22,16 +22,15 @@ jobs:
           channel: 'stable'
           flutter-version: '3.41.7'
 
-      # ❗ 오직 'pure_smb_test' 프로젝트만 빌드
-      - name: Build Pure SMB Test App
+      # ❗ 진짜 메인 앱 (root) 빌드로 복구
+      - name: Build Main App
         run: |
-          cd pure_smb_test
           flutter clean
           flutter pub get
           flutter build apk --release
         
-      - name: Upload Test APK
+      - name: Upload Main APK
         uses: actions/upload-artifact@v4
         with:
-          name: SMB-Scanner-Test-APK
-          path: pure_smb_test/build/app/outputs/flutter-apk/app-release.apk
+          name: CheckSheet-Main-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
