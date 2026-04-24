@@ -19,7 +19,6 @@ class SmbHandler(private val context: Context) {
     private var lastUser: String? = null
     private var lastPass: String? = null
 
-    // ❗ 네트워크 작업을 위해 지연 초기화 (Crash 방지)
     private suspend fun ensureContext(): BaseContext = withContext(Dispatchers.IO) {
         if (baseContext != null) return@withContext baseContext!!
         
@@ -36,7 +35,7 @@ class SmbHandler(private val context: Context) {
         ctx
     }
 
-    // [1] connect (접속 정보 저장 및 유효성 확인)
+    // [1] connect
     suspend fun connect(ip: String, user: String, pass: String): String = withContext(Dispatchers.IO) {
         try {
             lastIp = ip; lastUser = user; lastPass = pass
@@ -47,7 +46,6 @@ class SmbHandler(private val context: Context) {
             val rootUrl = "smb://$ip/"
             val server = SmbFile(rootUrl, authenticatedCtx)
             
-            // 접속 테스트 (폴더 목록 긁어보기)
             server.list()
             "SUCCESS"
         } catch (t: Throwable) {
@@ -62,7 +60,7 @@ class SmbHandler(private val context: Context) {
         return ctx.withCredentials(auth)
     }
 
-    // [2] listShares (진짜 모든 공유폴더 자동 탐색)
+    // [2] listShares
     suspend fun listShares(): List<String> = withContext(Dispatchers.IO) {
         val result = mutableListOf<String>()
         try {
@@ -81,7 +79,7 @@ class SmbHandler(private val context: Context) {
         result
     }
 
-    // [3] listFiles (하위 탐색)
+    // [3] listFiles
     suspend fun listFiles(shareName: String, path: String): List<Map<String, Any>> = withContext(Dispatchers.IO) {
         val result = mutableListOf<Map<String, Any>>()
         try {
@@ -102,13 +100,12 @@ class SmbHandler(private val context: Context) {
         result
     }
 
-    // [4] downloadFile (스마트 동기화 및 대소문자 무시)
+    // [4] downloadFile
     suspend fun downloadFile(shareName: String, remotePath: String, localPath: String): String? = withContext(Dispatchers.IO) {
         try {
             val ip = lastIp ?: return@withContext null
             val ctx = getAuthenticatedContext() ?: return@withContext null
             
-            // 대소문자 무시 검색
             val parentPath = File(remotePath).parent?.replace("\\", "/") ?: ""
             val targetName = File(remotePath).name
             val parentUrl = "smb://$ip/$shareName/${if (parentPath.isEmpty()) "" else "$parentPath/"}"
@@ -128,7 +125,6 @@ class SmbHandler(private val context: Context) {
             val remoteFile = SmbFile(finalRemoteUrl, ctx)
             val localFile = File(localPath)
 
-            // ❗ 스마트 동기화 (용량/날짜 비교)
             if (localFile.exists()) {
                 if (localFile.length() == remoteFile.length() && Math.abs(localFile.lastModified() - remoteFile.lastModified()) < 2000) {
                     return@withContext localPath
