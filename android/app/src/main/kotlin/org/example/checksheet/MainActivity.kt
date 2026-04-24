@@ -36,15 +36,6 @@ class MainActivity: FlutterActivity() {
                     val local = call.argument<String>("localPath") ?: ""
                     scope.launch { result.success(smbHandler.downloadFile(share, remote, local)) }
                 }
-                // ❗ jCIFS-ng 정찰병 테스트용 임시 명령어
-                "testDiscovery" -> {
-                    val ip = call.argument<String>("ip") ?: ""
-                    val user = call.argument<String>("user") ?: ""
-                    val pass = call.argument<String>("pass") ?: ""
-                    scope.launch {
-                        result.success(org.example.checksheet.test.SmbDiscoveryTest.runTest(ip, user, pass))
-                    }
-                }
                 else -> result.notImplemented()
             }
         }
