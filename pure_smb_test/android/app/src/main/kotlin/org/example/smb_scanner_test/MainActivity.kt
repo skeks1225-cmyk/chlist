@@ -25,15 +25,19 @@ class MainActivity: FlutterActivity() {
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         val prop = Properties()
+                        // ❗ 최신 윈도우 및 Tailscale 환경을 위한 핵심 설정
                         prop.setProperty("jcifs.smb.client.minVersion", "SMB202")
                         prop.setProperty("jcifs.smb.client.maxVersion", "SMB311")
+                        prop.setProperty("jcifs.smb.client.useExtendedSecurity", "true")
+                        prop.setProperty("jcifs.resolveOrder", "DNS") // NetBIOS 무시하고 직접 접속
+                        prop.setProperty("jcifs.smb.client.ipcSigningEnforced", "false")
                         
                         val config = PropertyConfiguration(prop)
                         val baseContext = BaseContext(config)
                         val auth = NtlmPasswordAuthenticator(null, user, pass)
                         val context = baseContext.withCredentials(auth)
                         
-                        // ❗ 지피티 조언: 루트 주소 접속
+                        // ❗ 루트 주소 접속
                         val rootUrl = "smb://$ip/"
                         val server = SmbFile(rootUrl, context)
                         
@@ -46,7 +50,8 @@ class MainActivity: FlutterActivity() {
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
-                            result.error("SCAN_ERROR", e.message ?: e.toString(), null)
+                            // 에러 내용을 더 자세히 반환하여 원인 파악 도움
+                            result.error("SCAN_ERROR", "${e.javaClass.simpleName}: ${e.message}", null)
                         }
                     }
                 }
