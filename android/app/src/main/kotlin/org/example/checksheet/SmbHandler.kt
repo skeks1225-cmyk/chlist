@@ -19,28 +19,36 @@ class SmbHandler(private val context: Context) {
     private var lastUser: String? = null
     private var lastPass: String? = null
 
-    init {
-        // jCIFS-ng 환경 설정 고정 (Tailscale 및 최신 윈도우 대응)
+    // ❗ [수정] 생성자(init)에서 네트워크를 건드리는 초기화 로직 제거
+    // 대신 필요할 때 비동기적으로 초기화함
+
+    private suspend fun ensureContext(): BaseContext = withContext(Dispatchers.IO) {
+        if (baseContext != null) return@withContext baseContext!!
+        
         val prop = Properties()
         prop.setProperty("jcifs.smb.client.minVersion", "SMB202")
         prop.setProperty("jcifs.smb.client.maxVersion", "SMB311")
         prop.setProperty("jcifs.smb.client.useExtendedSecurity", "true")
         prop.setProperty("jcifs.resolveOrder", "DNS")
         prop.setProperty("jcifs.smb.client.ipcSigningEnforced", "false")
+        
         val config = PropertyConfiguration(prop)
-        baseContext = BaseContext(config)
+        val ctx = BaseContext(config)
+        baseContext = ctx
+        ctx
     }
 
-    // [1] connect (인증 정보 저장 및 테스트)
+    // [1] connect
     suspend fun connect(ip: String, user: String, pass: String): String = withContext(Dispatchers.IO) {
         try {
             lastIp = ip; lastUser = user; lastPass = pass
+            val ctx = ensureContext() // ❗ 비동기 초기화 보장
             val auth = NtlmPasswordAuthenticator(null, user, pass)
-            val ctx = baseContext?.withCredentials(auth)
-            val rootUrl = "smb://$ip/"
-            val server = SmbFile(rootUrl, ctx!!)
+            val authenticatedCtx = ctx.withCredentials(auth)
             
-            // 실제 접속 시도 (목록 조회를 통해 인증 확인)
+            val rootUrl = "smb://$ip/"
+            val server = SmbFile(rootUrl, authenticatedCtx)
+            
             server.list()
             "SUCCESS"
         } catch (e: Exception) {
@@ -48,12 +56,13 @@ class SmbHandler(private val context: Context) {
         }
     }
 
-    private fun getAuthenticatedContext(): jcifs.CIFSContext? {
+    private suspend fun getAuthenticatedContext(): jcifs.CIFSContext? {
+        val ctx = ensureContext() // ❗ 비동기 초기화 보장
         val auth = NtlmPasswordAuthenticator(null, lastUser ?: "", lastPass ?: "")
-        return baseContext?.withCredentials(auth)
+        return ctx.withCredentials(auth)
     }
 
-    // [2] listShares (진짜 자동 탐색기)
+    // [2] listShares
     suspend fun listShares(): List<String> = withContext(Dispatchers.IO) {
         val result = mutableListOf<String>()
         try {
@@ -72,7 +81,7 @@ class SmbHandler(private val context: Context) {
         result
     }
 
-    // [3] listFiles (하위 탐색)
+    // [3] listFiles
     suspend fun listFiles(shareName: String, path: String): List<Map<String, Any>> = withContext(Dispatchers.IO) {
         val result = mutableListOf<Map<String, Any>>()
         try {
@@ -93,13 +102,12 @@ class SmbHandler(private val context: Context) {
         result
     }
 
-    // [4] downloadFile (스마트 동기화 및 대소문자 무시)
+    // [4] downloadFile
     suspend fun downloadFile(shareName: String, remotePath: String, localPath: String): String? = withContext(Dispatchers.IO) {
         try {
             val ip = lastIp ?: return@withContext null
             val ctx = getAuthenticatedContext() ?: return@withContext null
             
-            // ❗ 대소문자 무시를 위해 실제 파일명 검색
             val parentPath = File(remotePath).parent?.replace("\\", "/") ?: ""
             val targetName = File(remotePath).name
             val parentUrl = "smb://$ip/$shareName/${if (parentPath.isEmpty()) "" else "$parentPath/"}"
@@ -119,7 +127,6 @@ class SmbHandler(private val context: Context) {
             val remoteFile = SmbFile(finalRemoteUrl, ctx)
             val localFile = File(localPath)
 
-            // 스마트 동기화 대조
             if (localFile.exists()) {
                 if (localFile.length() == remoteFile.length() && Math.abs(localFile.lastModified() - remoteFile.lastModified()) < 2000) {
                     return@withContext localPath
@@ -140,7 +147,5 @@ class SmbHandler(private val context: Context) {
         null
     }
 
-    fun disconnect() {
-        // jCIFS-ng는 세션을 직접 닫을 필요가 없으나 구조 유지를 위해 둠
-    }
+    fun disconnect() {}
 }
