@@ -43,14 +43,23 @@ android {
     }
 }
 
+// ❗ [핵심 해결책] 프로젝트 내의 모든 Bouncy Castle 버전을 1.78 하나로 강제 통일
+configurations.all {
+    resolutionStrategy {
+        force("org.bouncycastle:bcprov-jdk18on:1.78.1")
+    }
+}
+
 flutter {
     source = "../.."
 }
 
 dependencies {
-    // ❗ jCIFS-ng 단일 엔진 체제 (안정성 최우선)
+    // ❗ jCIFS-ng 단일 엔진 (내부적으로 1.71 버전을 부르지만 위의 force 설정이 1.78로 승격시킴)
     implementation("org.codelibs:jcifs:2.1.34")
-    // 암호화 라이브러리 (NoClassDefFoundError 방지용)
-    implementation("org.bouncycastle:bcprov-jdk15to18:1.78")
+    
+    // ❗ 우리가 사용할 표준 암호화 라이브러리 하나만 명시
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
+    
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
