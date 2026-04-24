@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.util.EnumSet // ❗ 누락되었던 필수 임포트 추가
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
@@ -39,7 +40,6 @@ class SmbHandler(private val context: Context) {
     private var lastPass: String? = null
 
     init {
-        // jCIFS 환경 설정 (Tailscale 대응)
         val prop = Properties()
         prop.setProperty("jcifs.smb.client.minVersion", "SMB202")
         prop.setProperty("jcifs.smb.client.maxVersion", "SMB311")
@@ -49,38 +49,31 @@ class SmbHandler(private val context: Context) {
         jcifsBaseContext = BaseContext(config)
     }
 
-    // ❗ [중요] 모든 작업 전 SMBJ 연결 상태를 보장하는 자동 재접속 로직
     private suspend fun ensureConnected(): Boolean {
         if (smbjSession != null && smbjConnection?.isConnected == true) return true
         val ip = lastIp ?: return false
         return connect(ip, lastUser ?: "", lastPass ?: "") == "SUCCESS"
     }
 
-    // [1] connect
     suspend fun connect(ip: String, user: String, pass: String): String = withContext(Dispatchers.IO) {
         try {
             disconnect()
             lastIp = ip; lastUser = user; lastPass = pass
-            
-            // SMBJ 작업반장 출근
             smbjConnection = smbjClient.connect(ip)
             val auth = AuthenticationContext(user, pass.toCharArray(), "")
             smbjSession = smbjConnection?.authenticate(auth)
-            
             if (smbjSession != null) "SUCCESS" else "인증 실패"
         } catch (e: Exception) {
             e.message ?: e.toString()
         }
     }
 
-    // [2] listShares (똑똑한 jCIFS-ng 정찰병 투입)
     suspend fun listShares(): List<String> = withContext(Dispatchers.IO) {
         val result = mutableListOf<String>()
         try {
             val ip = lastIp ?: return@withContext result
             val auth = NtlmPasswordAuthenticator(null, lastUser ?: "", lastPass ?: "")
             val ctx = jcifsBaseContext?.withCredentials(auth)
-            
             val rootUrl = "smb://$ip/"
             val server = SmbFile(rootUrl, ctx!!)
             val shares = server.list() ?: emptyArray()
@@ -94,7 +87,6 @@ class SmbHandler(private val context: Context) {
         result
     }
 
-    // [3] listFiles (고속 SMBJ 엔진 사용)
     suspend fun listFiles(shareName: String, path: String): List<Map<String, Any>> = withContext(Dispatchers.IO) {
         val result = mutableListOf<Map<String, Any>>()
         try {
@@ -106,7 +98,6 @@ class SmbHandler(private val context: Context) {
                     val name = info.fileName
                     if (name == "." || name == "..") continue
                     val isDir = (info.fileAttributes and 0x00000010L) != 0L
-                    
                     val map = mutableMapOf<String, Any>()
                     map["name"] = name
                     map["isDirectory"] = isDir
@@ -117,13 +108,11 @@ class SmbHandler(private val context: Context) {
         result
     }
 
-    // [4] downloadFile (고속 SMBJ 엔진 사용 + 스마트 동기화)
     suspend fun downloadFile(shareName: String, remotePath: String, localPath: String): String? = withContext(Dispatchers.IO) {
         try {
             if (!ensureConnected()) return@withContext null
             val share = smbjSession?.connectShare(shareName) as? DiskShare ?: return@withContext null
 
-            // 지능형 대소문자 무시 (SMBJ 방식)
             val parentPath = File(remotePath).parent ?: ""
             val targetName = File(remotePath).name
             val fileList = share.list(parentPath)
@@ -147,6 +136,7 @@ class SmbHandler(private val context: Context) {
             }
 
             localFile.parentFile?.mkdirs()
+            // ❗ EnumSet.of 사용을 위해 상단에 import 추가 완료
             val remoteFile = share.openFile(actualRemotePath, EnumSet.of(AccessMask.GENERIC_READ), null, EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ), SMB2CreateDisposition.FILE_OPEN, null)
             remoteFile.inputStream.use { input -> FileOutputStream(localFile).use { output -> input.copyTo(output) } }
             remoteFile.close()
