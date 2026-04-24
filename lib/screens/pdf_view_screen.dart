@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pdfx/pdfx.dart';
 import '../models/item_model.dart';
-import '../services/smb_service.dart'; // ❗ SMB 서비스 추가
+import '../services/smb_service.dart';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -9,7 +9,7 @@ class PdfViewerScreen extends StatefulWidget {
   final List<ItemModel> items;
   final int initialIndex;
   final String pdfFolderPath;
-  final SmbService smbService; // ❗ 서비스 주입
+  final SmbService smbService;
   final Function(ItemModel, String) onStatusUpdate;
 
   const PdfViewerScreen({
@@ -48,7 +48,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
     String localPath = "";
     
-    // ❗ 1. 만약 SMB 경로라면, 로딩 전에 스마트 동기화(재접속 포함) 실행
     if (widget.pdfFolderPath.startsWith("smb://")) {
       try {
         String shareWithRest = widget.pdfFolderPath.replaceFirst("smb://", "");
@@ -58,13 +57,11 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
         localPath = "/storage/emulated/0/Download/CheckSheet/$cleanCode.pdf";
         
-        // 이 호출 하나로 [재접속 + 날짜비교 + 다운로드]가 원스톱으로 처리됨
         await widget.smbService.downloadFile(share, remoteFilePath, localPath);
       } catch (e) {
         debugPrint("Viewer Sync Error: $e");
       }
     } else {
-      // 로컬 경로인 경우
       localPath = "${widget.pdfFolderPath}/$cleanCode.pdf";
     }
 

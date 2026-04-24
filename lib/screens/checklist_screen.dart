@@ -208,7 +208,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             await prefs.setString('smbIp', ipController.text);
             await prefs.setString('smbUser', userController.text);
             await prefs.setString('smbPass', passController.text);
-            setState(() => _smbShareName = shareController.text);
+            setState(() => _smbShareName = shareController.text); 
             await prefs.setString('smbShareName', _smbShareName);
             _smbService.setConfig(ipController.text, userController.text, passController.text);
             Navigator.pop(ctx);
@@ -224,15 +224,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     setState(() => _isLoading = false);
     if (!mounted) return;
 
-    if (shares.isNotEmpty && shares[0].startsWith("ERROR:")) {
-      _showError("탐색 실패", shares[0].replaceFirst("ERROR:", "").trim());
-      return;
-    }
-
     Set<String> uniqueShares = {};
     if (_smbShareName.isNotEmpty) uniqueShares.add(_smbShareName);
     for (var s in shares) {
-      if (s != "설정된 공유폴더" && s != "체크시트" && s != "Shared" && s != "Users" && s != "Public" && s != "Downloads") {
+      if (s != "설정된 공유폴더" && s != "Shared" && s != "Users" && s != "Public") {
         uniqueShares.add(s);
       }
     }
