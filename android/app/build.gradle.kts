@@ -28,7 +28,6 @@ android {
 
     buildTypes {
         release {
-            // ❗ R8(난독화/최적화)로 인해 SMBJ 라이브러리가 유실되는 문제 해결
             isMinifyEnabled = false
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
@@ -42,5 +41,7 @@ flutter {
 
 dependencies {
     implementation("com.hierynomus:smbj:0.13.0")
+    // ❗ [테스트용 정찰병] jCIFS-ng 추가
+    implementation("org.codelibs:jcifs:2.1.34")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }

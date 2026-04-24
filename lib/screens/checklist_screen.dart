@@ -202,7 +202,20 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ElevatedButton(
                 onPressed: () async {
                   String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
-                  _showError(err == null ? "성공" : "접속 실패", err ?? "✅ 접속 성공!");
+                  
+                  // ❗ 정찰병 테스트 실행
+                  final List<dynamic> shares = await const MethodChannel('org.example.checksheet/smb').invokeMethod('testDiscovery', {
+                    'ip': ipController.text,
+                    'user': userController.text,
+                    'pass': passController.text,
+                  });
+
+                  String msg = err ?? "✅ 접속 성공!";
+                  if (shares.isNotEmpty) {
+                    msg += "\n\n[발견된 공유폴더]\n${shares.join(', ')}";
+                  }
+
+                  _showError(err == null ? "성공" : "접속 실패", msg);
                 },
                 child: const Text("접속 테스트"),
               ),
