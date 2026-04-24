@@ -48,6 +48,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
     String localPath = "";
     
+    // ❗ 핵심: 모든 로딩 전 동기화 로직을 항상 먼저 실행
     if (widget.pdfFolderPath.startsWith("smb://")) {
       try {
         String shareWithRest = widget.pdfFolderPath.replaceFirst("smb://", "");
@@ -57,6 +58,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
         localPath = "/storage/emulated/0/Download/CheckSheet/$cleanCode.pdf";
         
+        // ❗ 엔진 내부에서 [재접속 + 대소문자무시 + 날짜비교]가 일어남
         await widget.smbService.downloadFile(share, remoteFilePath, localPath);
       } catch (e) {
         debugPrint("Viewer Sync Error: $e");
@@ -68,6 +70,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _remarksController.text = item.remarks;
     _pdfController?.dispose();
     
+    // ❗ 동기화 결과를 바탕으로 파일 로드 시도
     final targetFile = File(localPath);
     if (targetFile.existsSync()) {
       try {
@@ -102,14 +105,14 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   void _next() {
     if (_currentIndex < widget.items.length - 1) {
       setState(() => _currentIndex++);
-      _loadPdf();
+      _loadPdf(); // ❗ 이동 시에도 항상 _loadPdf 호출
     }
   }
 
   void _prev() {
     if (_currentIndex > 0) {
       setState(() => _currentIndex--);
-      _loadPdf();
+      _loadPdf(); // ❗ 이동 시에도 항상 _loadPdf 호출
     }
   }
 
