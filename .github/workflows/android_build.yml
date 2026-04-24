@@ -22,20 +22,7 @@ jobs:
           channel: 'stable'
           flutter-version: '3.41.7'
 
-      # --- 1. 메인 앱 빌드 ---
-      - name: Build Main App
-        run: |
-          flutter clean
-          flutter pub get
-          flutter build apk --release
-        
-      - name: Upload Main APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: CheckSheet-Main-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
-
-      # --- 2. 독립 테스트 앱 빌드 ---
+      # ❗ 메인 앱 빌드 과정 삭제 (오직 테스트 앱만 진행)
       - name: Build SMB Test App
         run: |
           cd smb_test_app
