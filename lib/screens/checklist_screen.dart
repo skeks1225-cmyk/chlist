@@ -33,8 +33,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   String _currentSortCol = ""; 
   bool _isAscending = true;   
 
-  String _smbShareName = "체크시트"; 
-
   final String _baseDownloadPath = "/storage/emulated/0/Download";
 
   @override
@@ -75,7 +73,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _excelPath = prefs.getString('excelPath') ?? "";
       _pdfFolderPath = prefs.getString('pdfFolderPath') ?? "";
       _autoSave = prefs.getBool('autoSave') ?? true;
-      _smbShareName = prefs.getString('smbShareName') ?? "체크시트";
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -90,7 +87,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setString('excelPath', _excelPath);
     await prefs.setString('pdfFolderPath', _pdfFolderPath);
     await prefs.setBool('autoSave', _autoSave);
-    await prefs.setString('smbShareName', _smbShareName);
   }
 
   Future<void> _loadExcelData(String path) async {
@@ -198,27 +194,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               const SizedBox(height: 10),
               ElevatedButton(
                 onPressed: () async {
-                  // ❗ [접속 테스트 개선] 성공 시 폴더 목록까지 가져와서 보여줌
                   String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
-                  
-                  String msg = "";
-                  if (err == null) {
-                    msg = "✅ 접속 성공!";
-                    List<String> shares = await _smbService.listShares();
-                    if (shares.isNotEmpty) {
-                      if (shares[0].startsWith("ERROR:")) {
-                        msg += "\n\n⚠️ 목록 조회 실패: ${shares[0]}";
-                      } else {
-                        msg += "\n\n[발견된 공유폴더]\n${shares.join('\n')}";
-                      }
-                    } else {
-                      msg += "\n\n⚠️ 공유된 폴더가 없거나 조회할 수 없습니다.";
-                    }
-                  } else {
-                    msg = "접속 실패: $err";
-                  }
-
-                  _showError(err == null ? "성공" : "오류", msg);
+                  _showError(err == null ? "성공" : "접속 실패", err ?? "✅ 접속 성공!");
                 },
                 child: const Text("접속 테스트"),
               ),
@@ -241,29 +218,23 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _openSmbShares(String mode) async {
     setState(() => _isLoading = true);
-    try {
-      List<String> shares = await _smbService.listShares();
-      setState(() => _isLoading = false);
-      if (!mounted) return;
+    List<String> shares = await _smbService.listShares();
+    setState(() => _isLoading = false);
+    if (!mounted) return;
 
-      if (shares.isNotEmpty && shares[0].startsWith("ERROR:")) {
-        _showError("탐색 실패", shares[0].replaceFirst("ERROR:", "").trim());
-        return;
-      }
-
-      if (shares.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다. (PC 설정을 확인하세요)"); return; }
-      
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("공유폴더 선택"),
-          content: SizedBox(width: double.maxFinite, child: ListView.builder(shrinkWrap: true, itemCount: shares.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.folder_shared), title: Text(shares[i]), onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i], "", mode); }))),
-        ),
-      );
-    } catch (e) {
-      setState(() => _isLoading = false);
-      _showError("치명적 오류", "앱이 일시적으로 응답하지 않습니다: $e");
+    if (shares.isNotEmpty && shares[0].startsWith("ERROR:")) {
+      _showError("탐색 실패", shares[0].replaceFirst("ERROR:", "").trim());
+      return;
     }
+
+    if (shares.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다."); return; }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("공유폴더 선택"),
+        content: SizedBox(width: double.maxFinite, child: ListView.builder(shrinkWrap: true, itemCount: shares.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.folder_shared), title: Text(shares[i]), onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i], "", mode); }))),
+      ),
+    );
   }
 
   void _showSmbFiles(String share, String path, String mode) async {
