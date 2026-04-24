@@ -49,17 +49,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
     await _loadSettings();
     await _ensureBaseDirectory();
-    _autoConnectSMB(); 
-  }
-
-  Future<void> _autoConnectSMB() async {
-    final prefs = await SharedPreferences.getInstance();
-    String ip = prefs.getString('smbIp') ?? "";
-    String user = prefs.getString('smbUser') ?? "";
-    String pass = prefs.getString('smbPass') ?? "";
-    if (ip.isNotEmpty && user.isNotEmpty) {
-      await _smbService.testConnection(ip, user, pass);
-    }
+    // ❗ [수정] 앱 실행 시 자동 접속(_autoConnectSMB) 기능을 삭제합니다.
+    // 이제 실제 공유폴더 작업이 필요할 때만 접속합니다.
   }
 
   Future<void> _ensureBaseDirectory() async {
@@ -195,7 +186,25 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ElevatedButton(
                 onPressed: () async {
                   String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
-                  _showError(err == null ? "성공" : "접속 실패", err ?? "✅ 접속 성공!");
+                  
+                  String msg = "";
+                  if (err == null) {
+                    msg = "✅ 접속 성공!";
+                    List<String> shares = await _smbService.listShares();
+                    if (shares.isNotEmpty) {
+                      if (shares[0].startsWith("ERROR:")) {
+                        msg += "\n\n⚠️ 목록 조회 실패: ${shares[0]}";
+                      } else {
+                        msg += "\n\n[발견된 공유폴더]\n${shares.join('\n')}";
+                      }
+                    } else {
+                      msg += "\n\n⚠️ 공유된 폴더가 없거나 조회할 수 없습니다.";
+                    }
+                  } else {
+                    msg = "접속 실패: $err";
+                  }
+
+                  _showError(err == null ? "성공" : "오류", msg);
                 },
                 child: const Text("접속 테스트"),
               ),
@@ -218,23 +227,29 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _openSmbShares(String mode) async {
     setState(() => _isLoading = true);
-    List<String> shares = await _smbService.listShares();
-    setState(() => _isLoading = false);
-    if (!mounted) return;
+    try {
+      List<String> shares = await _smbService.listShares();
+      setState(() => _isLoading = false);
+      if (!mounted) return;
 
-    if (shares.isNotEmpty && shares[0].startsWith("ERROR:")) {
-      _showError("탐색 실패", shares[0].replaceFirst("ERROR:", "").trim());
-      return;
+      if (shares.isNotEmpty && shares[0].startsWith("ERROR:")) {
+        _showError("탐색 실패", shares[0].replaceFirst("ERROR:", "").trim());
+        return;
+      }
+
+      if (shares.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다. (PC 설정을 확인하세요)"); return; }
+      
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("공유폴더 선택"),
+          content: SizedBox(width: double.maxFinite, child: ListView.builder(shrinkWrap: true, itemCount: shares.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.folder_shared), title: Text(shares[i]), onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i], "", mode); }))),
+        ),
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showError("치명적 오류", "앱이 일시적으로 응답하지 않습니다: $e");
     }
-
-    if (shares.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다."); return; }
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("공유폴더 선택"),
-        content: SizedBox(width: double.maxFinite, child: ListView.builder(shrinkWrap: true, itemCount: shares.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.folder_shared), title: Text(shares[i]), onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i], "", mode); }))),
-      ),
-    );
   }
 
   void _showSmbFiles(String share, String path, String mode) async {

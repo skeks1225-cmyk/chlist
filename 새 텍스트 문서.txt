@@ -3947,3 +3947,168 @@ Flutter Android Build #141: Commit f9f36b6 pushed by skeks1225-cmyk
 접속성공
 목록 조회 실패: error: noclassdeffounderror: failed resolution of: lorg/bouncycastle/asn1/asn1applicationspecific; 
 이렇게 나와.
+
+
+
+
+빌드 실패했어.
+jCIFS-ng로 테스트한개 메인앱에 제대로 이식이 되지 않은거야?
+아래는 빌드로그야.
+
+Run flutter clean
+Resolving dependencies...
+Downloading packages...
++ archive 3.6.1 (4.0.9 available)
++ args 2.7.0
++ code_assets 1.0.0
++ crypto 3.0.7
++ equatable 2.0.8
++ excel 4.0.6
++ extension 0.6.0 (1.0.0 available)
++ ffi 2.2.0
++ file 7.0.1
++ fixnum 1.1.1
+< flutter_lints 3.0.2 (was 6.0.0) (6.0.0 available)
++ flutter_web_plugins 0.0.0 from sdk flutter
++ glob 2.1.3
++ hooks 1.0.3
++ intl 0.19.0 (0.20.2 available)
++ jni 1.0.0
++ jni_flutter 1.0.1
+< lints 3.0.0 (was 6.1.0) (6.1.0 available)
++ logging 1.3.0
+  meta 1.17.0 (1.18.2 available)
++ native_toolchain_c 0.17.6 (0.18.0 available)
++ objective_c 9.3.0
++ package_config 2.2.0
+  path 1.9.1 (from transitive dependency to direct dependency)
++ path_provider 2.1.5
++ path_provider_android 2.3.1
++ path_provider_foundation 2.6.0
++ path_provider_linux 2.2.1
++ path_provider_platform_interface 2.1.2
++ path_provider_windows 2.3.0
++ pdfx 2.9.2
++ permission_handler 11.4.0 (12.0.1 available)
++ permission_handler_android 12.1.0 (13.0.1 available)
++ permission_handler_apple 9.4.7
++ permission_handler_html 0.1.3+5
++ permission_handler_platform_interface 4.3.0
++ permission_handler_windows 0.2.1
++ petitparser 7.0.2
++ photo_view 0.15.0
++ platform 3.1.6
++ plugin_platform_interface 2.1.8
++ pub_semver 2.2.0
++ record_use 0.6.0
++ shared_preferences 2.5.5
++ shared_preferences_android 2.4.23
++ shared_preferences_foundation 2.5.6
++ shared_preferences_linux 2.4.1
++ shared_preferences_platform_interface 2.4.2
++ shared_preferences_web 2.4.3
++ shared_preferences_windows 2.4.1
++ synchronized 3.4.0+1
+  test_api 0.7.10 (0.7.11 available)
++ typed_data 1.4.0
++ universal_platform 1.1.0
++ uuid 4.5.3
+  vector_math 2.2.0 (2.3.0 available)
++ web 1.1.1
++ xdg_directories 1.1.0
++ xml 6.6.1
++ yaml 3.1.3
+These packages are no longer being depended on:
+- cupertino_icons 1.0.9
+Changed 58 dependencies!
+11 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Running Gradle task 'assembleRelease'...                        
+e: The daemon has terminated unexpectedly on startup attempt #1 with error code: 0. The daemon process output:
+    1. Kotlin compile daemon is ready
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 2504 bytes (99.8% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Checking the license for package CMake 3.22.1 in /usr/local/lib/android/sdk/licenses
+License for package CMake 3.22.1 accepted.
+Preparing "Install CMake 3.22.1 v.3.22.1".
+"Install CMake 3.22.1 v.3.22.1" ready.
+Installing CMake 3.22.1 in /usr/local/lib/android/sdk/cmake/3.22.1
+"Install CMake 3.22.1 v.3.22.1" complete.
+"Install CMake 3.22.1 v.3.22.1" finished.
+Caught exception: Already watching path: /home/runner/work/chlist/chlist/android
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:mergeReleaseJavaResource'.
+> A failure occurred while executing com.android.build.gradle.internal.tasks.MergeJavaResWorkAction
+   > 2 files found with path 'META-INF/versions/9/OSGI-INF/MANIFEST.MF' from inputs:
+      - org.bouncycastle:bcprov-jdk18on:1.78/bcprov-jdk18on-1.78.jar
+      - org.jspecify:jspecify:1.0.0/jspecify-1.0.0.jar
+     Adding a packaging block may help, please refer to
+     https://developer.android.com/reference/tools/gradle-api/com/android/build/api/dsl/Packaging
+     for more information
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 4m 54s
+Running Gradle task 'assembleRelease'...                          295.2s
+Gradle task assembleRelease failed with exit code 1
+Error: Process completed with exit code 1.
+
+
+빌드 성공 후 설치를 햇는데,
+접속테스트를 하면 이전과 동일해.
+
+접속성공
+목록 조회 실패: error: noclassdeffounderror: failed resolution of: lorg/bouncycastle/asn1/asn1applicationspecific; 
+이렇게 나와. 수정전과 변함이 없는데?
+
+
+
+
+
+
+빌드 실패했어. 의논해보자.
+
+2026-04-24T05:51:03.8575269Z failURE: Build failed with an exception.
+2026-04-24T05:51:03.8677069Z Execution failed for task ':app:checkReleaseDuplicateClasses'.
+2026-04-24T05:51:03.8705735Z > A failure occurred while executing com.android.build.gradle.internal.tasks.CheckDuplicatesRunnable
+2026-04-24T05:51:04.6251061Z      Duplicate class org.bouncycastle.util.test.TestfailedException found in modules bcprov-jdk15to18-1.78.jar -> bcprov-jdk15to18-1.78 (org.bouncycastle:bcprov-jdk15to18:1.78) and bcprov-jdk18on-1.75.jar -> bcprov-jdk18on-1.75 (org.bouncycastle:bcprov-jdk18on:1.75)
+2026-04-24T05:51:04.6285070Z BUILD failED in 3m 21s
+2026-04-24T05:51:04.7436921Z Gradle task assembleRelease failed with exit code 1
+
+
+
+
+빌드 성공 후 설치를 햇는데,
+접속테스트를 하면 이전과 동일해.
+
+접속성공
+목록 조회 실패: error: noclassdeffounderror: failed resolution of: lorg/bouncycastle/asn1/asn1applicationspecific; 
+이렇게 나와.
+왜 변함이 없는거야? 수정한 것 맞니? 수정전과 변함이 없는데?
+
+jCIFS-ng에서 리스트를 가져오는 건 어디에 포함되는거니?
+접속테스트를 하면 가져오는거야?
+
+
+
+무작정 수정하지 말고, 좋은 방법을 생각해보고 해야지.
+jCIFS-ng에서 리스트 가져오는 건 무조건 접속테스트를 해야 가져오는거야?
+
+내가 궁금한건 jCIFS-ng가 smbj보다 무조건 빨리 실행이 되어야 하는게 아닌가 하는 점이야.
+리스트를 얻어와야 smbj에 폴더명 알려줄 수 있는 것 아니야?
+
+
+jCIFS-ng만 사용을 해도 엑셀선택/pdf폴더 선택 시 문제가 없는거야?
+뷰어에서 공유폴더가 pdf폴더로 선택이 되어 있어도 정상작동을 할까?
+지금 모든게 smbj에 맞춰져 있어서 불안한 마음이야.
+
+
+smb접근은 접속테스트할때, 그리고 엑셀선택을 공유폴더에서 할때, 그리고 pdf폴더가 공유폴더로 지정되어있을때 이때만 되어야 하는것 아니니?
+외부설정에서 ip id pw 입력이 되어 있더라도 실제로 공유폴더에 접근을 하지 않을 때에는 접근을 할 필요가 없는 거잖아.
+아니니? 의논해보자.
