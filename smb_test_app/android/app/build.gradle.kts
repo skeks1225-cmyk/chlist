@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace = "org.example.smbtest.smb_test"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "org.example.smbtest.smb_test"
         minSdk = 24
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
     }
@@ -25,7 +25,6 @@ android {
         jvmTarget = "17"
     }
 
-    // ❗ 이름과 형식이 일치하는 올바른 최적화 비활성화 설정
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
