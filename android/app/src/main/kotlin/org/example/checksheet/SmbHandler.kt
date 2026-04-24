@@ -27,64 +27,81 @@ class SmbHandler(private val context: Context) {
     private var connection: Connection? = null
     private var session: Session? = null
 
+    // ❗ 재접속을 위한 정보 보관
+    private var lastIp: String? = null
+    private var lastUser: String? = null
+    private var lastPass: String? = null
+
+    // [0] 자동 재접속 헬퍼: 모든 작업 전에 호출됨
+    private suspend fun ensureConnected(): Boolean {
+        if (session != null && connection?.isConnected == true) return true
+        val ip = lastIp ?: return false
+        return connect(ip, lastUser ?: "", lastPass ?: "") == "SUCCESS"
+    }
+
     // [1] connectSMB
     suspend fun connect(ip: String, user: String, pass: String): String = withContext(Dispatchers.IO) {
         try {
             disconnect()
+            lastIp = ip; lastUser = user; lastPass = pass
             connection = client.connect(ip)
             val auth = AuthenticationContext(user, pass.toCharArray(), "")
             session = connection?.authenticate(auth)
-            if (session != null) "SUCCESS" else "인증 실패: 사용자 정보를 확인하세요."
+            if (session != null) "SUCCESS" else "인증 실패"
         } catch (e: Exception) {
-            val msg = e.message ?: e.toString()
-            if (msg.contains("Connection refused")) "접속 거부: PC IP가 맞는지 확인하세요."
-            else if (msg.contains("Timeout")) "응답 시간 초과: Tailscale 연결을 확인하세요."
-            else msg
+            e.message ?: e.toString()
         }
     }
 
-    // [2] listShares: ❗ 빌드 성공을 위해 "절대 깨지지 않는" 방식으로 고정
+    // [2] listShares (진짜 목록 조회 시도 + 안전 장치)
     suspend fun listShares(): List<String> = withContext(Dispatchers.IO) {
-        // SMBJ에서 listShares()는 매우 복잡하므로, 계약을 준수하는 안전한 리스트 반환
         val result = mutableListOf<String>()
-        result.add("체크시트")
-        result.add("Shared")
-        result.add("Users")
+        try {
+            if (!ensureConnected()) return@withContext result
+            // SMBJ에서 지원하는 한 최대한 진짜 목록을 가져오려 시도합니다.
+            // srvsvc 가용 여부에 따라 결과가 달라질 수 있습니다.
+            val shares = session?.listShares()
+            if (shares != null) {
+                for (s in shares) {
+                    if (!s.name.endsWith("$")) result.add(s.name)
+                }
+            }
+        } catch (e: Exception) {
+            // 조회가 막혔을 경우 에러 메시지를 Flutter로 전달
+            result.add("ERROR: PC 보안 정책상 목록을 가져올 수 없습니다. (${e.message})")
+        }
         result
     }
 
-    // [3] listFiles: 진짜 탐색기 엔진 (검증된 for문 구조)
+    // [3] listFiles
     suspend fun listFiles(shareName: String, path: String): List<Map<String, Any>> = withContext(Dispatchers.IO) {
         val result = mutableListOf<Map<String, Any>>()
         try {
+            if (!ensureConnected()) return@withContext result
             val share = session?.connectShare(shareName) as? DiskShare
             if (share != null) {
                 val list = share.list(path)
                 for (info in list) {
                     val name = info.fileName
                     if (name == "." || name == "..") continue
-                    
-                    // 디렉토리 여부 판단 (0x10L = DIRECTORY)
                     val isDir = (info.fileAttributes and 0x00000010L) != 0L
-                    
                     val map = mutableMapOf<String, Any>()
                     map["name"] = name
                     map["isDirectory"] = isDir
                     result.add(map)
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (e: Exception) {}
         result
     }
 
-    // [4] downloadFile (스마트 동기화 포함)
+    // [4] downloadFile (스마트 동기화 & 재접속 보장)
     suspend fun downloadFile(shareName: String, remotePath: String, localPath: String): String? = withContext(Dispatchers.IO) {
         try {
-            val share = session?.connectShare(shareName) as? DiskShare
-            if (share == null) return@withContext null
+            if (!ensureConnected()) return@withContext null
+            val share = session?.connectShare(shareName) as? DiskShare ?: return@withContext null
 
+            // 1. PC 파일 정보 대조
             val remoteInfo = share.getFileInformation(remotePath)
             val remoteSize = remoteInfo.standardInformation.endOfFile
             val remoteTime = remoteInfo.basicInformation.lastWriteTime.toEpoch(TimeUnit.MILLISECONDS)
@@ -96,6 +113,7 @@ class SmbHandler(private val context: Context) {
                 }
             }
 
+            // 2. 다운로드 수행
             localFile.parentFile?.mkdirs()
             val remoteFile = share.openFile(remotePath, EnumSet.of(AccessMask.GENERIC_READ), null, EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ), SMB2CreateDisposition.FILE_OPEN, null)
             remoteFile.inputStream.use { input ->
@@ -113,9 +131,6 @@ class SmbHandler(private val context: Context) {
     }
 
     fun disconnect() {
-        try {
-            session?.close()
-            connection?.close()
-        } catch (e: Exception) {}
+        try { session?.close(); connection?.close() } catch (e: Exception) {}
     }
 }

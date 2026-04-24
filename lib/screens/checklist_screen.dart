@@ -42,11 +42,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     _initApp();
   }
 
-  // ❗ 앱 시작 시 설정 로드 및 SMB 자동 접속 시도
   Future<void> _initApp() async {
     await _loadSettings();
     await _ensureBaseDirectory();
-    _autoConnectSMB(); // ❗ 백그라운드 자동 접속
+    _autoConnectSMB(); 
   }
 
   Future<void> _autoConnectSMB() async {
@@ -230,7 +229,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       return;
     }
 
-    // ❗ 중복 제거 및 가짜 데이터 정리
     Set<String> uniqueShares = {};
     if (_smbShareName.isNotEmpty) uniqueShares.add(_smbShareName);
     for (var s in shares) {
@@ -423,6 +421,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       items: _displayItems.where((i) => !i.isSubheading).toList(),
       initialIndex: _displayItems.where((i) => !i.isSubheading).toList().indexOf(item),
       pdfFolderPath: finalPdfPath,
+      smbService: _smbService,
       onStatusUpdate: (it, type) => _toggleStatus(it, type),
     )));
   }

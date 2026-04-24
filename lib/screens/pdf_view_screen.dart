@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pdfx/pdfx.dart';
 import '../models/item_model.dart';
+import '../services/smb_service.dart'; // ❗ SMB 서비스 추가
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -8,6 +9,7 @@ class PdfViewerScreen extends StatefulWidget {
   final List<ItemModel> items;
   final int initialIndex;
   final String pdfFolderPath;
+  final SmbService smbService; // ❗ 서비스 주입
   final Function(ItemModel, String) onStatusUpdate;
 
   const PdfViewerScreen({
@@ -15,6 +17,7 @@ class PdfViewerScreen extends StatefulWidget {
     required this.items,
     required this.initialIndex,
     required this.pdfFolderPath,
+    required this.smbService,
     required this.onStatusUpdate,
   });
 
@@ -28,6 +31,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   String _currentPdfPath = "";
   Key _viewerKey = UniqueKey();
   final TextEditingController _remarksController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -36,34 +40,43 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _loadPdf();
   }
 
-  // ❗ 검색 로직 강화: 대소문자 무시 및 공백 제거
   Future<void> _loadPdf() async {
     final item = widget.items[_currentIndex];
-    final String cleanCode = item.itemCode.trim(); // ❗ 공백 제거
+    final String cleanCode = item.itemCode.trim();
     
-    // ❗ 여러 후보 경로 생성 (.pdf, .PDF)
-    final List<String> paths = [
-      "${widget.pdfFolderPath}/$cleanCode.pdf",
-      "${widget.pdfFolderPath}/$cleanCode.PDF",
-      "${widget.pdfFolderPath}/$cleanCode.Pdf",
-    ];
+    setState(() => _isLoading = true);
 
-    String? foundPath;
-    for (var p in paths) {
-      if (File(p).existsSync()) {
-        foundPath = p;
-        break;
-      }
-    }
+    String localPath = "";
     
+    // ❗ 1. 만약 SMB 경로라면, 로딩 전에 스마트 동기화(재접속 포함) 실행
+    if (widget.pdfFolderPath.startsWith("smb://")) {
+      try {
+        String shareWithRest = widget.pdfFolderPath.replaceFirst("smb://", "");
+        int firstSlash = shareWithRest.indexOf("/");
+        String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
+        String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
+        String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
+        localPath = "/storage/emulated/0/Download/CheckSheet/$cleanCode.pdf";
+        
+        // 이 호출 하나로 [재접속 + 날짜비교 + 다운로드]가 원스톱으로 처리됨
+        await widget.smbService.downloadFile(share, remoteFilePath, localPath);
+      } catch (e) {
+        debugPrint("Viewer Sync Error: $e");
+      }
+    } else {
+      // 로컬 경로인 경우
+      localPath = "${widget.pdfFolderPath}/$cleanCode.pdf";
+    }
+
     _remarksController.text = item.remarks;
     _pdfController?.dispose();
     
-    if (foundPath != null) {
+    final targetFile = File(localPath);
+    if (targetFile.existsSync()) {
       try {
-        final Uint8List bytes = await File(foundPath).readAsBytes();
+        final Uint8List bytes = await targetFile.readAsBytes();
         setState(() {
-          _currentPdfPath = foundPath!;
+          _currentPdfPath = localPath;
           _pdfController = PdfControllerPinch(
             document: PdfDocument.openData(bytes), 
             initialPage: 1,
@@ -80,6 +93,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         _viewerKey = UniqueKey();
       });
     }
+    setState(() => _isLoading = false);
   }
 
   void _showError(String title, String msg) {
@@ -129,28 +143,29 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       body: Column(
         children: [
           Expanded(
-            child: _pdfController != null
-                ? PdfViewPinch(
-                    key: _viewerKey,
-                    controller: _pdfController!,
-                    scrollDirection: Axis.vertical, 
-                    builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
-                      options: const DefaultBuilderOptions(),
-                      documentLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-                      pageLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-                    ),
-                  )
-                : Center(child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline, color: Colors.red, size: 50),
-                      const SizedBox(height: 10),
-                      Text("PDF 파일을 찾을 수 없습니다.", style: const TextStyle(color: Colors.white, fontSize: 16)),
-                      const SizedBox(height: 5),
-                      Text("경로: ${widget.pdfFolderPath}", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                      Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                    ],
-                  )),
+            child: _isLoading 
+                ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                : (_pdfController != null
+                    ? PdfViewPinch(
+                        key: _viewerKey,
+                        controller: _pdfController!,
+                        scrollDirection: Axis.vertical, 
+                        builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
+                          options: const DefaultBuilderOptions(),
+                          documentLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                          pageLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                        ),
+                      )
+                    : Center(child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline, color: Colors.red, size: 50),
+                          const SizedBox(height: 10),
+                          Text("PDF 파일을 찾을 수 없습니다.", style: const TextStyle(color: Colors.white, fontSize: 16)),
+                          const SizedBox(height: 5),
+                          Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                        ],
+                      ))),
           ),
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
