@@ -15,6 +15,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        
+        // ❗ Proguard 설정 연결
+        proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
 
     compileOptions {
@@ -28,15 +31,17 @@ android {
 
     buildTypes {
         release {
+            // ❗ 릴리즈 빌드에서 라이브러리 유실을 막기 위해 비활성화 유지
             isMinifyEnabled = false
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
         }
     }
 
-    // ❗ [중요] 라이브러리 간 파일 충돌 해결 설정 추가
     packaging {
         resources {
+            // ❗ 모든 메타파일 충돌 방지
+            excludes += "META-INF/*"
             excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
     }
@@ -49,6 +54,9 @@ flutter {
 dependencies {
     implementation("com.hierynomus:smbj:0.13.0")
     implementation("org.codelibs:jcifs:2.1.34")
-    implementation("org.bouncycastle:bcprov-jdk18on:1.78")
+    
+    // ❗ [교체] 안드로이드 최적화 버전으로 변경
+    implementation("org.bouncycastle:bcprov-jdk15to18:1.78")
+    
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
