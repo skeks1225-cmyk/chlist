@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // ❗ 누락되었던 임포트 추가
+import 'package:flutter/services.dart'; 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/item_model.dart';
@@ -43,10 +43,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     _initApp();
   }
 
-  // ❗ 1. 앱 시작 시 즉시 권한 요청 및 초기화
   Future<void> _initApp() async {
     if (Platform.isAndroid) {
-      // 설치 후 첫 실행 시 바로 권한 팝업을 띄움
       if (!await Permission.manageExternalStorage.isGranted) {
         await Permission.manageExternalStorage.request();
       }
@@ -200,25 +198,34 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               TextField(controller: passController, decoration: const InputDecoration(labelText: "PW"), obscureText: true),
               TextField(controller: shareController, decoration: const InputDecoration(labelText: "공유폴더명 (예: 체크시트)")),
               const SizedBox(height: 10),
+              
+              // ❗ 1. 기존 버튼 원상 복구 (안정성 확보)
               ElevatedButton(
                 onPressed: () async {
                   String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
-                  
-                  // ❗ const 제거 (문법 오류 해결)
-                  final List<dynamic> shares = await MethodChannel('org.example.checksheet/smb').invokeMethod('testDiscovery', {
-                    'ip': ipController.text,
-                    'user': userController.text,
-                    'pass': passController.text,
-                  });
-
-                  String msg = err ?? "✅ 접속 성공!";
-                  if (shares.isNotEmpty) {
-                    msg += "\n\n[발견된 공유폴더]\n${shares.join(', ')}";
-                  }
-
-                  _showError(err == null ? "성공" : "접속 실패", msg);
+                  _showError(err == null ? "성공" : "접속 실패", err ?? "✅ 접속 성공!");
                 },
                 child: const Text("접속 테스트"),
+              ),
+              const Divider(height: 30),
+              
+              // ❗ 2. 완전히 분리된 별도 테스트 버튼 (실패해도 영향 없도록)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white),
+                onPressed: () async {
+                  _showSnackBar("정찰 테스트 시작...");
+                  try {
+                    final List<dynamic> shares = await MethodChannel('org.example.checksheet/smb').invokeMethod('testDiscovery', {
+                      'ip': ipController.text,
+                      'user': userController.text,
+                      'pass': passController.text,
+                    });
+                    _showError("정찰 결과", shares.isEmpty ? "검색된 폴더 없음" : "[발견됨]\n${shares.join('\n')}");
+                  } catch (e) {
+                    _showError("정찰 실패", "오류 발생: $e");
+                  }
+                },
+                child: const Text("공유목록 정찰 테스트 (jCIFS)"),
               ),
             ],
           ),
@@ -422,7 +429,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       setState(() => _isLoading = true);
       try {
         String shareWithRest = _pdfFolderPath.replaceFirst("smb://", "");
-        // 끝에 붙은 슬래시 제거 처리
         if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
         
         int firstSlash = shareWithRest.indexOf("/");
@@ -443,7 +449,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(
       items: _displayItems.where((i) => !i.isSubheading).toList(),
       initialIndex: _displayItems.where((i) => !i.isSubheading).toList().indexOf(item),
-      pdfFolderPath: _pdfFolderPath, // ❗ 원본 경로 전달
+      pdfFolderPath: _pdfFolderPath, 
       smbService: _smbService,
       onStatusUpdate: (it, type) => _toggleStatus(it, type),
     )));
