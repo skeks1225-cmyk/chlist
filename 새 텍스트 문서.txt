@@ -3941,3 +3941,9 @@ Flutter Android Build #141: Commit f9f36b6 pushed by skeks1225-cmyk
 접속테스트를 누르면 
 성공 확인창에 전달받은 폴더 리스트 나타나게 해줘.
 그리고 앱이 종료되는 원인으로 짐작가는 사항이 잇니?
+
+
+접속테스트를 누르면
+접속성공
+목록 조회 실패: error: noclassdeffounderror: failed resolution of: lorg/bouncycastle/asn1/asn1applicationspecific; 
+이렇게 나와.

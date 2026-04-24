@@ -28,7 +28,6 @@ android {
 
     buildTypes {
         release {
-            // ❗ 정찰병 라이브러리 유실 방지를 위해 R8 최적화 비활성화 유지
             isMinifyEnabled = false
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
@@ -42,7 +41,11 @@ flutter {
 
 dependencies {
     implementation("com.hierynomus:smbj:0.13.0")
-    // ❗ [성공 검증됨] jCIFS-ng 추가
     implementation("org.codelibs:jcifs:2.1.34")
+    
+    // ❗ [중요] 암호화 라이브러리(Bouncy Castle) 명시적 추가
+    // NoClassDefFoundError를 해결하기 위한 필수 장비입니다.
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78")
+    
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
