@@ -19,7 +19,7 @@ class SmbHandler(private val context: Context) {
     private var lastUser: String? = null
     private var lastPass: String? = null
 
-    // 비동기 초기화로 메인 쓰레드 튕김 방지
+    // ❗ 네트워크 작업을 위해 지연 초기화 (Crash 방지)
     private suspend fun ensureContext(): BaseContext = withContext(Dispatchers.IO) {
         if (baseContext != null) return@withContext baseContext!!
         
@@ -61,7 +61,7 @@ class SmbHandler(private val context: Context) {
         return ctx.withCredentials(auth)
     }
 
-    // [2] listShares (진짜 자동 목록)
+    // [2] listShares
     suspend fun listShares(): List<String> = withContext(Dispatchers.IO) {
         val result = mutableListOf<String>()
         try {

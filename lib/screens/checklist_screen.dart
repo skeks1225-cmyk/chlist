@@ -49,6 +49,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
     await _loadSettings();
     await _ensureBaseDirectory();
+    // ❗ [개선] 불필요한 자동 접속을 제거하여 초기 실행 안정성을 확보합니다.
   }
 
   Future<void> _ensureBaseDirectory() async {
@@ -273,14 +274,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     else _showError("오류", "파일 다운로드 실패");
   }
 
-  // ❗ [신규] PDF 전체 스마트 동기화
+  // ❗ PDF 전체 스마트 동기화 (리스트 품목 기준)
   Future<void> _syncAllPdfs() async {
     if (_originalItems.isEmpty) return;
     List<ItemModel> targets = _originalItems.where((i) => !i.isSubheading).toList();
     
     setState(() => _isLoading = true);
-    int count = 0;
-    
     try {
       String shareWithRest = _pdfFolderPath.replaceFirst("smb://", "");
       if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
@@ -292,10 +291,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         String cleanCode = item.itemCode.trim();
         String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
         String localFilePath = "$_baseDownloadPath/CheckSheet/$cleanCode.pdf";
-        
         await _smbService.downloadFile(share, remoteFilePath, localFilePath);
-        count++;
-        // 진행 상황 표시 (선택 사항)
       }
       _showSnackBar("✅ ${targets.length}개 품목 동기화 완료!");
     } catch (e) {
@@ -378,7 +374,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 const SizedBox(width: 4),
                 _topBtn("PDF폴더", () => _pickSource('dir'), isDark),
                 const SizedBox(width: 4),
-                // ❗ PDF 폴더가 SMB일 때만 나타나는 [전체동기화] 버튼
                 if (isSmbPdf) ...[
                   ElevatedButton(
                     onPressed: _isLoading ? null : _syncAllPdfs,

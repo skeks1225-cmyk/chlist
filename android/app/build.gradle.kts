@@ -36,9 +36,9 @@ android {
         }
     }
 
-    // ❗ [수정] 서명 파일(*.SF, *.RSA)은 제외하지 않습니다. (에러 해결 핵심)
     packaging {
         resources {
+            // ❗ 중복 파일만 처리하고, 인증서(*.RSA, *.SF)는 절대 건드리지 않음
             pickFirst("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
             excludes += "META-INF/NOTICE"
             excludes += "META-INF/LICENSE"
@@ -47,20 +47,12 @@ android {
     }
 }
 
-// ❗ Bouncy Castle 버전 강제 고정
-configurations.all {
-    resolutionStrategy {
-        force("org.bouncycastle:bcprov-jdk18on:1.78.1")
-    }
-}
-
 flutter {
     source = "../.."
 }
 
 dependencies {
-    // jCIFS-ng 단일 엔진 체제
+    // ❗ 검증된 jCIFS-ng 단일 엔진 체제
     implementation("org.codelibs:jcifs:2.1.34")
-    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
