@@ -52,6 +52,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (widget.pdfFolderPath.startsWith("smb://")) {
       try {
         String shareWithRest = widget.pdfFolderPath.replaceFirst("smb://", "");
+        // 끝에 붙은 슬래시 제거 처리
+        if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
+
         int firstSlash = shareWithRest.indexOf("/");
         String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
         String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
@@ -70,7 +73,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _remarksController.text = item.remarks;
     _pdfController?.dispose();
     
-    // ❗ 동기화 결과를 바탕으로 파일 로드 시도
     final targetFile = File(localPath);
     if (targetFile.existsSync()) {
       try {
@@ -105,14 +107,14 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   void _next() {
     if (_currentIndex < widget.items.length - 1) {
       setState(() => _currentIndex++);
-      _loadPdf(); // ❗ 이동 시에도 항상 _loadPdf 호출
+      _loadPdf();
     }
   }
 
   void _prev() {
     if (_currentIndex > 0) {
       setState(() => _currentIndex--);
-      _loadPdf(); // ❗ 이동 시에도 항상 _loadPdf 호출
+      _loadPdf();
     }
   }
 

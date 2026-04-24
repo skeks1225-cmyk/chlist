@@ -42,7 +42,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     _initApp();
   }
 
+  // ❗ 1. 앱 시작 시 즉시 권한 요청 및 초기화
   Future<void> _initApp() async {
+    if (Platform.isAndroid) {
+      // 설치 후 첫 실행 시 바로 권한 팝업을 띄움
+      if (!await Permission.manageExternalStorage.isGranted) {
+        await Permission.manageExternalStorage.request();
+      }
+    }
     await _loadSettings();
     await _ensureBaseDirectory();
     _autoConnectSMB(); 
@@ -224,6 +231,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     setState(() => _isLoading = false);
     if (!mounted) return;
 
+    if (shares.isNotEmpty && shares[0].startsWith("ERROR:")) {
+      _showError("탐색 실패", shares[0].replaceFirst("ERROR:", "").trim());
+      return;
+    }
+
     Set<String> uniqueShares = {};
     if (_smbShareName.isNotEmpty) uniqueShares.add(_smbShareName);
     for (var s in shares) {
@@ -282,7 +294,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Future<void> _openCustomPicker(String mode) async {
-    if (Platform.isAndroid) { if (!await Permission.manageExternalStorage.isGranted) await Permission.manageExternalStorage.request(); }
     final prefs = await SharedPreferences.getInstance();
     String startPath = prefs.getString('lastDir') ?? "$_baseDownloadPath/CheckSheet";
     if (!Directory(startPath).existsSync()) startPath = _baseDownloadPath;
@@ -397,6 +408,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       setState(() => _isLoading = true);
       try {
         String shareWithRest = _pdfFolderPath.replaceFirst("smb://", "");
+        // 끝에 붙은 슬래시 제거 처리
+        if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
+        
         int firstSlash = shareWithRest.indexOf("/");
         String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
         String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
@@ -415,7 +429,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(
       items: _displayItems.where((i) => !i.isSubheading).toList(),
       initialIndex: _displayItems.where((i) => !i.isSubheading).toList().indexOf(item),
-      pdfFolderPath: finalPdfPath,
+      pdfFolderPath: _pdfFolderPath, // ❗ 원본 경로 전달
       smbService: _smbService,
       onStatusUpdate: (it, type) => _toggleStatus(it, type),
     )));
