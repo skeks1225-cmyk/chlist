@@ -203,8 +203,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 onPressed: () async {
                   String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
                   
-                  // ❗ 정찰병 테스트 실행
-                  final List<dynamic> shares = await const MethodChannel('org.example.checksheet/smb').invokeMethod('testDiscovery', {
+                  // ❗ const 제거 (문법 오류 해결)
+                  final List<dynamic> shares = await MethodChannel('org.example.checksheet/smb').invokeMethod('testDiscovery', {
                     'ip': ipController.text,
                     'user': userController.text,
                     'pass': passController.text,
