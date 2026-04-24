@@ -48,11 +48,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
     String localPath = "";
     
-    // ❗ 핵심: 모든 로딩 전 동기화 로직을 항상 먼저 실행
     if (widget.pdfFolderPath.startsWith("smb://")) {
       try {
         String shareWithRest = widget.pdfFolderPath.replaceFirst("smb://", "");
-        // 끝에 붙은 슬래시 제거 처리
         if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
 
         int firstSlash = shareWithRest.indexOf("/");
@@ -61,7 +59,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
         localPath = "/storage/emulated/0/Download/CheckSheet/$cleanCode.pdf";
         
-        // ❗ 엔진 내부에서 [재접속 + 대소문자무시 + 날짜비교]가 일어남
         await widget.smbService.downloadFile(share, remoteFilePath, localPath);
       } catch (e) {
         debugPrint("Viewer Sync Error: $e");
@@ -169,56 +166,60 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         ],
                       ))),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-            color: Colors.grey[900],
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: TextField(
-                    controller: _remarksController,
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
-                    decoration: InputDecoration(
-                      hintText: "비고 입력...",
-                      hintStyle: TextStyle(color: Colors.grey[500]),
-                      filled: true,
-                      fillColor: Colors.black26,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.check_circle, color: Colors.blue),
-                        onPressed: () {
-                          item.remarks = _remarksController.text;
-                          widget.onStatusUpdate(item, 'remarks');
-                          FocusScope.of(context).unfocus();
-                        },
+          // ❗ 내비게이션 바 간섭 방지를 위한 SafeArea 적용
+          SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+              color: Colors.grey[900],
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TextField(
+                      controller: _remarksController,
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                      decoration: InputDecoration(
+                        hintText: "비고 입력...",
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        filled: true,
+                        fillColor: Colors.black26,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.check_circle, color: Colors.blue),
+                          onPressed: () {
+                            item.remarks = _remarksController.text;
+                            widget.onStatusUpdate(item, 'remarks');
+                            FocusScope.of(context).unfocus();
+                          },
+                        ),
                       ),
+                      onSubmitted: (val) {
+                        item.remarks = val;
+                        widget.onStatusUpdate(item, 'remarks');
+                      },
                     ),
-                    onSubmitted: (val) {
-                      item.remarks = val;
-                      widget.onStatusUpdate(item, 'remarks');
-                    },
                   ),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _statusBtn("완료", Colors.green, item.complete, () { widget.onStatusUpdate(item, 'complete'); setState(() {}); }),
-                    _statusBtn("부족", Colors.orange, item.shortage, () { widget.onStatusUpdate(item, 'shortage'); setState(() {}); }),
-                    _statusBtn("재작업", Colors.red, item.rework, () { widget.onStatusUpdate(item, 'rework'); setState(() {}); }),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    ElevatedButton.icon(onPressed: _prev, icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45))),
-                    Text("${_currentIndex + 1} / ${widget.items.length}", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                    ElevatedButton.icon(onPressed: _next, icon: const Icon(Icons.arrow_forward), label: const Text("다음", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45))),
-                  ],
-                )
-              ],
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _statusBtn("완료", Colors.green, item.complete, () { widget.onStatusUpdate(item, 'complete'); setState(() {}); }),
+                      _statusBtn("부족", Colors.orange, item.shortage, () { widget.onStatusUpdate(item, 'shortage'); setState(() {}); }),
+                      _statusBtn("재작업", Colors.red, item.rework, () { widget.onStatusUpdate(item, 'rework'); setState(() {}); }),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ElevatedButton.icon(onPressed: _prev, icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45))),
+                      Text("${_currentIndex + 1} / ${widget.items.length}", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      ElevatedButton.icon(onPressed: _next, icon: const Icon(Icons.arrow_forward), label: const Text("다음", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45))),
+                    ],
+                  )
+                ],
+              ),
             ),
           )
         ],

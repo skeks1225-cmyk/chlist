@@ -33,8 +33,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   String _currentSortCol = ""; 
   bool _isAscending = true;   
 
-  String _smbShareName = "체크시트"; 
-
   final String _baseDownloadPath = "/storage/emulated/0/Download";
 
   @override
@@ -75,7 +73,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _excelPath = prefs.getString('excelPath') ?? "";
       _pdfFolderPath = prefs.getString('pdfFolderPath') ?? "";
       _autoSave = prefs.getBool('autoSave') ?? true;
-      _smbShareName = prefs.getString('smbShareName') ?? "체크시트";
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -90,7 +87,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setString('excelPath', _excelPath);
     await prefs.setString('pdfFolderPath', _pdfFolderPath);
     await prefs.setBool('autoSave', _autoSave);
-    await prefs.setString('smbShareName', _smbShareName);
   }
 
   Future<void> _loadExcelData(String path) async {
@@ -184,7 +180,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final ipController = TextEditingController(text: prefs.getString('smbIp'));
     final userController = TextEditingController(text: prefs.getString('smbUser'));
     final passController = TextEditingController(text: prefs.getString('smbPass'));
-    final shareController = TextEditingController(text: _smbShareName);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -196,7 +191,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               TextField(controller: ipController, decoration: const InputDecoration(labelText: "IP 주소")),
               TextField(controller: userController, decoration: const InputDecoration(labelText: "ID")),
               TextField(controller: passController, decoration: const InputDecoration(labelText: "PW"), obscureText: true),
-              TextField(controller: shareController, decoration: const InputDecoration(labelText: "공유폴더명 (예: 체크시트)")),
               const SizedBox(height: 10),
               ElevatedButton(
                 onPressed: () async {
@@ -214,8 +208,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             await prefs.setString('smbIp', ipController.text);
             await prefs.setString('smbUser', userController.text);
             await prefs.setString('smbPass', passController.text);
-            setState(() => _smbShareName = shareController.text); 
-            await prefs.setString('smbShareName', _smbShareName);
             _smbService.setConfig(ipController.text, userController.text, passController.text);
             Navigator.pop(ctx);
           }, child: const Text("저장")),
@@ -235,21 +227,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       return;
     }
 
-    Set<String> uniqueShares = {};
-    if (_smbShareName.isNotEmpty) uniqueShares.add(_smbShareName);
-    for (var s in shares) {
-      if (s != "설정된 공유폴더" && s != "Shared" && s != "Users" && s != "Public") {
-        uniqueShares.add(s);
-      }
-    }
-    List<String> displayList = uniqueShares.toList();
-
-    if (displayList.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다."); return; }
+    if (shares.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다."); return; }
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("공유폴더 선택"),
-        content: SizedBox(width: double.maxFinite, child: ListView.builder(shrinkWrap: true, itemCount: displayList.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.folder_shared), title: Text(displayList[i]), onTap: () { Navigator.pop(ctx); _showSmbFiles(displayList[i], "", mode); }))),
+        content: SizedBox(width: double.maxFinite, child: ListView.builder(shrinkWrap: true, itemCount: shares.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.folder_shared), title: Text(shares[i]), onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i], "", mode); }))),
       ),
     );
   }

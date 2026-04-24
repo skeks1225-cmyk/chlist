@@ -28,6 +28,7 @@ android {
 
     buildTypes {
         release {
+            // ❗ 정찰병 라이브러리 유실 방지를 위해 R8 최적화 비활성화 유지
             isMinifyEnabled = false
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
@@ -41,6 +42,7 @@ flutter {
 
 dependencies {
     implementation("com.hierynomus:smbj:0.13.0")
-    // ❗ jcifs-ng 의존성 제거 (청소 완료)
+    // ❗ [성공 검증됨] jCIFS-ng 추가
+    implementation("org.codelibs:jcifs:2.1.34")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
