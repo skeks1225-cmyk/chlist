@@ -49,8 +49,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
     await _loadSettings();
     await _ensureBaseDirectory();
-    // ❗ [수정] 앱 실행 시 자동 접속(_autoConnectSMB) 기능을 삭제합니다.
-    // 이제 실제 공유폴더 작업이 필요할 때만 접속합니다.
   }
 
   Future<void> _ensureBaseDirectory() async {
@@ -186,24 +184,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ElevatedButton(
                 onPressed: () async {
                   String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
-                  
                   String msg = "";
                   if (err == null) {
                     msg = "✅ 접속 성공!";
                     List<String> shares = await _smbService.listShares();
                     if (shares.isNotEmpty) {
-                      if (shares[0].startsWith("ERROR:")) {
-                        msg += "\n\n⚠️ 목록 조회 실패: ${shares[0]}";
-                      } else {
-                        msg += "\n\n[발견된 공유폴더]\n${shares.join('\n')}";
-                      }
-                    } else {
-                      msg += "\n\n⚠️ 공유된 폴더가 없거나 조회할 수 없습니다.";
-                    }
-                  } else {
-                    msg = "접속 실패: $err";
-                  }
-
+                      if (shares[0].startsWith("ERROR:")) msg += "\n\n⚠️ 목록 조회 실패: ${shares[0]}";
+                      else msg += "\n\n[발견된 공유폴더]\n${shares.join('\n')}";
+                    } else msg += "\n\n⚠️ 공유된 폴더가 없거나 조회할 수 없습니다.";
+                  } else msg = "접속 실패: $err";
                   _showError(err == null ? "성공" : "오류", msg);
                 },
                 child: const Text("접속 테스트"),
@@ -231,14 +220,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       List<String> shares = await _smbService.listShares();
       setState(() => _isLoading = false);
       if (!mounted) return;
-
-      if (shares.isNotEmpty && shares[0].startsWith("ERROR:")) {
-        _showError("탐색 실패", shares[0].replaceFirst("ERROR:", "").trim());
-        return;
-      }
-
-      if (shares.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다. (PC 설정을 확인하세요)"); return; }
-      
+      if (shares.isNotEmpty && shares[0].startsWith("ERROR:")) { _showError("탐색 실패", shares[0].replaceFirst("ERROR:", "").trim()); return; }
+      if (shares.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다."); return; }
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -248,7 +231,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       );
     } catch (e) {
       setState(() => _isLoading = false);
-      _showError("치명적 오류", "앱이 일시적으로 응답하지 않습니다: $e");
+      _showError("치명적 오류", "응답이 없습니다: $e");
     }
   }
 
@@ -288,6 +271,38 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     setState(() => _isLoading = false);
     if (file != null) _loadExcelData(file.path);
     else _showError("오류", "파일 다운로드 실패");
+  }
+
+  // ❗ [신규] PDF 전체 스마트 동기화
+  Future<void> _syncAllPdfs() async {
+    if (_originalItems.isEmpty) return;
+    List<ItemModel> targets = _originalItems.where((i) => !i.isSubheading).toList();
+    
+    setState(() => _isLoading = true);
+    int count = 0;
+    
+    try {
+      String shareWithRest = _pdfFolderPath.replaceFirst("smb://", "");
+      if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
+      int firstSlash = shareWithRest.indexOf("/");
+      String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
+      String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
+
+      for (var item in targets) {
+        String cleanCode = item.itemCode.trim();
+        String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
+        String localFilePath = "$_baseDownloadPath/CheckSheet/$cleanCode.pdf";
+        
+        await _smbService.downloadFile(share, remoteFilePath, localFilePath);
+        count++;
+        // 진행 상황 표시 (선택 사항)
+      }
+      _showSnackBar("✅ ${targets.length}개 품목 동기화 완료!");
+    } catch (e) {
+      _showError("동기화 오류", e.toString());
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _openCustomPicker(String mode) async {
@@ -339,6 +354,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    bool isSmbPdf = _pdfFolderPath.startsWith("smb://");
+
     return Scaffold(
       appBar: AppBar(
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(_currentFileName, style: const TextStyle(fontSize: 12))]),
@@ -361,9 +378,18 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 const SizedBox(width: 4),
                 _topBtn("PDF폴더", () => _pickSource('dir'), isDark),
                 const SizedBox(width: 4),
-                ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(60, 45)), child: const Text("리셋")),
+                // ❗ PDF 폴더가 SMB일 때만 나타나는 [전체동기화] 버튼
+                if (isSmbPdf) ...[
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _syncAllPdfs,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(60, 45), padding: const EdgeInsets.symmetric(horizontal: 8)),
+                    child: const Text("전체동기화", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("리셋", style: TextStyle(fontSize: 12))),
                 const SizedBox(width: 4),
-                ElevatedButton(onPressed: _manualSave, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(60, 45)), child: const Text("저장")),
+                ElevatedButton(onPressed: _manualSave, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("저장", style: TextStyle(fontSize: 12))),
               ],
             ),
           ),
@@ -400,13 +426,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Future<void> _handleItemClick(ItemModel item) async {
-    String finalPdfPath = "$_baseDownloadPath/CheckSheet";
     if (_pdfFolderPath.startsWith("smb://")) {
       setState(() => _isLoading = true);
       try {
         String shareWithRest = _pdfFolderPath.replaceFirst("smb://", "");
         if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
-        
         int firstSlash = shareWithRest.indexOf("/");
         String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
         String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
@@ -418,8 +442,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       } finally {
         setState(() => _isLoading = false);
       }
-    } else {
-      finalPdfPath = _pdfFolderPath;
     }
     if (!mounted) return;
     Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(
