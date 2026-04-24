@@ -22,10 +22,10 @@ jobs:
           channel: 'stable'
           flutter-version: '3.41.7'
 
-      # ❗ 메인 앱 빌드 과정 삭제 (오직 테스트 앱만 진행)
-      - name: Build SMB Test App
+      # ❗ 오직 'pure_smb_test' 프로젝트만 빌드
+      - name: Build Pure SMB Test App
         run: |
-          cd smb_test_app
+          cd pure_smb_test
           flutter clean
           flutter pub get
           flutter build apk --release
@@ -33,5 +33,5 @@ jobs:
       - name: Upload Test APK
         uses: actions/upload-artifact@v4
         with:
-          name: SMB-Test-APK
-          path: smb_test_app/build/app/outputs/flutter-apk/app-release.apk
+          name: SMB-Scanner-Test-APK
+          path: pure_smb_test/build/app/outputs/flutter-apk/app-release.apk
