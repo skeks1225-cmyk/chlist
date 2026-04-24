@@ -33,6 +33,13 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    // ❗ [중요] 라이브러리 간 파일 충돌 해결 설정 추가
+    packaging {
+        resources {
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
+    }
 }
 
 flutter {
@@ -42,10 +49,6 @@ flutter {
 dependencies {
     implementation("com.hierynomus:smbj:0.13.0")
     implementation("org.codelibs:jcifs:2.1.34")
-    
-    // ❗ [중요] 암호화 라이브러리(Bouncy Castle) 명시적 추가
-    // NoClassDefFoundError를 해결하기 위한 필수 장비입니다.
     implementation("org.bouncycastle:bcprov-jdk18on:1.78")
-    
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
