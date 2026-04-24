@@ -41,7 +41,6 @@ flutter {
 
 dependencies {
     implementation("com.hierynomus:smbj:0.13.0")
-    // ❗ [테스트용 정찰병] jCIFS-ng 추가
-    implementation("org.codelibs:jcifs:2.1.34")
+    // ❗ jcifs-ng 의존성 제거 (청소 완료)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
