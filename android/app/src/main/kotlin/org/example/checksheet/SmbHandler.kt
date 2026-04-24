@@ -19,6 +19,7 @@ class SmbHandler(private val context: Context) {
     private var lastUser: String? = null
     private var lastPass: String? = null
 
+    // 비동기 초기화로 메인 쓰레드 튕김 방지
     private suspend fun ensureContext(): BaseContext = withContext(Dispatchers.IO) {
         if (baseContext != null) return@withContext baseContext!!
         
@@ -60,7 +61,7 @@ class SmbHandler(private val context: Context) {
         return ctx.withCredentials(auth)
     }
 
-    // [2] listShares
+    // [2] listShares (진짜 자동 목록)
     suspend fun listShares(): List<String> = withContext(Dispatchers.IO) {
         val result = mutableListOf<String>()
         try {
@@ -100,7 +101,7 @@ class SmbHandler(private val context: Context) {
         result
     }
 
-    // [4] downloadFile
+    // [4] downloadFile (스마트 동기화 & 대소문자 무시)
     suspend fun downloadFile(shareName: String, remotePath: String, localPath: String): String? = withContext(Dispatchers.IO) {
         try {
             val ip = lastIp ?: return@withContext null

@@ -30,24 +30,24 @@ android {
 
     buildTypes {
         release {
-            // ❗ 라이브러리 유실 방지를 위해 최적화 비활성화
             isMinifyEnabled = false
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
         }
     }
 
-    // ❗ [지옥 탈출 핵심] 중복 파일 충돌을 모든 경로에서 완벽히 차단
+    // ❗ [수정] 서명 파일(*.SF, *.RSA)은 제외하지 않습니다. (에러 해결 핵심)
     packaging {
         resources {
-            excludes += "META-INF/**"
-            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
-            excludes += "OSGI-INF/**"
+            pickFirst("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+            excludes += "META-INF/NOTICE"
+            excludes += "META-INF/LICENSE"
+            excludes += "META-INF/DEPENDENCIES"
         }
     }
 }
 
-// ❗ 라이브러리 간 버전 전쟁 종식 (1.78.1로 강제 통일)
+// ❗ Bouncy Castle 버전 강제 고정
 configurations.all {
     resolutionStrategy {
         force("org.bouncycastle:bcprov-jdk18on:1.78.1")
@@ -59,6 +59,7 @@ flutter {
 }
 
 dependencies {
+    // jCIFS-ng 단일 엔진 체제
     implementation("org.codelibs:jcifs:2.1.34")
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
