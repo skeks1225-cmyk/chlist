@@ -22,16 +22,29 @@ jobs:
           channel: 'stable'
           flutter-version: '3.41.7'
 
-      - name: Clean and Get dependencies
+      # --- 1. 메인 앱 빌드 ---
+      - name: Build Main App
         run: |
           flutter clean
           flutter pub get
+          flutter build apk --release
         
-      - name: Build APK
-        run: flutter build apk --release
-
-      - name: Upload APK
+      - name: Upload Main APK
         uses: actions/upload-artifact@v4
         with:
-          name: CheckSheet-Final-APK
+          name: CheckSheet-Main-APK
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      # --- 2. 독립 테스트 앱 빌드 ---
+      - name: Build SMB Test App
+        run: |
+          cd smb_test_app
+          flutter clean
+          flutter pub get
+          flutter build apk --release
+        
+      - name: Upload Test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SMB-Test-APK
+          path: smb_test_app/build/app/outputs/flutter-apk/app-release.apk
