@@ -24,6 +24,15 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    // ❗ R8 최적화 비활성화 (jcifs-ng 라이브러리 유실 방지)
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
 }
 
 flutter {
