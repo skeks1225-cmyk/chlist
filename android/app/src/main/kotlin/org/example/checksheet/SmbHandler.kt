@@ -50,12 +50,12 @@ class SmbHandler(private val context: Context) {
             val auth = AuthenticationContext(user, pass.toCharArray(), "")
             session = connection?.authenticate(auth)
             if (session != null) "SUCCESS" else "인증 실패"
-        } catch (e: Exception) {
-            e.message ?: e.toString()
+        } catch (t: Throwable) {
+            t.message ?: t.toString()
         }
     }
 
-    // ❗ [정찰병 로직 통합] jCIFS-ng를 사용하여 진짜 모든 공유폴더 목록을 가져옴
+    // ❗ [목록 조회 강화] 앱이 죽지 않도록 Throwable로 감싸고 정교하게 처리
     suspend fun listShares(): List<String> = withContext(Dispatchers.IO) {
         val result = mutableListOf<String>()
         try {
@@ -84,8 +84,9 @@ class SmbHandler(private val context: Context) {
                     result.add(name)
                 }
             }
-        } catch (e: Exception) {
-            result.add("ERROR: 목록 조회 실패 (${e.message})")
+        } catch (t: Throwable) {
+            // ❗ 절대 앱이 죽지 않게 텍스트로 에러 반환
+            result.add("ERROR: ${t.javaClass.simpleName}: ${t.message ?: "알 수 없는 이유로 중단됨"}")
         }
         result
     }
@@ -107,7 +108,7 @@ class SmbHandler(private val context: Context) {
                     result.add(map)
                 }
             }
-        } catch (e: Exception) {}
+        } catch (t: Throwable) {}
         result
     }
 
@@ -116,7 +117,6 @@ class SmbHandler(private val context: Context) {
             if (!ensureConnected()) return@withContext null
             val share = session?.connectShare(shareName) as? DiskShare ?: return@withContext null
 
-            // 지능형 대소문자 매칭
             val parentPath = File(remotePath).parent ?: ""
             val targetFileName = File(remotePath).name
             val fileList = share.list(parentPath)
@@ -145,11 +145,11 @@ class SmbHandler(private val context: Context) {
             remoteFile.close()
             localFile.setLastModified(remoteTime)
             return@withContext localPath
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (t: Throwable) { t.printStackTrace() }
         null
     }
 
     fun disconnect() {
-        try { session?.close(); connection?.close() } catch (e: Exception) {}
+        try { session?.close(); connection?.close() } catch (t: Throwable) {}
     }
 }
