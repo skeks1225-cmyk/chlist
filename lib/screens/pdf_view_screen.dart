@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pdfrx/pdfrx.dart'; // ❗ 1.3.5 버전 규격 사용
+import 'package:pdfrx/pdfrx.dart'; 
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
 import 'dart:io';
@@ -63,7 +63,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _remarksController.text = item.remarks;
     setState(() {
       _currentPdfPath = File(localPath).existsSync() ? localPath : "";
-      // ❗ 줌 초기화 및 화면 리프레시를 위해 새로운 키 할당
       _viewerKey = UniqueKey(); 
       _isLoading = false;
     });
@@ -73,7 +72,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(title), content: Text(msg), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
   }
 
-  // ❗ 1.3.5 버전 규격에 맞는 가장 확실한 FIT(줌 리셋) 방법
   void _resetFit() {
     _loadPdf(); 
   }
@@ -102,6 +100,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   Widget build(BuildContext context) {
     final item = widget.items[_currentIndex];
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // ❗ 테마에 따른 공통 배경색 정의
+    final Color viewerBgColor = isDark ? Colors.black : Colors.grey[300]!;
 
     return Scaffold(
       appBar: AppBar(
@@ -123,14 +124,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
                 : (_currentPdfPath.isNotEmpty
                     ? Container(
-                        color: isDark ? Colors.black : Colors.grey[300],
+                        // ❗ 뷰어 바깥쪽 여백 색상을 테마에 맞춤
+                        color: viewerBgColor,
                         child: PdfViewer.file(
                           _currentPdfPath,
                           key: _viewerKey,
                           controller: _pdfController,
-                          // ❗ 1.3.5 버전용 최소 파라미터 적용 (에러 유발 옵션 전량 삭제)
                           params: PdfViewerParams(
                             maxScale: 15.0,
+                            // ❗ 뷰어 안쪽 배경색을 테마에 맞춤
+                            backgroundColor: viewerBgColor,
                             onViewerReady: (document, controller) {
                               debugPrint("뷰어 로드 완료");
                             },
@@ -149,7 +152,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       ))),
           ),
           SafeArea(
-            top: false,
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
               color: isDark ? Colors.grey[900] : Colors.white,
