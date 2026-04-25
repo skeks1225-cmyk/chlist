@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pdfrx/pdfrx.dart'; 
+import 'package:pdfrx/pdfrx.dart'; // ❗ 최신 2.2.24 버전 사용
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
 import 'dart:io';
@@ -72,9 +72,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(title), content: Text(msg), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
   }
 
-  // ❗ 1.3.5 버전은 zoomTo(scale: 1.0) 방식 사용
+  // ❗ 최신 버전은 행렬 초기화 방식 사용
   void _resetFit() {
-    _pdfController.zoomTo(scale: 1.0);
+    _pdfController.zoomTo(matrix: Matrix4.identity());
   }
 
   void _next() {
@@ -127,10 +127,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                           _currentPdfPath,
                           key: _viewerKey,
                           controller: _pdfController,
-                          // ❗ 1.3.5 버전 규격에 맞는 파라미터 적용
+                          // ❗ 최신 버전의 정석 파라미터 적용
                           params: PdfViewerParams(
-                            maxScale: 15.0,
-                            layoutPages: pdfPageLayoutVertical, // 전용 레이아웃 함수
+                            maxScale: 10.0,
+                            layoutPages: (pages, params) => PdfPageLayout.column(pages, params),
                           ),
                         ),
                       )
