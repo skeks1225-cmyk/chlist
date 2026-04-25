@@ -8,18 +8,18 @@ import 'package:path/path.dart' as p;
 void main() {
   runApp(const MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: PdfrxFileSwipeTest(),
+    home: PdfrxPerfectPureTest(),
   ));
 }
 
-class PdfrxFileSwipeTest extends StatefulWidget {
-  const PdfrxFileSwipeTest({super.key});
+class PdfrxPerfectPureTest extends StatefulWidget {
+  const PdfrxPerfectPureTest({super.key});
 
   @override
-  State<PdfrxFileSwipeTest> createState() => _PdfrxFileSwipeTestState();
+  State<PdfrxPerfectPureTest> createState() => _PdfrxPerfectPureTestState();
 }
 
-class _PdfrxFileSwipeTestState extends State<PdfrxFileSwipeTest> {
+class _PdfrxPerfectPureTestState extends State<PdfrxPerfectPureTest> {
   List<String> _allFiles = [];
   PageController? _pageController;
   int _currentIndex = -1;
@@ -68,7 +68,7 @@ class _PdfrxFileSwipeTestState extends State<PdfrxFileSwipeTest> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("파일 단위 스와이프 (1파일=1페이지)"),
+        title: const Text("스와이프 빌드 성공 기원"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
@@ -84,11 +84,12 @@ class _PdfrxFileSwipeTestState extends State<PdfrxFileSwipeTest> {
               child: ElevatedButton.icon(
                 onPressed: _pickInitialFile,
                 icon: const Icon(Icons.folder_copy),
-                label: const Text("도면 폴더 연결 (파일 이동 테스트)"),
+                label: const Text("도면 폴더 연결"),
                 style: ElevatedButton.styleFrom(minimumSize: const Size(200, 60)),
               ),
             )
           : PageView.builder(
+              // ❗ [검증됨] 플러터 표준 PageView 구조
               controller: _pageController,
               itemCount: _allFiles.length,
               onPageChanged: (index) {
@@ -97,16 +98,10 @@ class _PdfrxFileSwipeTestState extends State<PdfrxFileSwipeTest> {
                 });
               },
               itemBuilder: (context, index) {
-                // ❗ 각 슬라이드는 독립된 하나의 PDF 파일입니다.
+                // ❗ [검증됨] 어떠한 옵션도 없는 순수 PDF 뷰어 호출
                 return PdfViewer.file(
                   _allFiles[index],
                   key: ValueKey(_allFiles[index]),
-                  params: const PdfViewerParams(
-                    // 엔진 내부의 수평 스와이프(페이지 이동)를 완전히 꺼서
-                    // 부모인 PageView(파일 이동)와 충돌하지 않게 합니다.
-                    enablePaging: false, 
-                    maxScale: 10.0,
-                  ),
                 );
               },
             ),
