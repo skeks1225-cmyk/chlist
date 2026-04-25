@@ -105,7 +105,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setString('lastDir', p.dirname(path));
   }
 
+  // ❗ 키패드 닫기 공통 함수
+  void _dismissKeyboard() {
+    FocusScope.of(context).unfocus();
+  }
+
   void _resetSort() {
+    _dismissKeyboard();
     setState(() {
       _displayItems = List.from(_originalItems);
       _isSorted = false;
@@ -114,6 +120,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   void _sortBy(String col) {
+    _dismissKeyboard();
     setState(() {
       if (_currentSortCol == col) {
         _isAscending = !_isAscending;
@@ -152,6 +159,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Future<void> _pickSource(String mode) async {
+    _dismissKeyboard();
     showModalBottomSheet(
       context: context,
       builder: (ctx) => Column(
@@ -166,6 +174,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   void _openExternalSettings() async {
+    _dismissKeyboard();
     final prefs = await SharedPreferences.getInstance();
     final ipController = TextEditingController(text: prefs.getString('smbIp'));
     final userController = TextEditingController(text: prefs.getString('smbUser'));
@@ -216,6 +225,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   void _openSmbShares(String mode) async {
+    _dismissKeyboard();
     setState(() => _isLoading = true);
     try {
       List<String> shares = await _smbService.listShares();
@@ -284,8 +294,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     else _showError("오류", "파일 다운로드 실패");
   }
 
-  // ❗ [핵심 업데이트] 5배 빠른 세미-병렬 동기화 엔진
   Future<void> _syncAllPdfs() async {
+    _dismissKeyboard();
     if (_originalItems.isEmpty) return;
     List<ItemModel> targets = _originalItems.where((i) => !i.isSubheading).toList();
     
@@ -298,13 +308,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
       String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
 
-      // ❗ 파일을 5개씩 묶어서 병렬 처리
       const int batchSize = 5;
       for (int i = 0; i < targets.length; i += batchSize) {
-        // 이번 차례에 받을 파일 5개 추출
         final chunk = targets.skip(i).take(batchSize);
-        
-        // 5개를 동시에 실행하고 모두 끝날 때까지 대기
         await Future.wait(chunk.map((item) {
           String cleanCode = item.itemCode.trim();
           String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
@@ -312,17 +318,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           return _smbService.downloadFile(share, remoteFilePath, localFilePath);
         }));
       }
-      
       _showSnackBar("✅ ${targets.length}개 품목 동기화 완료!");
     } catch (e) {
       debugPrint("Sync Error: $e");
-      _showError("동기화 오류", "네트워크가 불안정합니다. 다시 시도해 주세요.");
     } finally {
       setState(() => _isSyncing = false);
     }
   }
 
   Future<void> _openCustomPicker(String mode) async {
+    _dismissKeyboard();
     final prefs = await SharedPreferences.getInstance();
     String startPath = prefs.getString('lastDir') ?? "$_baseDownloadPath/CheckSheet";
     if (!Directory(startPath).existsSync()) startPath = _baseDownloadPath;
@@ -380,7 +385,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         foregroundColor: Colors.white,
         actions: [
           if (_isSorted) TextButton(onPressed: _resetSort, child: const Text("정렬리셋", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-          TextButton.icon(onPressed: () { setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
+          TextButton.icon(onPressed: () { _dismissKeyboard(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
         ],
       ),
       body: Column(
@@ -429,6 +434,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   void _showResetConfirm() {
+    _dismissKeyboard();
     if (_originalItems.isEmpty) return;
     showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("데이터 리셋"), content: const Text("모든 체크와 비고를 지우시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")), TextButton(onPressed: () { _resetAllData(); Navigator.pop(ctx); }, child: const Text("예", style: TextStyle(color: Colors.red)))]));
   }
@@ -443,6 +449,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Future<void> _handleItemClick(ItemModel item) async {
+    // ❗ 뷰어 진입 전 키패드 확실히 닫기
+    _dismissKeyboard();
+    
+    if (_autoSave && _excelPath.isNotEmpty) {
+      _manualSave(silent: true);
+    }
+
     if (_pdfFolderPath.startsWith("smb://")) {
       setState(() => _isLoading = true);
       try {
@@ -476,7 +489,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       height: 45,
       child: Row(
         children: [
-          SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
+          // ❗ No 클릭 시 키패드 닫기
+          InkWell(
+            onTap: _dismissKeyboard,
+            child: SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
+          ),
           Expanded(flex: 5, child: InkWell(
             onTap: () => _handleItemClick(item), 
             child: Container(
@@ -489,21 +506,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ),
             ),
           )),
-          SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
-          _checkBtn(item.complete, Colors.green, () => _toggleStatus(item, 'complete'), isDark),
-          _checkBtn(item.shortage, Colors.orange, () => _toggleStatus(item, 'shortage'), isDark),
-          _checkBtn(item.rework, Colors.red, () => _toggleStatus(item, 'rework'), isDark),
+          // ❗ 수량 클릭 시 키패드 닫기
+          InkWell(
+            onTap: _dismissKeyboard,
+            child: SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
+          ),
+          _checkBtn(item.complete, Colors.green, () { _dismissKeyboard(); _toggleStatus(item, 'complete'); }, isDark),
+          _checkBtn(item.shortage, Colors.orange, () { _dismissKeyboard(); _toggleStatus(item, 'shortage'); }, isDark),
+          _checkBtn(item.rework, Colors.red, () { _dismissKeyboard(); _toggleStatus(item, 'rework'); }, isDark),
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: TextField(
             controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)),
             style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: ''),
             onChanged: (val) => item.remarks = val,
             onTapOutside: (event) {
-              FocusScope.of(context).unfocus();
+              _dismissKeyboard();
               if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
             },
             onSubmitted: (val) {
               item.remarks = val;
+              _dismissKeyboard();
               if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
             },
           ))),
