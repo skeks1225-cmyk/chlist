@@ -8,20 +8,20 @@ import 'package:path/path.dart' as p;
 void main() {
   runApp(const MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: PdfrxPageViewTest(),
+    home: PdfrxFileSwipeTest(),
   ));
 }
 
-class PdfrxPageViewTest extends StatefulWidget {
-  const PdfrxPageViewTest({super.key});
+class PdfrxFileSwipeTest extends StatefulWidget {
+  const PdfrxFileSwipeTest({super.key});
 
   @override
-  State<PdfrxPageViewTest> createState() => _PdfrxPageViewTestState();
+  State<PdfrxFileSwipeTest> createState() => _PdfrxFileSwipeTestState();
 }
 
-class _PdfrxPageViewTestState extends State<PdfrxPageViewTest> {
+class _PdfrxFileSwipeTestState extends State<PdfrxFileSwipeTest> {
   List<String> _allFiles = [];
-  late PageController _pageController;
+  PageController? _pageController;
   int _currentIndex = -1;
 
   @override
@@ -59,7 +59,6 @@ class _PdfrxPageViewTestState extends State<PdfrxPageViewTest> {
       setState(() {
         _allFiles = files;
         _currentIndex = initialIndex;
-        // ❗ 현재 선택한 파일 위치에서 시작하는 페이지 컨트롤러 생성
         _pageController = PageController(initialPage: initialIndex);
       });
     }
@@ -69,7 +68,7 @@ class _PdfrxPageViewTestState extends State<PdfrxPageViewTest> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("스와이프 최종 (PageView)"),
+        title: const Text("파일 단위 스와이프 (1파일=1페이지)"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
@@ -85,12 +84,11 @@ class _PdfrxPageViewTestState extends State<PdfrxPageViewTest> {
               child: ElevatedButton.icon(
                 onPressed: _pickInitialFile,
                 icon: const Icon(Icons.folder_copy),
-                label: const Text("도면 폴더 연결"),
+                label: const Text("도면 폴더 연결 (파일 이동 테스트)"),
                 style: ElevatedButton.styleFrom(minimumSize: const Size(200, 60)),
               ),
             )
           : PageView.builder(
-              // ❗ [핵심] 좌우 넘기기를 담당하는 공식 위젯
               controller: _pageController,
               itemCount: _allFiles.length,
               onPageChanged: (index) {
@@ -99,10 +97,16 @@ class _PdfrxPageViewTestState extends State<PdfrxPageViewTest> {
                 });
               },
               itemBuilder: (context, index) {
-                // 각 페이지마다 독립적인 뷰어 생성
+                // ❗ 각 슬라이드는 독립된 하나의 PDF 파일입니다.
                 return PdfViewer.file(
                   _allFiles[index],
                   key: ValueKey(_allFiles[index]),
+                  params: const PdfViewerParams(
+                    // 엔진 내부의 수평 스와이프(페이지 이동)를 완전히 꺼서
+                    // 부모인 PageView(파일 이동)와 충돌하지 않게 합니다.
+                    enablePaging: false, 
+                    maxScale: 10.0,
+                  ),
                 );
               },
             ),
