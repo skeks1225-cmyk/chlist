@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_pdfview/flutter_pdfview.dart'; // ❗ 새 엔진 임포트
+import 'package:flutter_pdfview/flutter_pdfview.dart';
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
 import 'dart:io';
@@ -27,7 +27,7 @@ class PdfViewerScreen extends StatefulWidget {
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
   late int _currentIndex;
   String _currentPdfPath = "";
-  Key _viewerKey = UniqueKey(); // ❗ FIT 버튼 작동을 위한 키
+  Key _viewerKey = UniqueKey();
   final TextEditingController _remarksController = TextEditingController();
   bool _isLoading = false;
 
@@ -69,7 +69,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     
     setState(() {
       _currentPdfPath = File(localPath).existsSync() ? localPath : "";
-      _viewerKey = UniqueKey(); // 화면 강제 리프레시
+      _viewerKey = UniqueKey();
       _isLoading = false;
     });
   }
@@ -78,7 +78,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(title), content: Text(msg), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
   }
 
-  // ❗ FIT 버튼 누르면 다시 로드하여 전체 핏 복구
   void _resetFit() => _loadPdf();
 
   void _next() {
@@ -104,11 +103,14 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   @override
   Widget build(BuildContext context) {
     final item = widget.items[_currentIndex];
+    // ❗ 현재 테마가 다크 모드인지 확인
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(item.itemCode, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.black,
+        // ❗ 테마에 따라 상단 바 색상 변경
+        backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
         foregroundColor: Colors.white,
         actions: [
           TextButton(
@@ -117,12 +119,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           ),
         ],
       ),
-      backgroundColor: Colors.black,
+      // ❗ 테마에 따라 배경색 변경
+      backgroundColor: isDark ? Colors.black : Colors.grey[200],
       body: Column(
         children: [
           Expanded(
             child: _isLoading 
-                ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
                 : (_currentPdfPath.isNotEmpty
                     ? PDFView(
                         key: _viewerKey,
@@ -133,7 +136,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         pageFling: true,
                         pageSnap: false,
                         fitEachPage: true,
-                        fitPolicy: FitPolicy.BOTH, // ❗ 자유로운 축소 핵심 설정
+                        fitPolicy: FitPolicy.BOTH,
                         onRender: (pages) {
                           debugPrint("PDF 렌더링 완료");
                         },
@@ -146,9 +149,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         children: [
                           const Icon(Icons.error_outline, color: Colors.red, size: 50),
                           const SizedBox(height: 10),
-                          Text("PDF 파일을 찾을 수 없습니다.", style: const TextStyle(color: Colors.white, fontSize: 16)),
+                          Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)),
                           const SizedBox(height: 5),
-                          Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                          Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12)),
                         ],
                       ))),
           ),
@@ -156,19 +159,24 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             top: false,
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-              color: Colors.grey[900],
+              // ❗ 테마에 따라 하단 컨트롤러 배경색 변경
+              color: isDark ? Colors.grey[900] : Colors.white,
+              decoration: isDark ? null : BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.grey[300]!)),
+              ),
               child: Column(
                 children: [
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: TextField(
                       controller: _remarksController,
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                      // ❗ 테마에 따라 글자색 변경
+                      style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15),
                       decoration: InputDecoration(
                         hintText: "비고 입력...",
-                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
                         filled: true,
-                        fillColor: Colors.black26,
+                        fillColor: isDark ? Colors.black26 : Colors.grey[100],
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         suffixIcon: IconButton(
@@ -198,9 +206,33 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      ElevatedButton.icon(onPressed: _prev, icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45))),
-                      Text("${_currentIndex + 1} / ${widget.items.length}", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                      ElevatedButton.icon(onPressed: _next, icon: const Icon(Icons.arrow_forward), label: const Text("다음", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45))),
+                      ElevatedButton.icon(
+                        onPressed: _prev, 
+                        icon: const Icon(Icons.arrow_back), 
+                        label: const Text("이전", style: TextStyle(fontSize: 15)),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(100, 45),
+                          backgroundColor: isDark ? null : Colors.blueGrey[50],
+                          foregroundColor: isDark ? null : Colors.blueGrey[900],
+                        )
+                      ),
+                      Text("${_currentIndex + 1} / ${widget.items.length}", 
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87, 
+                          fontSize: 16, 
+                          fontWeight: FontWeight.bold
+                        )
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _next, 
+                        icon: const Icon(Icons.arrow_forward), 
+                        label: const Text("다음", style: TextStyle(fontSize: 15)),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(100, 45),
+                          backgroundColor: isDark ? null : Colors.blueGrey[50],
+                          foregroundColor: isDark ? null : Colors.blueGrey[900],
+                        )
+                      ),
                     ],
                   )
                 ],
@@ -215,7 +247,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   Widget _statusBtn(String label, Color color, bool active, VoidCallback onTap) {
     return ElevatedButton(
       onPressed: onTap,
-      style: ElevatedButton.styleFrom(backgroundColor: active ? color : Colors.grey[700], foregroundColor: Colors.white, minimumSize: const Size(100, 50)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: active ? color : Colors.grey[400]?.withOpacity(0.5), 
+        foregroundColor: active ? Colors.white : (active ? Colors.white : Colors.black54),
+        minimumSize: const Size(100, 50),
+        elevation: active ? 2 : 0,
+      ),
       child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
     );
   }
