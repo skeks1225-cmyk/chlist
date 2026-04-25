@@ -72,12 +72,11 @@ class _PdfrxTestHomeState extends State<PdfrxTestHome> {
                     child: PdfViewer.file(
                       _selectedPath!,
                       controller: _pdfController,
-                      params: PdfViewerParams(
-                        // ❗ 무제한에 가까운 확대 허용 (최대 20배)
+                      params: const PdfViewerParams(
+                        // ❗ 1.3.5 버전 정석 API 적용
                         maxScale: 20.0,
-                        // ❗ 부드러운 스크롤 및 줌 설정
-                        enablePaging: true,
-                        layoutPages: (pages, params) => PdfPageLayout.column(pages, params),
+                        minScale: 0.1,
+                        layoutPages: pdfPageLayoutVertical, 
                       ),
                     ),
                   ),
@@ -91,9 +90,9 @@ class _PdfrxTestHomeState extends State<PdfrxTestHome> {
                           onPressed: () => setState(() => _selectedPath = null),
                           child: const Text("다시 선택", style: TextStyle(color: Colors.tealAccent)),
                         ),
-                        // ❗ 핏 초기화 버튼
+                        // ❗ 1.3.5 버전 정석 줌 초기화 (scale 사용)
                         ElevatedButton(
-                          onPressed: () => _pdfController.zoomTo(matrix: Matrix4.identity()),
+                          onPressed: () => _pdfController.zoomTo(scale: 1.0),
                           child: const Text("전체핏 초기화"),
                         ),
                       ],
