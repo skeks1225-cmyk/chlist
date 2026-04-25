@@ -17,7 +17,6 @@ class PdfrxTestHome extends StatefulWidget {
 
 class _PdfrxTestHomeState extends State<PdfrxTestHome> {
   String? _selectedPath;
-  final PdfViewerController _pdfController = PdfViewerController();
 
   @override
   void initState() {
@@ -50,7 +49,7 @@ class _PdfrxTestHomeState extends State<PdfrxTestHome> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("pdfrx 오픈소스 테스트"),
+        title: const Text("pdfrx 순정 테스트"),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
@@ -59,7 +58,7 @@ class _PdfrxTestHomeState extends State<PdfrxTestHome> {
             ? ElevatedButton.icon(
                 onPressed: _pickFile,
                 icon: const Icon(Icons.picture_as_pdf),
-                label: const Text("오픈소스 도면 테스트"),
+                label: const Text("도면 선택하기"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.teal,
                   foregroundColor: Colors.white,
@@ -71,29 +70,26 @@ class _PdfrxTestHomeState extends State<PdfrxTestHome> {
                   Expanded(
                     child: PdfViewer.file(
                       _selectedPath!,
-                      controller: _pdfController,
-                      params: const PdfViewerParams(
-                        // ❗ 1.3.5 버전 정석 API 적용
-                        maxScale: 20.0,
-                        minScale: 0.1,
-                        layoutPages: pdfPageLayoutVertical, 
+                      // ❗ 모든 커스텀 기능을 빼고 라이브러리 기본값으로만 실행
+                      params: PdfViewerParams(
+                        onViewerReady: (document, controller) {
+                          debugPrint("뷰어 준비 완료");
+                        },
+                        onError: (error) {
+                          debugPrint("에러 발생: $error");
+                        },
                       ),
                     ),
                   ),
                   Container(
-                    color: Colors.grey[900],
-                    padding: const EdgeInsets.all(12),
+                    color: Colors.black,
+                    padding: const EdgeInsets.all(15),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         TextButton(
                           onPressed: () => setState(() => _selectedPath = null),
-                          child: const Text("다시 선택", style: TextStyle(color: Colors.tealAccent)),
-                        ),
-                        // ❗ 1.3.5 버전 정석 줌 초기화 (scale 사용)
-                        ElevatedButton(
-                          onPressed: () => _pdfController.zoomTo(scale: 1.0),
-                          child: const Text("전체핏 초기화"),
+                          child: const Text("다른 파일 선택", style: TextStyle(color: Colors.white)),
                         ),
                       ],
                     ),
