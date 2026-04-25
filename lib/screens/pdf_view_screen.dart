@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pdfrx/pdfrx.dart'; // ❗ pdfrx 엔진 탑재
+import 'package:pdfrx/pdfrx.dart'; 
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
 import 'dart:io';
@@ -63,7 +63,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _remarksController.text = item.remarks;
     setState(() {
       _currentPdfPath = File(localPath).existsSync() ? localPath : "";
-      _viewerKey = UniqueKey(); // 화면 리프레시 및 줌 초기화
+      _viewerKey = UniqueKey();
       _isLoading = false;
     });
   }
@@ -72,7 +72,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(title), content: Text(msg), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
   }
 
-  void _resetFit() => _loadPdf();
+  // ❗ 1.3.5 버전은 zoomTo(scale: 1.0) 방식 사용
+  void _resetFit() {
+    _pdfController.zoomTo(scale: 1.0);
+  }
 
   void _next() {
     if (_currentIndex < widget.items.length - 1) {
@@ -124,10 +127,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                           _currentPdfPath,
                           key: _viewerKey,
                           controller: _pdfController,
+                          // ❗ 1.3.5 버전 규격에 맞는 파라미터 적용
                           params: PdfViewerParams(
-                            maxScale: 10.0, // 시원한 확대 지원
-                            // ❗ 페이지 레이아웃 최적화
-                            layoutPages: (pages, params) => PdfPageLayout.column(pages, params),
+                            maxScale: 15.0,
+                            layoutPages: pdfPageLayoutVertical, // 전용 레이아웃 함수
                           ),
                         ),
                       )
