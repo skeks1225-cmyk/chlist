@@ -8,27 +8,21 @@ import 'package:path/path.dart' as p;
 void main() {
   runApp(const MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: PdfrxPerfectGestureTest(),
+    home: PdfrxOfficialEventTest(),
   ));
 }
 
-class PdfrxPerfectGestureTest extends StatefulWidget {
-  const PdfrxPerfectGestureTest({super.key});
+class PdfrxOfficialEventTest extends StatefulWidget {
+  const PdfrxOfficialEventTest({super.key});
 
   @override
-  State<PdfrxPerfectGestureTest> createState() => _PdfrxPerfectGestureTestState();
+  State<PdfrxOfficialEventTest> createState() => _PdfrxOfficialEventTestState();
 }
 
-class _PdfrxPerfectGestureTestState extends State<PdfrxPerfectGestureTest> {
+class _PdfrxOfficialEventTestState extends State<PdfrxOfficialEventTest> {
   List<String> _allFiles = [];
   int _currentIndex = -1;
   final PdfViewerController _pdfController = PdfViewerController();
-
-  // ❗ 제스처 제어를 위한 정밀 변수들
-  Offset? _startPos;
-  DateTime? _startTime;
-  bool _isMultiTouch = false; // 손가락이 2개 이상 닿았는지 확인
-  final Set<int> _pointers = {}; // 현재 화면에 닿은 손가락 ID들
 
   @override
   void initState() {
@@ -83,7 +77,7 @@ class _PdfrxPerfectGestureTestState extends State<PdfrxPerfectGestureTest> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("pdfrx 줌-스와이프 완성"),
+        title: const Text("pdfrx 공식 이벤트 테스트"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
@@ -99,57 +93,32 @@ class _PdfrxPerfectGestureTestState extends State<PdfrxPerfectGestureTest> {
               child: ElevatedButton.icon(
                 onPressed: _pickInitialFile,
                 icon: const Icon(Icons.folder_copy),
-                label: const Text("파일 선택"),
+                label: const Text("파일 선택 (스와이프 테스트)"),
                 style: ElevatedButton.styleFrom(minimumSize: const Size(200, 60)),
               ),
             )
-          : Listener(
-              // ❗ [핵심] 멀티터치 감지 로직
-              onPointerDown: (event) {
-                _pointers.add(event.pointer);
-                if (_pointers.length == 1) {
-                  // 첫 번째 손가락이 닿았을 때만 스와이프 준비
-                  _startPos = event.position;
-                  _startTime = DateTime.now();
-                  _isMultiTouch = false;
-                } else {
-                  // 손가락이 2개 이상이면 즉시 스와이프 기능 차단 (줌 모드)
-                  _isMultiTouch = true;
-                }
-              },
-              onPointerUp: (event) {
-                _pointers.remove(event.pointer);
-                
-                // 멀티터치가 아니었고, 정상적인 드래그 데이터가 있을 때만 판정
-                if (!_isMultiTouch && _startPos != null && _startTime != null) {
-                  final endPos = event.position;
-                  final duration = DateTime.now().difference(_startTime!);
-                  final dx = endPos.dx - _startPos!.dx;
-                  final dy = (endPos.dy - _startPos!.dy).abs();
-
-                  // 100픽셀 이상, 300ms 이내의 빠른 수평 스와이프만 인정
-                  if (dx.abs() > 100 && dy < 50 && duration.inMilliseconds < 300) {
-                    if (dx < 0) _goToNext();
-                    else _goToPrev();
+          : PdfViewer.file(
+              _allFiles[_currentIndex],
+              controller: _pdfController,
+              key: ValueKey(_allFiles[_currentIndex]),
+              params: PdfViewerParams(
+                maxScale: 10.0,
+                // ❗ [지피티 추천] 엔진이 조작 종료를 감지했을 때 실행되는 공식 콜백
+                onInteractionEnd: (details) {
+                  // 1. 현재 줌 배율이 전체핏(1.0) 근처인지 확인
+                  // details.zoom은 엔진이 직접 계산해서 주는 정확한 값입니다.
+                  if (details.zoom <= 1.01) {
+                    // 2. 수평 이동 속도 확인 (Velocity)
+                    // 왼쪽으로 휙: 음수(-), 오른쪽으로 휙: 양수(+)
+                    final double vx = details.velocity.pixelsPerSecond.dx;
+                    
+                    if (vx < -500) {
+                      _goToNext(); // 다음 도면
+                    } else if (vx > 500) {
+                      _goToPrev(); // 이전 도면
+                    }
                   }
-                }
-
-                if (_pointers.isEmpty) {
-                  _startPos = null;
-                  _startTime = null;
-                }
-              },
-              onPointerCancel: (event) {
-                _pointers.clear();
-                _isMultiTouch = false;
-              },
-              child: PdfViewer.file(
-                _allFiles[_currentIndex],
-                controller: _pdfController,
-                key: ValueKey(_allFiles[_currentIndex]),
-                params: const PdfViewerParams(
-                  maxScale: 15.0, // ❗ 시원한 확대를 위해 15배 허용
-                ),
+                },
               ),
             ),
     );
