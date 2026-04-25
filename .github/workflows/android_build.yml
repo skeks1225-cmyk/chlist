@@ -22,16 +22,15 @@ jobs:
           channel: 'stable'
           flutter-version: '3.41.7'
 
-      # ❗ 오직 'pdf_pdfrx_test' 프로젝트만 빌드
-      - name: Build pdfrx Test App
+      # ❗ 메인 앱 빌드로 복구
+      - name: Build Main App
         run: |
-          cd pdf_pdfrx_test
           flutter clean
           flutter pub get
           flutter build apk --release
         
-      - name: Upload Test APK
+      - name: Upload Main APK
         uses: actions/upload-artifact@v4
         with:
-          name: pdfrx-Viewer-Test-APK
-          path: pdf_pdfrx_test/build/app/outputs/flutter-apk/app-release.apk
+          name: CheckSheet-Main-APK
+          path: build/app/outputs/flutter-apk/app-release.apk

@@ -14,9 +14,9 @@ dependencies:
   shared_preferences: ^2.2.3
   permission_handler: ^11.3.1
   path: ^1.9.0
-  # ❗ pdfx 제거 후 flutter_pdfview 탑재
-  flutter_pdfview: ^1.3.2
   file_picker: ^8.1.7
+  # ❗ flutter_pdfview 삭제 후 최신 pdfrx 탑재
+  pdfrx: ^2.2.24
 
 dev_dependencies:
   flutter_test:

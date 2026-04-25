@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_pdfview/flutter_pdfview.dart';
+import 'package:pdfrx/pdfrx.dart'; // ❗ pdfrx 엔진 탑재
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
 import 'dart:io';
@@ -27,6 +27,7 @@ class PdfViewerScreen extends StatefulWidget {
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
   late int _currentIndex;
   String _currentPdfPath = "";
+  final PdfViewerController _pdfController = PdfViewerController();
   Key _viewerKey = UniqueKey();
   final TextEditingController _remarksController = TextEditingController();
   bool _isLoading = false;
@@ -62,7 +63,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _remarksController.text = item.remarks;
     setState(() {
       _currentPdfPath = File(localPath).existsSync() ? localPath : "";
-      _viewerKey = UniqueKey();
+      _viewerKey = UniqueKey(); // 화면 리프레시 및 줌 초기화
       _isLoading = false;
     });
   }
@@ -119,20 +120,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 : (_currentPdfPath.isNotEmpty
                     ? Container(
                         color: isDark ? Colors.black : Colors.grey[300],
-                        child: PDFView(
+                        child: PdfViewer.file(
+                          _currentPdfPath,
                           key: _viewerKey,
-                          filePath: _currentPdfPath,
-                          // ❗ 사용자님이 확인하신 "반전 없는 완벽한 다크모드" 설정 복구
-                          nightMode: isDark, 
-                          enableSwipe: true,
-                          swipeHorizontal: false,
-                          autoSpacing: true,
-                          pageFling: true,
-                          pageSnap: false,
-                          fitEachPage: true,
-                          fitPolicy: FitPolicy.BOTH,
-                          onRender: (pages) { debugPrint("PDF 렌더링 완료"); },
-                          onError: (error) { _showError("뷰어 에러", error.toString()); },
+                          controller: _pdfController,
+                          params: PdfViewerParams(
+                            maxScale: 10.0, // 시원한 확대 지원
+                            // ❗ 페이지 레이아웃 최적화
+                            layoutPages: (pages, params) => PdfPageLayout.column(pages, params),
+                          ),
                         ),
                       )
                     : Center(child: Column(
