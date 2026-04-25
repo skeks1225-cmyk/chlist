@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:flutter/services.dart';
+import 'dart:io';
 
 class SmbService {
   static const _channel = MethodChannel('org.example.checksheet/smb');
@@ -9,10 +9,12 @@ class SmbService {
   String _pass = "";
 
   void setConfig(String ip, String user, String pass) {
-    _ip = ip; _user = user; _pass = pass;
+    _ip = ip;
+    _user = user;
+    _pass = pass;
   }
 
-  // [1] connectSMB -> String
+  // ❗ 모든 메서드에서 최신 설정값을 함께 실어 보냄 (자동 재접속 보장)
   Future<String?> testConnection(String ip, String user, String pass) async {
     try {
       final String result = await _channel.invokeMethod('connectSMB', {
@@ -20,26 +22,35 @@ class SmbService {
         'user': user,
         'pass': pass,
       });
-      return result == "SUCCESS" ? null : result;
+      if (result == "SUCCESS") {
+        setConfig(ip, user, pass);
+        return null;
+      }
+      return result;
     } catch (e) {
       return e.toString();
     }
   }
 
-  // [2] listShares -> List<String>
   Future<List<String>> listShares() async {
     try {
-      final List<dynamic> result = await _channel.invokeMethod('listShares');
+      final List<dynamic> result = await _channel.invokeMethod('listShares', {
+        'ip': _ip,
+        'user': _user,
+        'pass': _pass,
+      });
       return result.cast<String>();
     } catch (e) {
-      return [];
+      return ["ERROR: ${e.toString()}"];
     }
   }
 
-  // [3] listFiles -> List<Map<String, Any>>
   Future<List<Map<String, dynamic>>> listFiles(String share, String path) async {
     try {
       final List<dynamic> result = await _channel.invokeMethod('listFiles', {
+        'ip': _ip,
+        'user': _user,
+        'pass': _pass,
         'share': share,
         'path': path,
       });
@@ -49,17 +60,20 @@ class SmbService {
     }
   }
 
-  // [4] downloadFile -> String?
   Future<File?> downloadFile(String share, String remotePath, String localPath) async {
     try {
-      final String? path = await _channel.invokeMethod('downloadFile', {
+      final String? result = await _channel.invokeMethod('downloadFile', {
+        'ip': _ip,
+        'user': _user,
+        'pass': _pass,
         'share': share,
         'remotePath': remotePath,
         'localPath': localPath,
       });
-      return path != null ? File(path) : null;
+      if (result != null) return File(result);
     } catch (e) {
-      return null;
+      print("Download Error: $e");
     }
+    return null;
   }
 }

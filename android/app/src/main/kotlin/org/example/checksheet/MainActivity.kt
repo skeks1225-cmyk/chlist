@@ -15,26 +15,28 @@ class MainActivity: FlutterActivity() {
         smbHandler = SmbHandler(this)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+            // ❗ 모든 호출에서 공통적으로 IP, User, Pass 추출
+            val ip = call.argument<String>("ip")
+            val user = call.argument<String>("user")
+            val pass = call.argument<String>("pass")
+
             when (call.method) {
                 "connectSMB" -> {
-                    val ip = call.argument<String>("ip") ?: ""
-                    val user = call.argument<String>("user") ?: ""
-                    val pass = call.argument<String>("pass") ?: ""
-                    scope.launch { result.success(smbHandler.connect(ip, user, pass)) }
+                    scope.launch { result.success(smbHandler.connect(ip!!, user!!, pass!!)) }
                 }
                 "listShares" -> {
-                    scope.launch { result.success(smbHandler.listShares()) }
+                    scope.launch { result.success(smbHandler.listShares(ip, user, pass)) }
                 }
                 "listFiles" -> {
                     val share = call.argument<String>("share") ?: ""
                     val path = call.argument<String>("path") ?: ""
-                    scope.launch { result.success(smbHandler.listFiles(share, path)) }
+                    scope.launch { result.success(smbHandler.listFiles(ip, user, pass, share, path)) }
                 }
                 "downloadFile" -> {
                     val share = call.argument<String>("share") ?: ""
                     val remote = call.argument<String>("remotePath") ?: ""
                     val local = call.argument<String>("localPath") ?: ""
-                    scope.launch { result.success(smbHandler.downloadFile(share, remote, local)) }
+                    scope.launch { result.success(smbHandler.downloadFile(ip, user, pass, share, remote, local)) }
                 }
                 else -> result.notImplemented()
             }
@@ -43,7 +45,6 @@ class MainActivity: FlutterActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        smbHandler.disconnect()
         scope.cancel()
     }
 }
