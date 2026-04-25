@@ -20,12 +20,12 @@ class PdfrxSwipeTest extends StatefulWidget {
 }
 
 class _PdfrxSwipeTestState extends State<PdfrxSwipeTest> {
-  List<String> _allFiles = []; // 선택한 폴더의 모든 PDF 목록
+  List<String> _allFiles = [];
   int _currentIndex = -1;
   final PdfViewerController _pdfController = PdfViewerController();
   
-  // ❗ 스와이프 방향 및 속도 감지를 위한 변수
-  double _dragStartX = 0;
+  // ❗ 거리 측정을 위한 변수
+  double _totalDeltaX = 0;
 
   @override
   void initState() {
@@ -41,7 +41,6 @@ class _PdfrxSwipeTestState extends State<PdfrxSwipeTest> {
     }
   }
 
-  // ❗ 폴더 내 모든 PDF를 가져와서 테스트 환경 구축
   Future<void> _pickInitialFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -51,8 +50,6 @@ class _PdfrxSwipeTestState extends State<PdfrxSwipeTest> {
     if (result != null) {
       String pickedPath = result.files.single.path!;
       String dirPath = p.dirname(pickedPath);
-      
-      // 해당 폴더의 모든 PDF 목록 스캔
       final dir = Directory(dirPath);
       final files = dir.listSync()
           .where((e) => e.path.toLowerCase().endsWith('.pdf'))
@@ -83,7 +80,7 @@ class _PdfrxSwipeTestState extends State<PdfrxSwipeTest> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("pdfrx 스와이프 테스트"),
+        title: const Text("pdfrx 정석 스와이프 테스트"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
@@ -99,57 +96,45 @@ class _PdfrxSwipeTestState extends State<PdfrxSwipeTest> {
               child: ElevatedButton.icon(
                 onPressed: _pickInitialFile,
                 icon: const Icon(Icons.folder_copy),
-                label: const Text("도면 폴더 연결 (파일 하나 선택)"),
+                label: const Text("도면 폴더 연결"),
                 style: ElevatedButton.styleFrom(minimumSize: const Size(200, 60)),
               ),
             )
           : GestureDetector(
-              // ❗ [핵심] 스와이프 감지 로직
-              onHorizontalDragStart: (details) {
-                _dragStartX = details.globalPosition.dx;
+              // ❗ [개선] 1. 드래그 거리 누적 시작
+              onHorizontalDragStart: (_) {
+                _totalDeltaX = 0;
               },
+              // ❗ [개선] 2. 실시간 거리 누적 (비고란 포커스 해제 등에도 활용 가능)
+              onHorizontalDragUpdate: (details) {
+                _totalDeltaX += details.delta.dx;
+              },
+              // ❗ [개선] 3. 드래그 종료 시점에만 '배율 + 속도 + 거리' 삼위일체 판정
               onHorizontalDragEnd: (details) {
-                // 1. 현재 줌 배율 확인 (pdfrx 2.x 기준)
-                // 1.05는 오차 범위를 고려한 '전체핏' 기준점입니다.
-                if (_pdfController.zoom < 1.05) {
-                  double velocity = details.primaryVelocity ?? 0;
-                  
-                  // 2. 휙 넘기는 속도(Velocity) 또는 이동 거리 확인
-                  if (velocity < -500) {
-                    // 오른쪽에서 왼쪽으로 휙 -> 다음 파일
-                    _goToNext();
-                  } else if (velocity > 500) {
-                    // 왼쪽에서 오른쪽으로 휙 -> 이전 파일
-                    _goToPrev();
+                // pdfrx 2.x에서는 1.0이 기본 전체핏입니다.
+                // 미세한 조작 오차를 고려해 1.01로 잡습니다.
+                final double currentZoom = _pdfController.zoom;
+                
+                if (currentZoom <= 1.01) {
+                  final double velocity = details.primaryVelocity ?? 0;
+                  final double distance = _totalDeltaX;
+
+                  // ❗ 지피티 조언 반영: 속도(500) AND 거리(50) 동시 만족 시에만 이동
+                  if (velocity < -500 && distance < -50) {
+                    _goToNext(); // 오른쪽에서 왼쪽으로 (다음)
+                  } else if (velocity > 500 && distance > 50) {
+                    _goToPrev(); // 왼쪽에서 오른쪽으로 (이전)
                   }
                 }
               },
-              child: Stack(
-                children: [
-                  PdfViewer.file(
-                    _allFiles[_currentIndex],
-                    controller: _pdfController,
-                    key: ValueKey(_allFiles[_currentIndex]), // 파일 변경 시 뷰어 초기화
-                    params: const PdfViewerParams(
-                      maxScale: 10.0,
-                      enableTextSelection: false, // 조작 간섭 방지
-                    ),
-                  ),
-                  // 안내 메시지 레이어 (잠시 후 사라지게 하거나 생략 가능)
-                  if (_pdfController.zoom < 1.05)
-                    Positioned(
-                      bottom: 20,
-                      left: 0, right: 0,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
-                          child: const Text("전체핏 상태입니다. 좌우로 밀어서 도면을 넘기세요.", 
-                              style: TextStyle(color: Colors.white, fontSize: 12)),
-                        ),
-                      ),
-                    ),
-                ],
+              child: PdfViewer.file(
+                _allFiles[_currentIndex],
+                controller: _pdfController,
+                key: ValueKey(_allFiles[_currentIndex]),
+                params: const PdfViewerParams(
+                  maxScale: 10.0,
+                  enableTextSelection: false,
+                ),
               ),
             ),
     );
