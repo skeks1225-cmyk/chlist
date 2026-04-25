@@ -8,18 +8,18 @@ import 'package:path/path.dart' as p;
 void main() {
   runApp(const MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: PdfrxStackGestureTest(),
+    home: PdfrxMinimalSwipeTest(),
   ));
 }
 
-class PdfrxStackGestureTest extends StatefulWidget {
-  const PdfrxStackGestureTest({super.key});
+class PdfrxMinimalSwipeTest extends StatefulWidget {
+  const PdfrxMinimalSwipeTest({super.key});
 
   @override
-  State<PdfrxStackGestureTest> createState() => _PdfrxStackGestureTestState();
+  State<PdfrxMinimalSwipeTest> createState() => _PdfrxMinimalSwipeTestState();
 }
 
-class _PdfrxStackGestureTestState extends State<PdfrxStackGestureTest> {
+class _PdfrxMinimalSwipeTestState extends State<PdfrxMinimalSwipeTest> {
   List<String> _allFiles = [];
   int _currentIndex = -1;
   final PdfViewerController _pdfController = PdfViewerController();
@@ -77,56 +77,42 @@ class _PdfrxStackGestureTestState extends State<PdfrxStackGestureTest> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("pdfrx 스택 오버레이 테스트"),
+        title: const Text("스와이프 이벤트 확인 (최종)"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
-        actions: [
-          if (_currentIndex != -1)
-            Center(child: Padding(
-              padding: const EdgeInsets.only(right: 15),
-              child: Text("${_currentIndex + 1} / ${_allFiles.length}"),
-            )),
-        ],
       ),
       body: _currentIndex == -1
           ? Center(
               child: ElevatedButton.icon(
                 onPressed: _pickInitialFile,
-                icon: const Icon(Icons.folder_copy),
+                icon: const Icon(Icons.folder_open),
                 label: const Text("도면 폴더 연결"),
                 style: ElevatedButton.styleFrom(minimumSize: const Size(200, 60)),
               ),
             )
           : Stack(
               children: [
-                // 1. 바닥 레이어: 도면 뷰어
+                // 1. 도면 뷰어 (순정)
                 PdfViewer.file(
                   _allFiles[_currentIndex],
                   controller: _pdfController,
                   key: ValueKey(_allFiles[_currentIndex]),
                 ),
 
-                // 2. ❗ 최상단 레이어: 지피티 추천 스와이프 감지기
+                // 2. ❗ 최상단 투명 감지 레이어 (줌 조건 없음)
                 Positioned.fill(
                   child: GestureDetector(
-                    behavior: HitTestBehavior.translucent, // ❗ 터치 신호를 아래로 통과시킴
+                    behavior: HitTestBehavior.translucent,
                     onHorizontalDragEnd: (details) {
-                      // ❗ 로그 확인용
-                      debugPrint("스와이프 동작 감지됨!");
+                      debugPrint("스와이프 신호 들어옴!"); // ❗ 로그 확인용
 
-                      // pdfrx 2.x에서 줌 값을 가져오는 가장 안전한 방법
-                      // 에러 방지를 위해 1.05 이하일 때만 작동하도록 설계
-                      final double currentZoom = _pdfController.currentValue.zoom;
-                      
-                      if (currentZoom <= 1.05) {
-                        final double velocity = details.primaryVelocity ?? 0;
-                        if (velocity < -300) {
-                          debugPrint("다음 파일로 이동");
-                          _goToNext();
-                        } else if (velocity > 300) {
-                          debugPrint("이전 파일로 이동");
-                          _goToPrev();
-                        }
+                      final double velocity = details.primaryVelocity ?? 0;
+                      if (velocity < -300) {
+                        debugPrint("오른쪽으로 밀었음 -> 다음 파일");
+                        _goToNext();
+                      } else if (velocity > 300) {
+                        debugPrint("왼쪽으로 밀었음 -> 이전 파일");
+                        _goToPrev();
                       }
                     },
                   ),
