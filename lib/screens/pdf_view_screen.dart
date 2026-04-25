@@ -118,12 +118,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
                 : (_currentPdfPath.isNotEmpty
                     ? Container(
-                        // ❗ 뷰어 주변 여백 색상도 테마에 맞춤
+                        // ❗ 도면 주변 여백 공간의 색상을 테마에 맞춤
                         color: isDark ? Colors.black : Colors.grey[300],
                         child: PDFView(
                           key: _viewerKey,
                           filePath: _currentPdfPath,
-                          backgroundColor: isDark ? Colors.black : Colors.grey[300], // ❗ 뷰어 자체 배경 설정
+                          // ❗ 도면 원본 색상을 유지하기 위해 nightMode는 항상 false로 둡니다.
+                          nightMode: false, 
                           enableSwipe: true,
                           swipeHorizontal: false,
                           autoSpacing: true,
@@ -131,6 +132,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                           pageSnap: false,
                           fitEachPage: true,
                           fitPolicy: FitPolicy.BOTH,
+                          onRender: (pages) { debugPrint("PDF 렌더링 완료"); },
+                          onError: (error) { _showError("뷰어 에러", error.toString()); },
                         ),
                       )
                     : Center(child: Column(
