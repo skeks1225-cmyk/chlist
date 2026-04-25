@@ -110,7 +110,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           ),
         ],
       ),
-      // ❗ 배경색을 테마에 연동 (다크모드 시 검은색)
       backgroundColor: isDark ? Colors.black : Colors.grey[200],
       body: Column(
         children: [
@@ -119,12 +118,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
                 : (_currentPdfPath.isNotEmpty
                     ? Container(
-                        // ❗ 뷰어 주변 여백 공간의 색상을 테마에 맞춤
                         color: isDark ? Colors.black : Colors.grey[300],
                         child: PDFView(
                           key: _viewerKey,
                           filePath: _currentPdfPath,
-                          nightMode: false, // 도면 색상 유지
+                          // ❗ 사용자님이 확인하신 "반전 없는 완벽한 다크모드" 설정 복구
+                          nightMode: isDark, 
                           enableSwipe: true,
                           swipeHorizontal: false,
                           autoSpacing: true,
