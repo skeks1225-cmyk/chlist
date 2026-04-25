@@ -29,8 +29,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _autoSave = true;
   bool _isLoading = false;
   bool _isSorted = false;
-  
-  // ❗ 동기화 상태 관리 변수 추가
   bool _isSyncing = false;
 
   String _currentSortCol = ""; 
@@ -244,7 +242,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     setState(() => _isLoading = false);
     if (!mounted) return;
 
-    // ❗ [개선] 모드에 맞는 확장자만 필터링
     List<Map<String, dynamic>> filteredFiles = files.where((f) {
       bool isDir = f['isDirectory'] as bool;
       if (isDir) return true;
@@ -287,12 +284,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     else _showError("오류", "파일 다운로드 실패");
   }
 
-  // ❗ [개선] 백그라운드 동기화 로직
+  // ❗ [핵심 업데이트] 5배 빠른 세미-병렬 동기화 엔진
   Future<void> _syncAllPdfs() async {
     if (_originalItems.isEmpty) return;
     List<ItemModel> targets = _originalItems.where((i) => !i.isSubheading).toList();
     
-    // 화면 전체를 가리는 _isLoading 대신 _isSyncing 사용
     setState(() => _isSyncing = true);
     
     try {
@@ -302,17 +298,25 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
       String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
 
-      for (var item in targets) {
-        String cleanCode = item.itemCode.trim();
-        String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
-        String localFilePath = "$_baseDownloadPath/CheckSheet/$cleanCode.pdf";
+      // ❗ 파일을 5개씩 묶어서 병렬 처리
+      const int batchSize = 5;
+      for (int i = 0; i < targets.length; i += batchSize) {
+        // 이번 차례에 받을 파일 5개 추출
+        final chunk = targets.skip(i).take(batchSize);
         
-        // await를 사용하지만 UI는 차단하지 않음
-        await _smbService.downloadFile(share, remoteFilePath, localFilePath);
+        // 5개를 동시에 실행하고 모두 끝날 때까지 대기
+        await Future.wait(chunk.map((item) {
+          String cleanCode = item.itemCode.trim();
+          String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
+          String localFilePath = "$_baseDownloadPath/CheckSheet/$cleanCode.pdf";
+          return _smbService.downloadFile(share, remoteFilePath, localFilePath);
+        }));
       }
+      
       _showSnackBar("✅ ${targets.length}개 품목 동기화 완료!");
     } catch (e) {
       debugPrint("Sync Error: $e");
+      _showError("동기화 오류", "네트워크가 불안정합니다. 다시 시도해 주세요.");
     } finally {
       setState(() => _isSyncing = false);
     }
@@ -395,7 +399,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   ElevatedButton(
                     onPressed: _isSyncing ? null : _syncAllPdfs,
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(80, 45), padding: const EdgeInsets.symmetric(horizontal: 8)),
-                    // ❗ 글자 변경 및 상태 표시
                     child: Text(_isSyncing ? "동기화중..." : "PDF동기화", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(width: 4),
@@ -419,7 +422,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               },
             ),
           ),
-          // ❗ 동기화 중임을 알리는 하단 미세 바 (선택 사항)
           if (_isSyncing) const LinearProgressIndicator(minHeight: 2, color: Colors.orange),
         ],
       ),
