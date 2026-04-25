@@ -22,10 +22,10 @@ jobs:
           channel: 'stable'
           flutter-version: '3.41.7'
 
-      # ❗ 오직 'pdf_sync_test' 프로젝트만 빌드
-      - name: Build Syncfusion Test App
+      # ❗ 오직 'pdf_pdfrx_test' 프로젝트만 빌드
+      - name: Build pdfrx Test App
         run: |
-          cd pdf_sync_test
+          cd pdf_pdfrx_test
           flutter clean
           flutter pub get
           flutter build apk --release
@@ -33,5 +33,5 @@ jobs:
       - name: Upload Test APK
         uses: actions/upload-artifact@v4
         with:
-          name: Syncfusion-Viewer-Test-APK
-          path: pdf_sync_test/build/app/outputs/flutter-apk/app-release.apk
+          name: pdfrx-Viewer-Test-APK
+          path: pdf_pdfrx_test/build/app/outputs/flutter-apk/app-release.apk
