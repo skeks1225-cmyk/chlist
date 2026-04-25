@@ -36,7 +36,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   final String _baseDownloadPath = "/storage/emulated/0/Download";
 
-  // ❗ [핵심] 마지막 입력칸을 잊게 만드는 가짜 포커스 노드
   final FocusNode _dummyFocusNode = FocusNode();
 
   @override
@@ -47,7 +46,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   @override
   void dispose() {
-    _dummyFocusNode.dispose(); // 메모리 해제
+    _dummyFocusNode.dispose();
     super.dispose();
   }
 
@@ -114,7 +113,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setString('lastDir', p.dirname(path));
   }
 
-  // ❗ [핵심] 포커스를 비고란에서 뺏어와 "망각"시키는 함수
   void _forgetFocus() {
     FocusScope.of(context).requestFocus(_dummyFocusNode);
   }
@@ -171,13 +169,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     _forgetFocus();
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(leading: const Icon(Icons.phone_android), title: const Text("내 휴대폰"), onTap: () { Navigator.pop(ctx); _openCustomPicker(mode); }),
-          ListTile(leading: const Icon(Icons.computer), title: const Text("PC 공유폴더 (SMB)"), onTap: () { Navigator.pop(ctx); _openSmbShares(mode); }),
-          const SizedBox(height: 20),
-        ],
+      // ❗ 내비게이션 바 보호를 위한 SafeArea 추가
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(leading: const Icon(Icons.phone_android), title: const Text("내 휴대폰"), onTap: () { Navigator.pop(ctx); _openCustomPicker(mode); }),
+            ListTile(leading: const Icon(Icons.computer), title: const Text("PC 공유폴더 (SMB)"), onTap: () { Navigator.pop(ctx); _openSmbShares(mode); }),
+            const SizedBox(height: 10),
+          ],
+        ),
       ),
     );
   }
@@ -307,16 +308,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     _forgetFocus();
     if (_originalItems.isEmpty) return;
     List<ItemModel> targets = _originalItems.where((i) => !i.isSubheading).toList();
-    
     setState(() => _isSyncing = true);
-    
     try {
       String shareWithRest = _pdfFolderPath.replaceFirst("smb://", "");
       if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
       int firstSlash = shareWithRest.indexOf("/");
       String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
       String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
-
       const int batchSize = 5;
       for (int i = 0; i < targets.length; i += batchSize) {
         final chunk = targets.skip(i).take(batchSize);
@@ -328,11 +326,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         }));
       }
       _showSnackBar("✅ ${targets.length}개 품목 동기화 완료!");
-    } catch (e) {
-      debugPrint("Sync Error: $e");
-    } finally {
-      setState(() => _isSyncing = false);
-    }
+    } catch (e) { debugPrint("Sync Error: $e"); }
+    finally { setState(() => _isSyncing = false); }
   }
 
   Future<void> _openCustomPicker(String mode) async {
@@ -397,49 +392,51 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           TextButton.icon(onPressed: () { _forgetFocus(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                _topBtn("외부설정", _openExternalSettings, isDark),
-                const SizedBox(width: 4),
-                _topBtn("엑셀선택", () => _pickSource('file'), isDark),
-                const SizedBox(width: 4),
-                _topBtn("PDF폴더", () => _pickSource('dir'), isDark),
-                const SizedBox(width: 4),
-                if (isSmbPdf) ...[
-                  ElevatedButton(
-                    onPressed: _isSyncing ? null : _syncAllPdfs,
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(80, 45), padding: const EdgeInsets.symmetric(horizontal: 8)),
-                    child: Text(_isSyncing ? "동기화중..." : "PDF동기화", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                  ),
+      // ❗ 메인 바디 하단 보호
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                children: [
+                  _topBtn("외부설정", _openExternalSettings, isDark),
                   const SizedBox(width: 4),
+                  _topBtn("엑셀선택", () => _pickSource('file'), isDark),
+                  const SizedBox(width: 4),
+                  _topBtn("PDF폴더", () => _pickSource('dir'), isDark),
+                  const SizedBox(width: 4),
+                  if (isSmbPdf) ...[
+                    ElevatedButton(
+                      onPressed: _isSyncing ? null : _syncAllPdfs,
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(80, 45), padding: const EdgeInsets.symmetric(horizontal: 8)),
+                      child: Text(_isSyncing ? "동기화중..." : "PDF동기화", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("리셋", style: TextStyle(fontSize: 12))),
+                  const SizedBox(width: 4),
+                  ElevatedButton(onPressed: () { _forgetFocus(); _manualSave(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("저장", style: TextStyle(fontSize: 12))),
                 ],
-                ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("리셋", style: TextStyle(fontSize: 12))),
-                const SizedBox(width: 4),
-                ElevatedButton(onPressed: () { _forgetFocus(); _manualSave(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("저장", style: TextStyle(fontSize: 12))),
-              ],
+              ),
             ),
-          ),
-          _buildHeader(context),
-          Expanded(
-            child: _isLoading ? const Center(child: CircularProgressIndicator()) : ListView.builder(
-              itemCount: _displayItems.length,
-              itemBuilder: (ctx, idx) {
-                final item = _displayItems[idx];
-                if (item.isSubheading) {
-                  return Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), color: isDark ? Colors.white10 : Colors.grey[300], width: double.infinity, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)));
-                }
-                return _buildDataRow(item, isDark);
-              },
+            _buildHeader(context),
+            Expanded(
+              child: _isLoading ? const Center(child: CircularProgressIndicator()) : ListView.builder(
+                itemCount: _displayItems.length,
+                itemBuilder: (ctx, idx) {
+                  final item = _displayItems[idx];
+                  if (item.isSubheading) {
+                    return Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), color: isDark ? Colors.white10 : Colors.grey[300], width: double.infinity, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)));
+                  }
+                  return _buildDataRow(item, isDark);
+                },
+              ),
             ),
-          ),
-          if (_isSyncing) const LinearProgressIndicator(minHeight: 2, color: Colors.orange),
-          // ❗ 보이지 않는 가짜 포커스 존
-          Offstage(child: TextField(focusNode: _dummyFocusNode, readOnly: true)),
-        ],
+            if (_isSyncing) const LinearProgressIndicator(minHeight: 2, color: Colors.orange),
+            Offstage(child: TextField(focusNode: _dummyFocusNode, readOnly: true)),
+          ],
+        ),
       ),
     );
   }
@@ -460,13 +457,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Future<void> _handleItemClick(ItemModel item) async {
-    // ❗ [핵심] 도면 열기 전 포커스를 가짜 존으로 이동시켜 "비고란 포커스 기억"을 삭제
     _forgetFocus();
-    
     if (_autoSave && _excelPath.isNotEmpty) {
       _manualSave(silent: true);
     }
-
     if (_pdfFolderPath.startsWith("smb://")) {
       setState(() => _isLoading = true);
       try {
@@ -478,11 +472,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf";
         String localFilePath = "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf";
         await _smbService.downloadFile(share, remoteFilePath, localFilePath);
-      } catch (e) {
-        debugPrint("SMB Sync Error: $e");
-      } finally {
-        setState(() => _isLoading = false);
-      }
+      } catch (e) { debugPrint("SMB Sync Error: $e"); }
+      finally { setState(() => _isLoading = false); }
     }
     if (!mounted) return;
     Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(
@@ -500,7 +491,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       height: 45,
       child: Row(
         children: [
-          // ❗ No 클릭 시 포커스 강제 해제
           InkWell(
             onTap: _forgetFocus,
             child: SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
@@ -517,7 +507,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ),
             ),
           )),
-          // ❗ 수량 클릭 시 포커스 강제 해제
           InkWell(
             onTap: _forgetFocus,
             child: SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
