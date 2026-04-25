@@ -63,7 +63,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _remarksController.text = item.remarks;
     setState(() {
       _currentPdfPath = File(localPath).existsSync() ? localPath : "";
-      _viewerKey = UniqueKey();
+      // ❗ 줌 초기화 및 화면 리프레시를 위해 새로운 키 할당
+      _viewerKey = UniqueKey(); 
       _isLoading = false;
     });
   }
@@ -72,9 +73,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(title), content: Text(msg), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
   }
 
-  // ❗ 1.3.5 버전은 matrix 대신 scale 파라미터를 사용합니다.
+  // ❗ 1.3.5 버전 규격에 맞는 가장 확실한 FIT(줌 리셋) 방법
   void _resetFit() {
-    _pdfController.zoomTo(scale: 1.0);
+    _loadPdf(); 
   }
 
   void _next() {
@@ -127,10 +128,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                           _currentPdfPath,
                           key: _viewerKey,
                           controller: _pdfController,
-                          // ❗ 1.3.5 버전용 공식 파라미터 적용 (PdfPageLayout.column 대신 pdfPageLayoutVertical 사용)
+                          // ❗ 1.3.5 버전용 최소 파라미터 적용 (에러 유발 옵션 전량 삭제)
                           params: PdfViewerParams(
                             maxScale: 15.0,
-                            layoutPages: pdfPageLayoutVertical, 
+                            onViewerReady: (document, controller) {
+                              debugPrint("뷰어 로드 완료");
+                            },
                           ),
                         ),
                       )
