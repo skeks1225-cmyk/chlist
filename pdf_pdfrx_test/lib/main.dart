@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:pdfrx/pdfrx.dart';
+import 'package:pdfrx/pdfrx.dart'; // ❗ 최신 2.2.24 버전 사용
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 
 void main() {
-  runApp(const MaterialApp(home: PdfrxTestHome()));
+  runApp(const MaterialApp(
+    debugShowCheckedModeBanner: false,
+    home: PdfrxPureTest(),
+  ));
 }
 
-class PdfrxTestHome extends StatefulWidget {
-  const PdfrxTestHome({super.key});
+class PdfrxPureTest extends StatefulWidget {
+  const PdfrxPureTest({super.key});
 
   @override
-  State<PdfrxTestHome> createState() => _PdfrxTestHomeState();
+  State<PdfrxPureTest> createState() => _PdfrxPureTestState();
 }
 
-class _PdfrxTestHomeState extends State<PdfrxTestHome> {
+class _PdfrxPureTestState extends State<PdfrxPureTest> {
   String? _selectedPath;
 
   @override
@@ -49,8 +52,8 @@ class _PdfrxTestHomeState extends State<PdfrxTestHome> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("pdfrx 순정 테스트"),
-        backgroundColor: Colors.teal,
+        title: const Text("pdfrx 최신버전 순정 테스트"),
+        backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
       ),
       body: Center(
@@ -58,9 +61,9 @@ class _PdfrxTestHomeState extends State<PdfrxTestHome> {
             ? ElevatedButton.icon(
                 onPressed: _pickFile,
                 icon: const Icon(Icons.picture_as_pdf),
-                label: const Text("도면 선택하기"),
+                label: const Text("테스트할 도면 선택"),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.teal,
+                  backgroundColor: Colors.indigo,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(200, 60),
                 ),
@@ -68,21 +71,13 @@ class _PdfrxTestHomeState extends State<PdfrxTestHome> {
             : Column(
                 children: [
                   Expanded(
+                    // ❗ 최신 버전의 가장 기본적인 호출 방식
                     child: PdfViewer.file(
                       _selectedPath!,
-                      // ❗ 모든 커스텀 기능을 빼고 라이브러리 기본값으로만 실행
-                      params: PdfViewerParams(
-                        onViewerReady: (document, controller) {
-                          debugPrint("뷰어 준비 완료");
-                        },
-                        onError: (error) {
-                          debugPrint("에러 발생: $error");
-                        },
-                      ),
                     ),
                   ),
                   Container(
-                    color: Colors.black,
+                    color: Colors.grey[900],
                     padding: const EdgeInsets.all(15),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,

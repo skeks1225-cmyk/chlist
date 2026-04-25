@@ -9,7 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  pdfrx: ^1.0.67
+  # ❗ 최신 버전(2.x)으로 제한을 풉니다.
+  pdfrx: ^2.2.24
   file_picker: ^8.1.7
   permission_handler: ^11.3.1
 
