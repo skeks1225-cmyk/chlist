@@ -8,18 +8,18 @@ import 'package:path/path.dart' as p;
 void main() {
   runApp(const MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: PdfrxOfficialEventTest(),
+    home: PdfrxStackGestureTest(),
   ));
 }
 
-class PdfrxOfficialEventTest extends StatefulWidget {
-  const PdfrxOfficialEventTest({super.key});
+class PdfrxStackGestureTest extends StatefulWidget {
+  const PdfrxStackGestureTest({super.key});
 
   @override
-  State<PdfrxOfficialEventTest> createState() => _PdfrxOfficialEventTestState();
+  State<PdfrxStackGestureTest> createState() => _PdfrxStackGestureTestState();
 }
 
-class _PdfrxOfficialEventTestState extends State<PdfrxOfficialEventTest> {
+class _PdfrxStackGestureTestState extends State<PdfrxStackGestureTest> {
   List<String> _allFiles = [];
   int _currentIndex = -1;
   final PdfViewerController _pdfController = PdfViewerController();
@@ -77,7 +77,7 @@ class _PdfrxOfficialEventTestState extends State<PdfrxOfficialEventTest> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("pdfrx 공식 이벤트 테스트"),
+        title: const Text("pdfrx 스택 오버레이 테스트"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
@@ -93,33 +93,45 @@ class _PdfrxOfficialEventTestState extends State<PdfrxOfficialEventTest> {
               child: ElevatedButton.icon(
                 onPressed: _pickInitialFile,
                 icon: const Icon(Icons.folder_copy),
-                label: const Text("파일 선택 (스와이프 테스트)"),
+                label: const Text("도면 폴더 연결"),
                 style: ElevatedButton.styleFrom(minimumSize: const Size(200, 60)),
               ),
             )
-          : PdfViewer.file(
-              _allFiles[_currentIndex],
-              controller: _pdfController,
-              key: ValueKey(_allFiles[_currentIndex]),
-              params: PdfViewerParams(
-                maxScale: 10.0,
-                // ❗ [지피티 추천] 엔진이 조작 종료를 감지했을 때 실행되는 공식 콜백
-                onInteractionEnd: (details) {
-                  // 1. 현재 줌 배율이 전체핏(1.0) 근처인지 확인
-                  // details.zoom은 엔진이 직접 계산해서 주는 정확한 값입니다.
-                  if (details.zoom <= 1.01) {
-                    // 2. 수평 이동 속도 확인 (Velocity)
-                    // 왼쪽으로 휙: 음수(-), 오른쪽으로 휙: 양수(+)
-                    final double vx = details.velocity.pixelsPerSecond.dx;
-                    
-                    if (vx < -500) {
-                      _goToNext(); // 다음 도면
-                    } else if (vx > 500) {
-                      _goToPrev(); // 이전 도면
-                    }
-                  }
-                },
-              ),
+          : Stack(
+              children: [
+                // 1. 바닥 레이어: 도면 뷰어
+                PdfViewer.file(
+                  _allFiles[_currentIndex],
+                  controller: _pdfController,
+                  key: ValueKey(_allFiles[_currentIndex]),
+                ),
+
+                // 2. ❗ 최상단 레이어: 지피티 추천 스와이프 감지기
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent, // ❗ 터치 신호를 아래로 통과시킴
+                    onHorizontalDragEnd: (details) {
+                      // ❗ 로그 확인용
+                      debugPrint("스와이프 동작 감지됨!");
+
+                      // pdfrx 2.x에서 줌 값을 가져오는 가장 안전한 방법
+                      // 에러 방지를 위해 1.05 이하일 때만 작동하도록 설계
+                      final double currentZoom = _pdfController.currentValue.zoom;
+                      
+                      if (currentZoom <= 1.05) {
+                        final double velocity = details.primaryVelocity ?? 0;
+                        if (velocity < -300) {
+                          debugPrint("다음 파일로 이동");
+                          _goToNext();
+                        } else if (velocity > 300) {
+                          debugPrint("이전 파일로 이동");
+                          _goToPrev();
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
     );
   }
