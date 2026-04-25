@@ -8,24 +8,22 @@ import 'package:path/path.dart' as p;
 void main() {
   runApp(const MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: PdfrxFinalTest(),
+    home: PdfrxPerfectSwipeTest(),
   ));
 }
 
-class PdfrxFinalTest extends StatefulWidget {
-  const PdfrxFinalTest({super.key});
+class PdfrxPerfectSwipeTest extends StatefulWidget {
+  const PdfrxPerfectSwipeTest({super.key});
 
   @override
-  State<PdfrxFinalTest> createState() => _PdfrxFinalTestState();
+  State<PdfrxPerfectSwipeTest> createState() => _PdfrxPerfectSwipeTestState();
 }
 
-class _PdfrxFinalTestState extends State<PdfrxFinalTest> {
+class _PdfrxPerfectSwipeTestState extends State<PdfrxPerfectSwipeTest> {
   List<String> _allFiles = [];
   int _currentIndex = -1;
   final PdfViewerController _pdfController = PdfViewerController();
-  
-  // ❗ 사용자 확인을 위한 상태 메시지
-  String _gestureStatus = "제스처 대기 중";
+  String _gestureStatus = "대기 중";
 
   @override
   void initState() {
@@ -80,9 +78,16 @@ class _PdfrxFinalTestState extends State<PdfrxFinalTest> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("pdfrx 제스처 최종 확인"),
+        title: const Text("pdfrx 진짜 최종 제스처"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
+        actions: [
+          if (_currentIndex != -1)
+            Center(child: Padding(
+              padding: const EdgeInsets.only(right: 15),
+              child: Text("${_currentIndex + 1} / ${_allFiles.length}"),
+            )),
+        ],
       ),
       body: _currentIndex == -1
           ? Center(
@@ -101,18 +106,19 @@ class _PdfrxFinalTestState extends State<PdfrxFinalTest> {
                     controller: _pdfController,
                     key: ValueKey(_allFiles[_currentIndex]),
                     params: PdfViewerParams(
-                      maxScale: 10.0,
-                      // ❗ [중요] 도면 엔진 내부의 공식 콜백 사용 (충돌 없음)
+                      maxScale: 15.0,
+                      // ❗ [최신 API] 조작 종료 시점 감지
                       onInteractionEnd: (details) {
-                        final double zoom = details.zoom;
+                        // ❗ pdfrx 2.2.24에서 줌(배율)을 가져오는 유일한 공식 방법
+                        final double currentZoom = _pdfController.currentMatrix.storage[0];
                         final double vx = details.velocity.pixelsPerSecond.dx;
 
                         setState(() {
-                          _gestureStatus = "배율: ${zoom.toStringAsFixed(2)}, 속도: ${vx.toStringAsFixed(0)}";
+                          _gestureStatus = "배율: ${currentZoom.toStringAsFixed(2)}, 속도: ${vx.toStringAsFixed(0)}";
                         });
 
-                        // 전체핏(1.05 이하) 상태에서만 파일 넘기기 작동
-                        if (zoom <= 1.05) {
+                        // 1.05 이하(전체핏)일 때만 파일 넘기기 작동
+                        if (currentZoom <= 1.05) {
                           if (vx < -500) {
                             _goToNext();
                           } else if (vx > 500) {
@@ -123,21 +129,12 @@ class _PdfrxFinalTestState extends State<PdfrxFinalTest> {
                     ),
                   ),
                 ),
-                // ❗ 사용자 확인용 하단 상태 바
                 Container(
                   width: double.infinity,
                   color: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text("${_currentIndex + 1} / ${_allFiles.length}", style: const TextStyle(color: Colors.white)),
-                      Text(_gestureStatus, style: const TextStyle(color: Colors.yellow, fontSize: 12)),
-                      TextButton(
-                        onPressed: () => setState(() => _currentIndex = -1),
-                        child: const Text("폴더 재선택", style: TextStyle(color: Colors.cyan)),
-                      ),
-                    ],
+                  padding: const EdgeInsets.all(10),
+                  child: Center(
+                    child: Text(_gestureStatus, style: const TextStyle(color: Colors.yellow, fontSize: 12)),
                   ),
                 ),
               ],
