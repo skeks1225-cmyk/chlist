@@ -22,15 +22,16 @@ jobs:
           channel: 'stable'
           flutter-version: '3.41.7'
 
-      # ❗ 메인 앱 빌드로 원복
-      - name: Build Main App
+      # ❗ 오직 'pdf_sync_test' 프로젝트만 빌드
+      - name: Build Syncfusion Test App
         run: |
+          cd pdf_sync_test
           flutter clean
           flutter pub get
           flutter build apk --release
         
-      - name: Upload Main APK
+      - name: Upload Test APK
         uses: actions/upload-artifact@v4
         with:
-          name: CheckSheet-Main-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: Syncfusion-Viewer-Test-APK
+          path: pdf_sync_test/build/app/outputs/flutter-apk/app-release.apk
