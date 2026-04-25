@@ -8,22 +8,20 @@ import 'package:path/path.dart' as p;
 void main() {
   runApp(const MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: PdfrxPerfectSwipeTest(),
+    home: PdfrxMinimalTest(),
   ));
 }
 
-class PdfrxPerfectSwipeTest extends StatefulWidget {
-  const PdfrxPerfectSwipeTest({super.key});
+class PdfrxMinimalTest extends StatefulWidget {
+  const PdfrxMinimalTest({super.key});
 
   @override
-  State<PdfrxPerfectSwipeTest> createState() => _PdfrxPerfectSwipeTestState();
+  State<PdfrxMinimalTest> createState() => _PdfrxMinimalTestState();
 }
 
-class _PdfrxPerfectSwipeTestState extends State<PdfrxPerfectSwipeTest> {
+class _PdfrxMinimalTestState extends State<PdfrxMinimalTest> {
   List<String> _allFiles = [];
   int _currentIndex = -1;
-  final PdfViewerController _pdfController = PdfViewerController();
-  String _gestureStatus = "대기 중";
 
   @override
   void initState() {
@@ -78,7 +76,7 @@ class _PdfrxPerfectSwipeTestState extends State<PdfrxPerfectSwipeTest> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("pdfrx 진짜 최종 제스처"),
+        title: const Text("스와이프 신호 테스트 (줌X)"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
@@ -93,48 +91,33 @@ class _PdfrxPerfectSwipeTestState extends State<PdfrxPerfectSwipeTest> {
           ? Center(
               child: ElevatedButton.icon(
                 onPressed: _pickInitialFile,
-                icon: const Icon(Icons.folder_open),
+                icon: const Icon(Icons.folder_copy),
                 label: const Text("도면 폴더 연결"),
                 style: ElevatedButton.styleFrom(minimumSize: const Size(200, 60)),
               ),
             )
-          : Column(
+          : Stack(
               children: [
-                Expanded(
-                  child: PdfViewer.file(
-                    _allFiles[_currentIndex],
-                    controller: _pdfController,
-                    key: ValueKey(_allFiles[_currentIndex]),
-                    params: PdfViewerParams(
-                      maxScale: 15.0,
-                      // ❗ [최신 API] 조작 종료 시점 감지
-                      onInteractionEnd: (details) {
-                        // ❗ pdfrx 2.2.24에서 줌(배율)을 가져오는 유일한 공식 방법
-                        final double currentZoom = _pdfController.currentMatrix.storage[0];
-                        final double vx = details.velocity.pixelsPerSecond.dx;
-
-                        setState(() {
-                          _gestureStatus = "배율: ${currentZoom.toStringAsFixed(2)}, 속도: ${vx.toStringAsFixed(0)}";
-                        });
-
-                        // 1.05 이하(전체핏)일 때만 파일 넘기기 작동
-                        if (currentZoom <= 1.05) {
-                          if (vx < -500) {
-                            _goToNext();
-                          } else if (vx > 500) {
-                            _goToPrev();
-                          }
-                        }
-                      },
-                    ),
-                  ),
+                // 1. 하단: 도면 뷰어
+                PdfViewer.file(
+                  _allFiles[_currentIndex],
+                  key: ValueKey(_allFiles[_currentIndex]),
                 ),
-                Container(
-                  width: double.infinity,
-                  color: Colors.black,
-                  padding: const EdgeInsets.all(10),
-                  child: Center(
-                    child: Text(_gestureStatus, style: const TextStyle(color: Colors.yellow, fontSize: 12)),
+
+                // 2. 상단: 투명 스와이프 감지 레이어 (줌 조건 없음)
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragEnd: (details) {
+                      final double vx = details.primaryVelocity ?? 0;
+                      
+                      // ❗ 속도만 체크하여 파일 넘김 실행
+                      if (vx < -500) {
+                        _goToNext();
+                      } else if (vx > 500) {
+                        _goToPrev();
+                      }
+                    },
                   ),
                 ),
               ],
