@@ -8,19 +8,20 @@ import 'package:path/path.dart' as p;
 void main() {
   runApp(const MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: PdfrxMinimalTest(),
+    home: PdfrxPageViewTest(),
   ));
 }
 
-class PdfrxMinimalTest extends StatefulWidget {
-  const PdfrxMinimalTest({super.key});
+class PdfrxPageViewTest extends StatefulWidget {
+  const PdfrxPageViewTest({super.key});
 
   @override
-  State<PdfrxMinimalTest> createState() => _PdfrxMinimalTestState();
+  State<PdfrxPageViewTest> createState() => _PdfrxPageViewTestState();
 }
 
-class _PdfrxMinimalTestState extends State<PdfrxMinimalTest> {
+class _PdfrxPageViewTestState extends State<PdfrxPageViewTest> {
   List<String> _allFiles = [];
+  late PageController _pageController;
   int _currentIndex = -1;
 
   @override
@@ -53,22 +54,14 @@ class _PdfrxMinimalTestState extends State<PdfrxMinimalTest> {
           .toList();
       files.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
+      int initialIndex = files.indexOf(pickedPath);
+      
       setState(() {
         _allFiles = files;
-        _currentIndex = _allFiles.indexOf(pickedPath);
+        _currentIndex = initialIndex;
+        // ❗ 현재 선택한 파일 위치에서 시작하는 페이지 컨트롤러 생성
+        _pageController = PageController(initialPage: initialIndex);
       });
-    }
-  }
-
-  void _goToNext() {
-    if (_currentIndex < _allFiles.length - 1) {
-      setState(() => _currentIndex++);
-    }
-  }
-
-  void _goToPrev() {
-    if (_currentIndex > 0) {
-      setState(() => _currentIndex--);
     }
   }
 
@@ -76,7 +69,7 @@ class _PdfrxMinimalTestState extends State<PdfrxMinimalTest> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("스와이프 신호 테스트 (줌X)"),
+        title: const Text("스와이프 최종 (PageView)"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
@@ -96,31 +89,22 @@ class _PdfrxMinimalTestState extends State<PdfrxMinimalTest> {
                 style: ElevatedButton.styleFrom(minimumSize: const Size(200, 60)),
               ),
             )
-          : Stack(
-              children: [
-                // 1. 하단: 도면 뷰어
-                PdfViewer.file(
-                  _allFiles[_currentIndex],
-                  key: ValueKey(_allFiles[_currentIndex]),
-                ),
-
-                // 2. 상단: 투명 스와이프 감지 레이어 (줌 조건 없음)
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onHorizontalDragEnd: (details) {
-                      final double vx = details.primaryVelocity ?? 0;
-                      
-                      // ❗ 속도만 체크하여 파일 넘김 실행
-                      if (vx < -500) {
-                        _goToNext();
-                      } else if (vx > 500) {
-                        _goToPrev();
-                      }
-                    },
-                  ),
-                ),
-              ],
+          : PageView.builder(
+              // ❗ [핵심] 좌우 넘기기를 담당하는 공식 위젯
+              controller: _pageController,
+              itemCount: _allFiles.length,
+              onPageChanged: (index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              },
+              itemBuilder: (context, index) {
+                // 각 페이지마다 독립적인 뷰어 생성
+                return PdfViewer.file(
+                  _allFiles[index],
+                  key: ValueKey(_allFiles[index]),
+                );
+              },
             ),
     );
   }
