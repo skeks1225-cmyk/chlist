@@ -29,6 +29,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _autoSave = true;
   bool _isLoading = false;
   bool _isSorted = false;
+  
+  // ❗ 동기화 상태 관리 변수 추가
+  bool _isSyncing = false;
 
   String _currentSortCol = ""; 
   bool _isAscending = true;   
@@ -49,7 +52,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
     await _loadSettings();
     await _ensureBaseDirectory();
-    // ❗ [개선] 불필요한 자동 접속을 제거하여 초기 실행 안정성을 확보합니다.
   }
 
   Future<void> _ensureBaseDirectory() async {
@@ -241,14 +243,25 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     List<Map<String, dynamic>> files = await _smbService.listFiles(share, path);
     setState(() => _isLoading = false);
     if (!mounted) return;
+
+    // ❗ [개선] 모드에 맞는 확장자만 필터링
+    List<Map<String, dynamic>> filteredFiles = files.where((f) {
+      bool isDir = f['isDirectory'] as bool;
+      if (isDir) return true;
+      String name = (f['name'] as String).toLowerCase();
+      if (mode == 'file') return name.endsWith('.xlsx') || name.endsWith('.xls');
+      if (mode == 'dir') return name.endsWith('.pdf');
+      return true;
+    }).toList();
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text("$share/$path"),
         content: SizedBox(width: double.maxFinite, height: 400, child: Column(children: [
           if (path != "") ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showSmbFiles(share, p.dirname(path) == "." ? "" : p.dirname(path), mode); }),
-          Expanded(child: ListView.builder(itemCount: files.length, itemBuilder: (c, i) {
-            final f = files[i];
+          Expanded(child: ListView.builder(itemCount: filteredFiles.length, itemBuilder: (c, i) {
+            final f = filteredFiles[i];
             bool isDir = f['isDirectory'] as bool;
             String name = f['name'] as String;
             return ListTile(leading: Icon(isDir ? Icons.folder : Icons.description), title: Text(name), onTap: () {
@@ -274,12 +287,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     else _showError("오류", "파일 다운로드 실패");
   }
 
-  // ❗ PDF 전체 스마트 동기화 (리스트 품목 기준)
+  // ❗ [개선] 백그라운드 동기화 로직
   Future<void> _syncAllPdfs() async {
     if (_originalItems.isEmpty) return;
     List<ItemModel> targets = _originalItems.where((i) => !i.isSubheading).toList();
     
-    setState(() => _isLoading = true);
+    // 화면 전체를 가리는 _isLoading 대신 _isSyncing 사용
+    setState(() => _isSyncing = true);
+    
     try {
       String shareWithRest = _pdfFolderPath.replaceFirst("smb://", "");
       if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
@@ -291,13 +306,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         String cleanCode = item.itemCode.trim();
         String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
         String localFilePath = "$_baseDownloadPath/CheckSheet/$cleanCode.pdf";
+        
+        // await를 사용하지만 UI는 차단하지 않음
         await _smbService.downloadFile(share, remoteFilePath, localFilePath);
       }
       _showSnackBar("✅ ${targets.length}개 품목 동기화 완료!");
     } catch (e) {
-      _showError("동기화 오류", e.toString());
+      debugPrint("Sync Error: $e");
     } finally {
-      setState(() => _isLoading = false);
+      setState(() => _isSyncing = false);
     }
   }
 
@@ -376,9 +393,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 const SizedBox(width: 4),
                 if (isSmbPdf) ...[
                   ElevatedButton(
-                    onPressed: _isLoading ? null : _syncAllPdfs,
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(60, 45), padding: const EdgeInsets.symmetric(horizontal: 8)),
-                    child: const Text("전체동기화", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    onPressed: _isSyncing ? null : _syncAllPdfs,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(80, 45), padding: const EdgeInsets.symmetric(horizontal: 8)),
+                    // ❗ 글자 변경 및 상태 표시
+                    child: Text(_isSyncing ? "동기화중..." : "PDF동기화", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(width: 4),
                 ],
@@ -401,6 +419,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               },
             ),
           ),
+          // ❗ 동기화 중임을 알리는 하단 미세 바 (선택 사항)
+          if (_isSyncing) const LinearProgressIndicator(minHeight: 2, color: Colors.orange),
         ],
       ),
     );
