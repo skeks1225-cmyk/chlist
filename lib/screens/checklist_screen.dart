@@ -36,10 +36,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   final String _baseDownloadPath = "/storage/emulated/0/Download";
 
+  // ❗ [핵심] 마지막 입력칸을 잊게 만드는 가짜 포커스 노드
+  final FocusNode _dummyFocusNode = FocusNode();
+
   @override
   void initState() {
     super.initState();
     _initApp();
+  }
+
+  @override
+  void dispose() {
+    _dummyFocusNode.dispose(); // 메모리 해제
+    super.dispose();
   }
 
   Future<void> _initApp() async {
@@ -105,13 +114,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setString('lastDir', p.dirname(path));
   }
 
-  // ❗ 키패드 닫기 공통 함수
-  void _dismissKeyboard() {
-    FocusScope.of(context).unfocus();
+  // ❗ [핵심] 포커스를 비고란에서 뺏어와 "망각"시키는 함수
+  void _forgetFocus() {
+    FocusScope.of(context).requestFocus(_dummyFocusNode);
   }
 
   void _resetSort() {
-    _dismissKeyboard();
+    _forgetFocus();
     setState(() {
       _displayItems = List.from(_originalItems);
       _isSorted = false;
@@ -120,7 +129,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   void _sortBy(String col) {
-    _dismissKeyboard();
+    _forgetFocus();
     setState(() {
       if (_currentSortCol == col) {
         _isAscending = !_isAscending;
@@ -159,7 +168,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Future<void> _pickSource(String mode) async {
-    _dismissKeyboard();
+    _forgetFocus();
     showModalBottomSheet(
       context: context,
       builder: (ctx) => Column(
@@ -174,7 +183,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   void _openExternalSettings() async {
-    _dismissKeyboard();
+    _forgetFocus();
     final prefs = await SharedPreferences.getInstance();
     final ipController = TextEditingController(text: prefs.getString('smbIp'));
     final userController = TextEditingController(text: prefs.getString('smbUser'));
@@ -225,7 +234,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   void _openSmbShares(String mode) async {
-    _dismissKeyboard();
+    _forgetFocus();
     setState(() => _isLoading = true);
     try {
       List<String> shares = await _smbService.listShares();
@@ -295,7 +304,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Future<void> _syncAllPdfs() async {
-    _dismissKeyboard();
+    _forgetFocus();
     if (_originalItems.isEmpty) return;
     List<ItemModel> targets = _originalItems.where((i) => !i.isSubheading).toList();
     
@@ -327,7 +336,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Future<void> _openCustomPicker(String mode) async {
-    _dismissKeyboard();
+    _forgetFocus();
     final prefs = await SharedPreferences.getInstance();
     String startPath = prefs.getString('lastDir') ?? "$_baseDownloadPath/CheckSheet";
     if (!Directory(startPath).existsSync()) startPath = _baseDownloadPath;
@@ -385,7 +394,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         foregroundColor: Colors.white,
         actions: [
           if (_isSorted) TextButton(onPressed: _resetSort, child: const Text("정렬리셋", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-          TextButton.icon(onPressed: () { _dismissKeyboard(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
+          TextButton.icon(onPressed: () { _forgetFocus(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
         ],
       ),
       body: Column(
@@ -410,7 +419,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 ],
                 ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("리셋", style: TextStyle(fontSize: 12))),
                 const SizedBox(width: 4),
-                ElevatedButton(onPressed: _manualSave, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("저장", style: TextStyle(fontSize: 12))),
+                ElevatedButton(onPressed: () { _forgetFocus(); _manualSave(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("저장", style: TextStyle(fontSize: 12))),
               ],
             ),
           ),
@@ -428,13 +437,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             ),
           ),
           if (_isSyncing) const LinearProgressIndicator(minHeight: 2, color: Colors.orange),
+          // ❗ 보이지 않는 가짜 포커스 존
+          Offstage(child: TextField(focusNode: _dummyFocusNode, readOnly: true)),
         ],
       ),
     );
   }
 
   void _showResetConfirm() {
-    _dismissKeyboard();
+    _forgetFocus();
     if (_originalItems.isEmpty) return;
     showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("데이터 리셋"), content: const Text("모든 체크와 비고를 지우시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")), TextButton(onPressed: () { _resetAllData(); Navigator.pop(ctx); }, child: const Text("예", style: TextStyle(color: Colors.red)))]));
   }
@@ -449,8 +460,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Future<void> _handleItemClick(ItemModel item) async {
-    // ❗ 뷰어 진입 전 키패드 확실히 닫기
-    _dismissKeyboard();
+    // ❗ [핵심] 도면 열기 전 포커스를 가짜 존으로 이동시켜 "비고란 포커스 기억"을 삭제
+    _forgetFocus();
     
     if (_autoSave && _excelPath.isNotEmpty) {
       _manualSave(silent: true);
@@ -489,9 +500,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       height: 45,
       child: Row(
         children: [
-          // ❗ No 클릭 시 키패드 닫기
+          // ❗ No 클릭 시 포커스 강제 해제
           InkWell(
-            onTap: _dismissKeyboard,
+            onTap: _forgetFocus,
             child: SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
           ),
           Expanded(flex: 5, child: InkWell(
@@ -506,26 +517,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ),
             ),
           )),
-          // ❗ 수량 클릭 시 키패드 닫기
+          // ❗ 수량 클릭 시 포커스 강제 해제
           InkWell(
-            onTap: _dismissKeyboard,
+            onTap: _forgetFocus,
             child: SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
           ),
-          _checkBtn(item.complete, Colors.green, () { _dismissKeyboard(); _toggleStatus(item, 'complete'); }, isDark),
-          _checkBtn(item.shortage, Colors.orange, () { _dismissKeyboard(); _toggleStatus(item, 'shortage'); }, isDark),
-          _checkBtn(item.rework, Colors.red, () { _dismissKeyboard(); _toggleStatus(item, 'rework'); }, isDark),
+          _checkBtn(item.complete, Colors.green, () { _forgetFocus(); _toggleStatus(item, 'complete'); }, isDark),
+          _checkBtn(item.shortage, Colors.orange, () { _forgetFocus(); _toggleStatus(item, 'shortage'); }, isDark),
+          _checkBtn(item.rework, Colors.red, () { _forgetFocus(); _toggleStatus(item, 'rework'); }, isDark),
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: TextField(
             controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)),
             style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: ''),
             onChanged: (val) => item.remarks = val,
             onTapOutside: (event) {
-              _dismissKeyboard();
+              _forgetFocus();
               if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
             },
             onSubmitted: (val) {
               item.remarks = val;
-              _dismissKeyboard();
+              _forgetFocus();
               if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
             },
           ))),

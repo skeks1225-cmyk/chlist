@@ -1,0 +1,44 @@
+📋 CheckSheet 앱 최종 기술 요약본 (Rebuild Guide)
+
+1. 핵심 아키텍처 (Tech Stack)
+* 프레임워크: Flutter (Dart) + Android Native (Kotlin)
+* SMB 엔진: jCIFS-ng (v2.1.34) 단일 체제
+  - 이유: Windows 10/11 및 Tailscale 환경에서 공유 목록 검색과 파일 전송을 가장 안정적으로 수행함.
+* 데이터 처리: 
+  - excel: 엑셀 읽기/쓰기 (TextCellValue 방식 사용)
+  - pdfx: 내부 PDF 뷰어 (외부 앱 호출 금지)
+* 권한: MANAGE_EXTERNAL_STORAGE (안드로이드 11+ 대응 필수)
+
+2. 네이티브 엔진 설정 (The Heart: Kotlin)
+* 무상태(Stateless) & 온데만드(On-Demand) 접속
+  - 원칙: 앱은 세션을 유지하지 않음. 모든 요청 시점에 IP/ID/PW를 전달받아 즉시 인증.
+  - 안정성: ensureContext() 초기화는 반드시 백그라운드 쓰레드에서 실행 (NetworkOnMainThreadException 방지).
+  - Throwable 캐칭: 모든 네이티브 함수는 Throwable로 감싸서 Crash 방지.
+* 지능형 파일 매칭: PC 파일명 대소문자 무시를 위해 ignoreCase 매칭 필수 적용.
+
+3. 핵심 기능 로직 (Key Logic)
+* 스마트 동기화 (Smart Sync)
+  - 로컬과 PC 파일의 [용량 + 수정시간] 대조하여 바뀐 파일만 다운로드.
+* 5배속 PDF 동기화 (Batch Processing)
+  - Future.wait를 활용하여 파일을 5개씩 묶어서 동시에 다운로드.
+* 내추럴 정렬 (Natural Sort)
+  - 'No'와 '수량' 컬럼은 int.tryParse를 통한 숫자 크기 기반 정렬 적용.
+
+4. UI/UX 디테일 (The Interface)
+* SafeArea: 시스템 내비게이션 바와의 간섭 방지.
+* 포커스 자동 해제: 
+  - 버튼 및 특정 칸 클릭 시 즉시 unfocus() 호출하여 키패드 닫기.
+  - 키패드가 내려감과 동시에 자동 저장 실행.
+* 가시성: 접속 테스트 성공 시 팝업창에 실제 공유 폴더 리스트 출력.
+
+5. 빌드 설정 (The Shield: Gradle)
+* Bouncy Castle 보안 충돌 해결
+  - bcprov-jdk18on:1.78.1 버전으로 강제 고정 (ResolutionStrategy).
+  - 주의: packaging 설정에서 인증서(*.RSA, *.SF)는 절대 삭제 금지.
+* Proguard (R8) 설정
+  - -keep class org.bouncycastle.** { *; } 설정으로 보안 클래스 보호.
+
+⚠️ 주의사항
+1. jCIFS-ng 초기화는 반드시 suspend 함수 내부에서 진행할 것.
+2. SMB 경로 끝의 슬래시(/) 처리를 항상 정규화할 것.
+3. 라이브러리 충돌 방지를 위해 단일 엔진 체제를 유지할 것.
