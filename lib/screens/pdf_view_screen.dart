@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:pdfx/pdfx.dart';
+import 'package:flutter_pdfview/flutter_pdfview.dart'; // ❗ 새 엔진 임포트
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
 import 'dart:io';
-import 'dart:typed_data';
 
 class PdfViewerScreen extends StatefulWidget {
   final List<ItemModel> items;
@@ -27,9 +26,8 @@ class PdfViewerScreen extends StatefulWidget {
 
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
   late int _currentIndex;
-  PdfControllerPinch? _pdfController;
   String _currentPdfPath = "";
-  Key _viewerKey = UniqueKey();
+  Key _viewerKey = UniqueKey(); // ❗ FIT 버튼 작동을 위한 키
   final TextEditingController _remarksController = TextEditingController();
   bool _isLoading = false;
 
@@ -68,37 +66,19 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
 
     _remarksController.text = item.remarks;
-    _pdfController?.dispose();
     
-    final targetFile = File(localPath);
-    if (targetFile.existsSync()) {
-      try {
-        final Uint8List bytes = await targetFile.readAsBytes();
-        setState(() {
-          _currentPdfPath = localPath;
-          _pdfController = PdfControllerPinch(
-            document: PdfDocument.openData(bytes), 
-            initialPage: 1,
-          );
-          _viewerKey = UniqueKey();
-        });
-      } catch (e) {
-        _showError("파일 읽기 실패", e.toString());
-      }
-    } else {
-      setState(() {
-        _currentPdfPath = "";
-        _pdfController = null;
-        _viewerKey = UniqueKey();
-      });
-    }
-    setState(() => _isLoading = false);
+    setState(() {
+      _currentPdfPath = File(localPath).existsSync() ? localPath : "";
+      _viewerKey = UniqueKey(); // 화면 강제 리프레시
+      _isLoading = false;
+    });
   }
 
   void _showError(String title, String msg) {
     showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(title), content: Text(msg), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
   }
 
+  // ❗ FIT 버튼 누르면 다시 로드하여 전체 핏 복구
   void _resetFit() => _loadPdf();
 
   void _next() {
@@ -117,7 +97,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   @override
   void dispose() {
-    _pdfController?.dispose();
     _remarksController.dispose();
     super.dispose();
   }
@@ -144,16 +123,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           Expanded(
             child: _isLoading 
                 ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                : (_pdfController != null
-                    ? PdfViewPinch(
+                : (_currentPdfPath.isNotEmpty
+                    ? PDFView(
                         key: _viewerKey,
-                        controller: _pdfController!,
-                        scrollDirection: Axis.vertical, 
-                        builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
-                          options: const DefaultBuilderOptions(),
-                          documentLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-                          pageLoaderBuilder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-                        ),
+                        filePath: _currentPdfPath,
+                        enableSwipe: true,
+                        swipeHorizontal: false,
+                        autoSpacing: true,
+                        pageFling: true,
+                        pageSnap: false,
+                        fitEachPage: true,
+                        fitPolicy: FitPolicy.BOTH, // ❗ 자유로운 축소 핵심 설정
+                        onRender: (pages) {
+                          debugPrint("PDF 렌더링 완료");
+                        },
+                        onError: (error) {
+                          _showError("뷰어 에러", error.toString());
+                        },
                       )
                     : Center(child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -166,7 +152,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         ],
                       ))),
           ),
-          // ❗ 내비게이션 바 간섭 방지를 위한 SafeArea 적용
           SafeArea(
             top: false,
             child: Container(

@@ -22,16 +22,15 @@ jobs:
           channel: 'stable'
           flutter-version: '3.41.7'
 
-      # ❗ 오직 'pdf_test_app' 프로젝트만 빌드
-      - name: Build PDF Test App
+      # ❗ 메인 앱 빌드로 원복
+      - name: Build Main App
         run: |
-          cd pdf_test_app
           flutter clean
           flutter pub get
           flutter build apk --release
         
-      - name: Upload Test APK
+      - name: Upload Main APK
         uses: actions/upload-artifact@v4
         with:
-          name: PDF-Viewer-Test-APK
-          path: pdf_test_app/build/app/outputs/flutter-apk/app-release.apk
+          name: CheckSheet-Main-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
