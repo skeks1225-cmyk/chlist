@@ -1,44 +1,39 @@
-📋 CheckSheet 앱 최종 기술 요약본 (Rebuild Guide)
+📋 CheckSheet 앱 최종 기술 요약본 (Final Rebuild Guide)
 
 1. 핵심 아키텍처 (Tech Stack)
 * 프레임워크: Flutter (Dart) + Android Native (Kotlin)
-* SMB 엔진: jCIFS-ng (v2.1.34) 단일 체제 (고성능/안정성)
-  - 이유: Windows 10/11 및 Tailscale 환경에서 가장 안정적인 공유 목록 조회 및 파일 전송 지원.
+* SMB 엔진: jCIFS-ng (v2.1.34) 단일 체제
+  - 무상태(Stateless) 아키텍처: 매 호출 시 IP/ID/PW를 전달하여 자동 재접속 보장.
 * 데이터 처리: 
-  - excel: 엑셀 읽기/쓰기 (TextCellValue 방식 사용)
-  - flutter_pdfview: 네이티브 기반 PDF 뷰어 (자유로운 핀치 줌 및 자동 fit)
-* 권한: MANAGE_EXTERNAL_STORAGE (안드로이드 11+ 직접 파일 제어)
+  - excel (v4.0.6): 엑셀 읽기/쓰기 전용.
+  - pdfrx (v1.3.5): 고성능 오픈소스 PDF 엔진 (최대 15배 확대 지원).
+  - ⚠️ 중요: excel 라이브러리가 사용하는 archive(3.x) 패키지와의 충돌 방지를 위해 반드시 pdfrx 1.3.5 버전을 유지해야 함.
+* 권한: MANAGE_EXTERNAL_STORAGE (안드로이드 11+ 필수)
 
 2. 네이티브 엔진 설정 (The Heart: Kotlin)
-* 무상태(Stateless) & 온데만드(On-Demand) 접속
-  - 원칙: 모든 네트워크 작업 호출마다 IP/ID/PW를 전달하여 재접속 수행.
-  - 안정성: ensureContext() 초기화는 반드시 백그라운드 쓰레드에서 실행 (NetworkOnMainThreadException 방지).
-  - Throwable 캐칭: 모든 에러는 Throwable로 감싸서 Crash 방지.
-* 지능형 파일 매칭: PC 파일명 대소문자 무시 (ignoreCase) 매칭 필수 적용.
+* 비동기 초기화: ensureContext()는 반드시 백그라운드 쓰레드(Dispatchers.IO)에서 호출하여 NetworkOnMainThreadException 원천 차단.
+* 안정성 설계: 모든 네이티브 통신은 Throwable 캐칭을 통해 어떤 상황에서도 앱 강제 종료를 방지함.
+* 대소문자 무시: PC 파일명(PDF vs pdf) 차이에 대응하기 위한 ignoreCase 파일 매칭 로직 탑재.
 
 3. 핵심 기능 로직 (Key Logic)
-* 스마트 동기화 (Smart Sync)
-  - 로컬과 PC 파일의 [용량 + 수정시간] 대조하여 바뀐 파일만 다운로드.
-* PDF 전체 동기화 (Batch Processing)
-  - 파일을 5개씩 묶어서 동시에 처리 (세미-병렬 방식)하여 5배 빠른 속도 제공.
-* 내추럴 정렬 (Natural Sort)
-  - 'No'와 '수량' 컬럼은 int.tryParse를 통한 숫자 크기 기반 정렬 적용.
+* 스마트 동기화 (Smart Sync): 파일의 [용량 + 수정시간]을 1ms 단위로 대조하여 변경된 도면만 쏙쏙 골라 다운로드.
+* 5배속 PDF 동기화 (Batch Processing): 100개 이상의 품목도 5개씩 한 조로 묶어 동시에 내려받는 세미-병렬 방식 적용.
+* 내추럴 숫자 정렬: No/수량 컬럼 정렬 시 1, 2, 10, 11 순서로 정렬되도록 int.tryParse 로직 적용.
 
-4. UI/UX 디테일 (The Interface)
-* SafeArea: 시스템 내비게이션 바와의 간섭 방지.
-* 포커스 자동 해제: 
-  - 비고란 외 다른 터치 발생 시, 가짜 포커스 존(Dummy FocusNode)으로 이동시켜 키패드 강제 해제.
-* 다크모드 대응: 
-  - Scaffold 배경색과 PDF 뷰어의 nightMode를 시스템 테마와 연동.
+4. UI/UX 정밀 튜닝 (Interface)
+* 테마 완벽 동기화: 
+  - 다크모드: 배경 검은색(Colors.black), 도면 원본 색상 유지.
+  - 라이트모드: 배경 밝은 회색(Colors.grey[300]), 도면 원본 색상 유지.
+  - PdfViewerParams.backgroundColor 속성을 활용하여 여백 없는 몰입감 제공.
+* 포커스 완전 망각: 
+  - 비고란 입력 외 다른 모든 터치(버전, 수량, 버튼, 도면 등) 시 가짜 포커스 노드(Dummy Node)로 포커스를 강제 이동시켜 키패드 즉시 해제.
+* FIT 기능: UniqueKey 갱신 방식을 통해 엔진 버전에 상관없이 100% 확실한 줌 리셋 기능 구현.
 
-5. 빌드 설정 (The Shield: Gradle)
-* Bouncy Castle 보안 충돌 해결
-  - bcprov-jdk18on:1.78.1 강제 고정 (resolutionStrategy).
-  - 주의: packaging 설정에서 인증서(*.RSA, *.SF)는 절대 삭제 금지.
-* Proguard (R8) 설정: 
-  - 최적화 비활성화(isMinifyEnabled = false)로 릴리즈 안정성 확보.
+5. 빌드 설정 (Gradle & Proguard)
+* 보안 라이브러리 충돌 해결: bcprov-jdk18on:1.78.1 강제 고정 및 JAR 서명 파일(*.RSA, *.SF) 유지 필수.
+* 패키징 최적화: META-INF/ 중복 파일만 pickFirst 처리하여 빌드 속도 및 안정성 확보.
 
-⚠️ 재구축 시 주의사항
-1. jCIFS-ng 초기화는 반드시 suspend 함수 내부에서 진행할 것.
-2. 모든 네트워크 작업은 반드시 Dispatchers.IO 문맥에서 실행할 것.
-3. 빌드 시 라이브러리 간의 중복 클래스 충돌 방지를 위해 반드시 force 및 exclude 전략을 포함할 것.
+⚠️ 재구축 시 절대 금기 사항
+1. 짐작으로 최신 pdfrx(2.x) 기능을 쓰지 말 것 (excel과 빌드 충돌 발생함).
+2. 빌드 시 archive 라이브러리 버전을 강제로 4.x로 올리지 말 것 (excel 라이브러리 고장의 원인).
+3. 뷰어 배경색을 위해 nightMode를 true로 하지 말 것 (도면 색상이 반전되어 업무에 지장 초래).

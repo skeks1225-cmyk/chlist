@@ -35,7 +35,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _isAscending = true;   
 
   final String _baseDownloadPath = "/storage/emulated/0/Download";
-
   final FocusNode _dummyFocusNode = FocusNode();
 
   @override
@@ -169,7 +168,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     _forgetFocus();
     showModalBottomSheet(
       context: context,
-      // ❗ 내비게이션 바 보호를 위한 SafeArea 추가
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -377,6 +375,53 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
+  // ❗ [신규] 리스트 닫기 처리
+  void _handleClose() {
+    _forgetFocus();
+    if (_originalItems.isEmpty) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("리스트 닫기"),
+        content: const Text("현재 리스트를 닫으시겠습니까?\n저장되지 않은 변경사항은 사라질 수 있습니다."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _originalItems = [];
+                _displayItems = [];
+                _currentFileName = "파일을 선택하세요";
+                _excelPath = "";
+                _isSorted = false;
+                _currentSortCol = "";
+              });
+              _saveSettings();
+              Navigator.pop(ctx);
+              _showSnackBar("리스트가 닫혔습니다.");
+            },
+            child: const Text("예", style: TextStyle(color: Colors.red)),
+          )
+        ],
+      ),
+    );
+  }
+
+  // ❗ [신규] 새로고침 처리
+  void _handleRefresh() {
+    _forgetFocus();
+    if (_excelPath.isEmpty) {
+      _showSnackBar("열려 있는 파일이 없습니다.");
+      return;
+    }
+    if (File(_excelPath).existsSync()) {
+      _loadExcelData(_excelPath);
+      _showSnackBar("🔄 리스트를 다시 읽어왔습니다.");
+    } else {
+      _showError("새로고침 실패", "파일을 찾을 수 없습니다. 다시 선택해 주세요.");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -388,11 +433,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
         foregroundColor: Colors.white,
         actions: [
+          // ❗ [신규] 새로고침 버튼
+          IconButton(
+            onPressed: _handleRefresh,
+            icon: const Icon(Icons.refresh, color: Colors.cyanAccent),
+            tooltip: "새로고침",
+          ),
+          // ❗ [신규] 리스트 닫기 버튼
+          IconButton(
+            onPressed: _handleClose,
+            icon: const Icon(Icons.close, color: Colors.redAccent),
+            tooltip: "리스트 닫기",
+          ),
           if (_isSorted) TextButton(onPressed: _resetSort, child: const Text("정렬리셋", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
           TextButton.icon(onPressed: () { _forgetFocus(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
         ],
       ),
-      // ❗ 메인 바디 하단 보호
       body: SafeArea(
         child: Column(
           children: [
