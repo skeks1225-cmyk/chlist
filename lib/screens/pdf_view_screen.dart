@@ -63,7 +63,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _remarksController.text = item.remarks;
     setState(() {
       _currentPdfPath = File(localPath).existsSync() ? localPath : "";
-      _viewerKey = UniqueKey(); 
+      _viewerKey = UniqueKey();
       _isLoading = false;
     });
   }
@@ -100,8 +100,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   Widget build(BuildContext context) {
     final item = widget.items[_currentIndex];
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    // ❗ 테마에 따른 공통 배경색 정의
     final Color viewerBgColor = isDark ? Colors.black : Colors.grey[300]!;
 
     return Scaffold(
@@ -124,7 +122,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
                 : (_currentPdfPath.isNotEmpty
                     ? Container(
-                        // ❗ 뷰어 바깥쪽 여백 색상을 테마에 맞춤
                         color: viewerBgColor,
                         child: PdfViewer.file(
                           _currentPdfPath,
@@ -132,7 +129,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                           controller: _pdfController,
                           params: PdfViewerParams(
                             maxScale: 15.0,
-                            // ❗ 뷰어 안쪽 배경색을 테마에 맞춤
                             backgroundColor: viewerBgColor,
                             onViewerReady: (document, controller) {
                               debugPrint("뷰어 로드 완료");
@@ -178,6 +174,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                           },
                         ),
                       ),
+                      onChanged: (val) => item.remarks = val,
                       onSubmitted: (val) {
                         item.remarks = val;
                         widget.onStatusUpdate(item, 'remarks');
@@ -187,9 +184,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _statusBtn("완료", Colors.green, item.complete, () { widget.onStatusUpdate(item, 'complete'); setState(() {}); }),
-                      _statusBtn("부족", Colors.orange, item.shortage, () { widget.onStatusUpdate(item, 'shortage'); setState(() {}); }),
-                      _statusBtn("재작업", Colors.red, item.rework, () { widget.onStatusUpdate(item, 'rework'); setState(() {}); }),
+                      _statusBtn("완료", Colors.green, item.complete, () { 
+                        widget.onStatusUpdate(item, 'complete'); 
+                        setState(() {}); 
+                      }),
+                      // ❗ 부족/재작업 버튼이 '보완' 상태를 업데이트하도록 변경
+                      _statusBtn("부족", Colors.orange, item.complement == "부족", () { 
+                        item.complement = item.complement == "부족" ? "" : "부족";
+                        item.complete = false;
+                        widget.onStatusUpdate(item, 'complement'); 
+                        setState(() {}); 
+                      }),
+                      _statusBtn("재작업", Colors.red, item.complement == "재작업", () { 
+                        item.complement = item.complement == "재작업" ? "" : "재작업";
+                        item.complete = false;
+                        widget.onStatusUpdate(item, 'complement'); 
+                        setState(() {}); 
+                      }),
                     ],
                   ),
                   const SizedBox(height: 12),
