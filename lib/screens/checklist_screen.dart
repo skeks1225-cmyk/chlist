@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart'; 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/item_model.dart';
@@ -19,10 +19,10 @@ class ChecklistScreen extends StatefulWidget {
 class _ChecklistScreenState extends State<ChecklistScreen> {
   final ExcelService _excelService = ExcelService();
   final SmbService _smbService = SmbService();
-
-  List<ItemModel> _originalItems = [];
-  List<ItemModel> _displayItems = [];
-
+  
+  List<ItemModel> _originalItems = []; 
+  List<ItemModel> _displayItems = [];  
+  
   String _excelPath = "";
   String _pdfFolderPath = "";
   String _currentFileName = "파일을 선택하세요";
@@ -31,8 +31,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _isSorted = false;
   bool _isSyncing = false;
 
-  String _currentSortCol = "";
-  bool _isAscending = true;
+  String _currentSortCol = ""; 
+  bool _isAscending = true;   
 
   final String _baseDownloadPath = "/storage/emulated/0/Download";
   final FocusNode _dummyFocusNode = FocusNode();
@@ -43,8 +43,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = "";
 
-  bool _showUnfinishedOnly = false;
-  String? _selectedSectionHeader;
+  bool _showUnfinishedOnly = false; 
+  String? _selectedSectionHeader; 
 
   // ❗ 행 삭제(편집) 모드 관련 변수
   bool _isEditMode = false;
@@ -55,7 +55,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   void initState() {
     super.initState();
     _initApp();
-    _searchFocusNode.addListener(() => setState(() {}));
+    _searchFocusNode.addListener(() => setState(() {})); 
   }
 
   @override
@@ -261,11 +261,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         child: StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
             title: const TabBar(
-              labelColor: Colors.blue, unselectedLabelColor: Colors.grey,
+              labelColor: Colors.blue,
+              unselectedLabelColor: Colors.grey,
               tabs: [Tab(icon: Icon(Icons.dns), text: "연결 설정"), Tab(icon: Icon(Icons.settings_suggest), text: "공정 관리")],
             ),
             content: SizedBox(
-              width: double.maxFinite, height: 450,
+              width: double.maxFinite,
+              height: 450,
               child: TabBarView(
                 children: [
                   SingleChildScrollView(
@@ -283,7 +285,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                             String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
                             _showError(err == null ? "성공" : "오류", err == null ? "✅ 접속 성공!" : "접속 실패: $err");
                           },
-                          icon: const Icon(Icons.check_circle_outline), label: const Text("접속 테스트"),
+                          icon: const Icon(Icons.check_circle_outline),
+                          label: const Text("접속 테스트"),
                         ),
                       ],
                     ),
@@ -304,7 +307,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                             for (int i = 0; i < _processList.length; i++)
                               ListTile(
                                 key: ValueKey(_processList[i] + i.toString()),
-                                title: Text(_processList[i]), trailing: const Icon(Icons.drag_handle),
+                                title: Text(_processList[i]),
+                                trailing: const Icon(Icons.drag_handle),
                                 leading: IconButton(
                                   icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
                                   onPressed: () => setDialogState(() => _processList.removeAt(i)),
@@ -321,7 +325,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                             icon: const Icon(Icons.add_box, color: Colors.green, size: 35),
                             onPressed: () {
                               if (newProcessController.text.isNotEmpty) {
-                                setDialogState(() { _processList.add(newProcessController.text); newProcessController.clear(); });
+                                setDialogState(() {
+                                  _processList.add(newProcessController.text);
+                                  newProcessController.clear();
+                                });
                               }
                             },
                           ),
@@ -340,7 +347,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 await prefs.setString('smbPass', passController.text);
                 await prefs.setStringList('processList', _processList);
                 _smbService.setConfig(ipController.text, userController.text, passController.text);
-                setState(() {}); Navigator.pop(ctx);
+                setState(() {}); 
+                Navigator.pop(ctx);
               }, child: const Text("저장", style: TextStyle(fontWeight: FontWeight.bold))),
             ],
           ),
@@ -626,11 +634,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
     setState(() {
       bool allSelected = sectionRealIndices.every((idx) => _selectedIndices.contains(idx));
-      if (allSelected) {
-        for (var idx in sectionRealIndices) _selectedIndices.remove(idx);
-      } else {
-        _selectedIndices.addAll(sectionRealIndices);
-      }
+      if (allSelected) _selectedIndices.removeAll(sectionRealIndices);
+      else _selectedIndices.addAll(sectionRealIndices);
     });
   }
 
@@ -685,15 +690,31 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Future<void> _handleItemClick(ItemModel item) async {
     _forgetFocus();
     if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
-    
-    String cleanCode = item.itemCode.trim();
-    String localPath = "$_baseDownloadPath/CheckSheet/$cleanCode.pdf";
-    
-    if (File(localPath).existsSync()) {
-      Navigator.push(context, MaterialPageRoute(builder: (context) => PdfViewScreen(filePath: localPath, itemCode: cleanCode)));
-    } else {
-      _showError("파일 없음", "PDF 파일이 휴대폰에 없습니다.\n[PDF동기화]를 먼저 진행하거나 폴더 설정을 확인하세요.");
+    if (_pdfFolderPath.startsWith("smb://")) {
+      setState(() => _isLoading = true);
+      try {
+        String shareWithRest = _pdfFolderPath.replaceFirst("smb://", "");
+        if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
+        int firstSlash = shareWithRest.indexOf("/");
+        String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
+        String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
+        String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf";
+        String localFilePath = "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf";
+        await _smbService.downloadFile(share, remoteFilePath, localFilePath);
+      } catch (e) { debugPrint("SMB Error: $e"); }
+      finally { setState(() => _isLoading = false); }
     }
+    if (!mounted) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(
+      items: _displayItems.where((i) => !i.isSubheading).toList(),
+      initialIndex: _displayItems.where((i) => !i.isSubheading).toList().indexOf(item),
+      pdfFolderPath: _pdfFolderPath, smbService: _smbService,
+      onStatusUpdate: (it, type) {
+        if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) it.complement = ""; }); }
+        else { setState(() {}); }
+        if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
+      },
+    )));
   }
 
   void _showResetConfirm() {
@@ -703,9 +724,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   void _resetAllData() {
-    setState(() {
-      for (var item in _originalItems) { item.complete = false; item.complement = ""; item.process = ""; item.remarks = ""; }
-      _displayItems = List.from(_originalItems); _isSorted = false; _currentSortCol = "";
+    setState(() { 
+      for (var item in _originalItems) { item.complete = false; item.complement = ""; item.process = ""; item.remarks = ""; } 
+      _displayItems = List.from(_originalItems); _isSorted = false; _currentSortCol = ""; 
       _selectedSectionHeader = null; _showUnfinishedOnly = false;
     });
     if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
@@ -722,12 +743,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
         foregroundColor: Colors.white,
         actions: _isEditMode ? [
-          TextButton.icon(onPressed: _deleteSelectedRows, icon: const Icon(Icons.delete_forever, color: Colors.redAccent), label: Text("확인(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),    
+          TextButton.icon(onPressed: _deleteSelectedRows, icon: const Icon(Icons.delete_forever, color: Colors.redAccent), label: Text("확인(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
           TextButton(onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); }), child: const Text("취소", style: TextStyle(color: Colors.white))),
         ] : [
           IconButton(onPressed: _handleRefresh, icon: const Icon(Icons.refresh, color: Colors.cyanAccent), tooltip: "새로고침"),
           IconButton(onPressed: _handleClose, icon: const Icon(Icons.close, color: Colors.redAccent), tooltip: "리스트 닫기"),
-          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly)
+          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly) 
             TextButton(onPressed: () { setState(() { _isSorted = false; _currentSortCol = ""; _selectedSectionHeader = null; _showUnfinishedOnly = false; }); _applyFilterAndSort(); }, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
           TextButton.icon(onPressed: () { _forgetFocus(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
         ],
@@ -751,7 +772,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     ElevatedButton(onPressed: _isSyncing ? null : _syncAllPdfs, style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(80, 45), padding: const EdgeInsets.symmetric(horizontal: 8)), child: Text(_isSyncing ? "동기화중..." : "PDF동기화", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 4),
                   ],
-                  ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("리셋", style: TextStyle(fontSize: 12))), 
+                  ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("리셋", style: TextStyle(fontSize: 12))),
                   const SizedBox(width: 4),
                   ElevatedButton(onPressed: () { _forgetFocus(); _manualSave(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("저장", style: TextStyle(fontSize: 12))),
                 ],
@@ -795,7 +816,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         }
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), color: _selectedSectionHeader == item.itemCode ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300]), width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), color: _selectedSectionHeader == item.itemCode ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300]), width: double.infinity, 
                         child: Row(children: [Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)), if (_selectedSectionHeader == item.itemCode) const Padding(padding: EdgeInsets.only(left: 8.0), child: Icon(Icons.check_circle, size: 16, color: Colors.blueAccent)), const Spacer(), if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue)]),
                       ),
                     );
@@ -816,6 +837,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final bool isSelected = _selectedIndices.contains(item.realIndex);
     final Color? rowColor = _isEditMode ? (isSelected ? Colors.blue.withOpacity(0.2) : null) : (item.complete ? (isDark ? Colors.green.withOpacity(0.2) : Colors.green[50]) : null);
     return GestureDetector(
+      onPanStart: (_) { if (!_isEditMode) return; _draggedIndices.clear(); _draggedIndices.add(item.realIndex); setState(() { if (_selectedIndices.contains(item.realIndex)) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); },
+      onPanUpdate: (details) {
+        if (!_isEditMode) return;
+        // 드래그 중 다른 행 감지는 MouseRegion 또는 정밀 터치 좌표 계산이 필요하지만 모바일 성능을 위해 탭과 개별 드래그 시작 위주로 최적화
+      },
       onTap: () { if (_isEditMode) setState(() { if (_selectedIndices.contains(item.realIndex)) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); },
       child: Container(
         decoration: BoxDecoration(color: rowColor, border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45,
@@ -829,7 +855,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           _textBtn(item.process, Colors.blueGrey, _isEditMode ? null : () => _showProcessDialog(item), isDark),
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Stack(alignment: Alignment.centerRight, children: [
             TextField(enabled: !_isEditMode, controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)), style: const TextStyle(fontSize: 13), decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: ''), onChanged: (val) { item.remarks = val; setState(() {}); }, onTapOutside: (event) { _forgetFocus(); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); }, onSubmitted: (val) { item.remarks = val; _forgetFocus(); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); }),
-            if (item.remarks.isNotEmpty && !_isEditMode) GestureDetector(onTap: () { setState(() => item.remarks = ""); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); }, child: Icon(Icons.cancel, size: 18, color: Colors.grey[600])),  
+            if (item.remarks.isNotEmpty && !_isEditMode) GestureDetector(onTap: () { setState(() => item.remarks = ""); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); }, child: Icon(Icons.cancel, size: 18, color: Colors.grey[600])),
           ]))),
         ]),
       ),
