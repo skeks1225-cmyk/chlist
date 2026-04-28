@@ -37,8 +37,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   final String _baseDownloadPath = "/storage/emulated/0/Download";
   final FocusNode _dummyFocusNode = FocusNode();
 
-  // ❗ 공정 목록 관리
-  List<String> _processList = ['레이저', '탭', '버링탭', 'CS', '헤밍', 'ZB', '압입', '리베팅'];
+  // ❗ 공정 목록 업데이트 (절곡 추가)
+  List<String> _processList = ['레이저', '탭', '버링탭', 'CS', '헤밍', 'ZB', '절곡', '압입', '리베팅'];
+
+  // ❗ 검색 관련 변수
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
 
   @override
   void initState() {
@@ -49,6 +53,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   @override
   void dispose() {
     _dummyFocusNode.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -78,8 +83,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         prefs.getString('smbUser') ?? "",
         prefs.getString('smbPass') ?? "",
       );
-      // 공정 목록 로드
-      _processList = prefs.getStringList('processList') ?? ['레이저', '탭', '버링탭', 'CS', '헤밍', 'ZB', '압입', '리베팅'];
+      // ❗ 기본값에도 절곡 반영
+      _processList = prefs.getStringList('processList') ?? ['레이저', '탭', '버링탭', 'CS', '헤밍', 'ZB', '절곡', '압입', '리베팅'];
     });
     if (_excelPath.isNotEmpty && File(_excelPath).existsSync()) _loadExcelData(_excelPath);
   }
@@ -103,6 +108,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         _excelPath = path;
         _isSorted = false;
         _currentSortCol = "";
+        _searchController.clear();
+        _searchQuery = "";
       });
       _saveSettings();
       _saveLastDir(path);
@@ -122,29 +129,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     FocusScope.of(context).requestFocus(_dummyFocusNode);
   }
 
-  void _resetSort() {
-    _forgetFocus();
-    setState(() {
-      _displayItems = List.from(_originalItems);
-      _isSorted = false;
-      _currentSortCol = "";
-    });
-  }
+  // ❗ 검색 및 정렬 통합 적용 함수
+  void _applyFilterAndSort() {
+    List<ItemModel> results = List.from(_originalItems);
 
-  void _sortBy(String col) {
-    _forgetFocus();
-    setState(() {
-      if (_currentSortCol == col) {
-        _isAscending = !_isAscending;
-      } else {
-        _currentSortCol = col;
-        _isAscending = true;
-      }
-      _isSorted = true;
-      List<ItemModel> dataOnly = _originalItems.where((i) => !i.isSubheading).toList();
-      dataOnly.sort((a, b) {
+    // 1. 검색 적용 (Everything 스타일)
+    if (_searchQuery.isNotEmpty) {
+      final queryParts = _searchQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty);
+      results = results.where((item) {
+        if (item.isSubheading) return false; // 검색 시 소제목 제외
+        final targetStr = (item.itemCode + item.remarks).toLowerCase();
+        return queryParts.every((part) => targetStr.contains(part));
+      }).toList();
+    }
+
+    // 2. 정렬 적용
+    if (_isSorted) {
+      results = results.where((i) => !i.isSubheading).toList();
+      results.sort((a, b) {
         int cmp = 0;
-        switch (col) {
+        switch (_currentSortCol) {
           case 'no':
             cmp = (int.tryParse(a.no) ?? 0).compareTo(int.tryParse(b.no) ?? 0);
             break;
@@ -160,8 +164,34 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         }
         return _isAscending ? cmp : -cmp;
       });
-      _displayItems = dataOnly;
+    }
+
+    setState(() {
+      _displayItems = results;
     });
+  }
+
+  void _resetSort() {
+    _forgetFocus();
+    setState(() {
+      _isSorted = false;
+      _currentSortCol = "";
+    });
+    _applyFilterAndSort();
+  }
+
+  void _sortBy(String col) {
+    _forgetFocus();
+    setState(() {
+      if (_currentSortCol == col) {
+        _isAscending = !_isAscending;
+      } else {
+        _currentSortCol = col;
+        _isAscending = true;
+      }
+      _isSorted = true;
+    });
+    _applyFilterAndSort();
   }
 
   Future<void> _pickSource(String mode) async {
@@ -181,7 +211,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ [개편] 설정 다이얼로그 (SMB + 공정 관리)
   void _openSettings() async {
     _forgetFocus();
     final prefs = await SharedPreferences.getInstance();
@@ -271,7 +300,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               await prefs.setString('smbPass', passController.text);
               await prefs.setStringList('processList', _processList);
               _smbService.setConfig(ipController.text, userController.text, passController.text);
-              setState(() {}); // 메인 화면 반영
+              setState(() {}); 
               Navigator.pop(ctx);
             }, child: const Text("저장")),
           ],
@@ -442,6 +471,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 _excelPath = "";
                 _isSorted = false;
                 _currentSortCol = "";
+                _searchController.clear();
+                _searchQuery = "";
               });
               _saveSettings();
               Navigator.pop(ctx);
@@ -468,7 +499,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
   }
 
-  // ❗ [신규] 보완 다이얼로그 (부족/재작업 선택)
   void _showComplementDialog(ItemModel item) {
     _forgetFocus();
     showDialog(
@@ -489,7 +519,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ [신규] 공정 다이얼로그 (커스텀 목록 선택)
   void _showProcessDialog(ItemModel item) {
     _forgetFocus();
     showDialog(
@@ -534,6 +563,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
+  // ❗ 요약 정보 계산기
+  Widget _buildSummaryInfo() {
+    if (_originalItems.isEmpty) return const SizedBox.shrink();
+    final dataItems = _originalItems.where((i) => !i.isSubheading);
+    int total = dataItems.length;
+    int completed = dataItems.where((i) => i.complete).length;
+    int shortages = dataItems.where((i) => i.complement == "부족").length;
+    double percent = total > 0 ? (completed / total) * 100 : 0;
+    
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text(
+        "[전체 $total / 완료 $completed / 부족 $shortages / ${percent.toStringAsFixed(1)}%]",
+        style: const TextStyle(fontSize: 11, color: Colors.white70),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -541,7 +588,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(_currentFileName, style: const TextStyle(fontSize: 12))]),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start, 
+          children: [
+            const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), 
+            Row(
+              children: [
+                Flexible(child: Text(_currentFileName, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
+                const SizedBox(width: 8),
+                _buildSummaryInfo(), // ❗ 요약 정보 추가
+              ],
+            )
+          ]
+        ),
         backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
         foregroundColor: Colors.white,
         actions: [
@@ -578,6 +637,28 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 ],
               ),
             ),
+            
+            // ❗ [신규] 에브리띵 스타일 검색바
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: "품목코드 또는 비고 검색 (예: 4 383)",
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchController.text.isNotEmpty 
+                    ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); _applyFilterAndSort(); }) 
+                    : null,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+                onChanged: (val) {
+                  setState(() => _searchQuery = val);
+                  _applyFilterAndSort();
+                },
+              ),
+            ),
+
             _buildHeader(context),
             Expanded(
               child: _isLoading ? const Center(child: CircularProgressIndicator()) : ListView.builder(
@@ -669,7 +750,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           )),
           InkWell(onTap: _forgetFocus, child: SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))),
           
-          // 완료 칸
           _checkBtn(item.complete, Colors.green, () { 
             _forgetFocus(); 
             setState(() { 
@@ -679,10 +759,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
           }, isDark),
 
-          // 보완 칸 (부족/재작업)
           _textBtn(item.complement, Colors.orange, () => _showComplementDialog(item), isDark),
 
-          // 공정 칸 (커스텀 공정)
           _textBtn(item.process, Colors.blueGrey, () => _showProcessDialog(item), isDark),
 
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: TextField(
@@ -747,7 +825,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ [신규] 텍스트 표시 버튼 (보완, 공정 칸용)
   Widget _textBtn(String text, Color color, VoidCallback onTap, bool isDark) {
     return InkWell(
       onTap: onTap,
