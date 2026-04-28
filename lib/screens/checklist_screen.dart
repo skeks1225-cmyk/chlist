@@ -623,19 +623,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ],
       ),
     );
-  }
-
   void _toggleSectionSelection(String headerTitle) {
     String? currentHeader;
     List<int> sectionRealIndices = [];
     for (var item in _originalItems) {
-      if (item.isSubheading) currentHeader = item.itemCode;
-      else if (currentHeader == headerTitle) sectionRealIndices.add(item.realIndex);
+      if (item.isSubheading) {
+        currentHeader = item.itemCode;
+        if (currentHeader == headerTitle) sectionRealIndices.add(item.realIndex);
+      } else if (currentHeader == headerTitle) {
+        sectionRealIndices.add(item.realIndex);
+      }
     }
     setState(() {
       bool allSelected = sectionRealIndices.every((idx) => _selectedIndices.contains(idx));
-      if (allSelected) _selectedIndices.removeAll(sectionRealIndices);
-      else _selectedIndices.addAll(sectionRealIndices);
+      if (allSelected) {
+        for (var idx in sectionRealIndices) _selectedIndices.remove(idx);
+      } else {
+        _selectedIndices.addAll(sectionRealIndices);
+      }
     });
   }
 
