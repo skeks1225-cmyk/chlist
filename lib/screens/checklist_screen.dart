@@ -46,16 +46,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _showUnfinishedOnly = false; 
   String? _selectedSectionHeader; 
 
-  // ❗ [신규] 행 삭제(편집) 모드 관련 변수
+  // ❗ 행 삭제(편집) 모드 관련 변수
   bool _isEditMode = false;
-  Set<int> _selectedIndices = {}; // realIndex 저장
-  final Set<int> _draggedIndices = {}; // 현재 드래그 세션에서 이미 반전시킨 행들
+  final Set<int> _selectedIndices = {}; // realIndex 저장
+  final Set<int> _draggedIndices = {}; // 드래그 중 반전 중복 방지
 
   @override
   void initState() {
     super.initState();
     _initApp();
-    _searchFocusNode.addListener(() => setState(() {})); // 돋보기 숨김 제어용
+    _searchFocusNode.addListener(() => setState(() {})); 
   }
 
   @override
@@ -229,6 +229,23 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     _applyFilterAndSort();
   }
 
+  Future<void> _pickSource(String mode) async {
+    _forgetFocus();
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(leading: const Icon(Icons.phone_android), title: const Text("내 휴대폰"), onTap: () { Navigator.pop(ctx); _openCustomPicker(mode); }),
+            ListTile(leading: const Icon(Icons.computer), title: const Text("PC 공유폴더 (SMB)"), onTap: () { Navigator.pop(ctx); _openSmbShares(mode); }),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openSettings() async {
     _forgetFocus();
     final prefs = await SharedPreferences.getInstance();
@@ -340,7 +357,251 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ [신규] 행 삭제 처리
+  void _openSmbShares(String mode) async {
+    _forgetFocus();
+    setState(() => _isLoading = true);
+    try {
+      List<String> shares = await _smbService.listShares();
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      if (shares.isNotEmpty && shares[0].startsWith("ERROR:")) { _showError("탐색 실패", shares[0].replaceFirst("ERROR:", "").trim()); return; }
+      if (shares.isEmpty) { _showError("오류", "공유폴더를 찾을 수 없습니다."); return; }
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("공유폴더 선택"),
+          content: SizedBox(width: double.maxFinite, child: ListView.builder(shrinkWrap: true, itemCount: shares.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.folder_shared), title: Text(shares[i]), onTap: () { Navigator.pop(ctx); _showSmbFiles(shares[i], "", mode); }))),
+        ),
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showError("치명적 오류", "응답이 없습니다: $e");
+    }
+  }
+
+  void _showSmbFiles(String share, String path, String mode) async {
+    setState(() => _isLoading = true);
+    List<Map<String, dynamic>> files = await _smbService.listFiles(share, path);
+    setState(() => _isLoading = false);
+    if (!mounted) return;
+
+    List<Map<String, dynamic>> filteredFiles = files.where((f) {
+      bool isDir = f['isDirectory'] as bool;
+      if (isDir) return true;
+      String name = (f['name'] as String).toLowerCase();
+      if (mode == 'file') return name.endsWith('.xlsx') || name.endsWith('.xls');
+      if (mode == 'dir') return name.endsWith('.pdf');
+      return true;
+    }).toList();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("$share/$path"),
+        content: SizedBox(width: double.maxFinite, height: 400, child: Column(children: [
+          if (path != "") ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showSmbFiles(share, p.dirname(path) == "." ? "" : p.dirname(path), mode); }),
+          Expanded(child: ListView.builder(itemCount: filteredFiles.length, itemBuilder: (c, i) {
+            final f = filteredFiles[i];
+            bool isDir = f['isDirectory'] as bool;
+            String name = f['name'] as String;
+            return ListTile(leading: Icon(isDir ? Icons.folder : Icons.description), title: Text(name), onTap: () {
+              if (isDir) { Navigator.pop(ctx); _showSmbFiles(share, "${path == "" ? "" : "$path/"}$name", mode); }
+              else if (mode == 'file') { Navigator.pop(ctx); _downloadAndLoad(share, "${path == "" ? "" : "$path/"}$name"); }
+            });
+          })),
+        ])),
+        actions: [
+          if (mode == 'dir') TextButton(onPressed: () { setState(() => _pdfFolderPath = "smb://$share/$path"); _saveSettings(); Navigator.pop(ctx); }, child: const Text("현재 폴더 선택")),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _downloadAndLoad(String share, String remotePath) async {
+    setState(() => _isLoading = true);
+    String localPath = "$_baseDownloadPath/CheckSheet/${p.basename(remotePath)}";
+    File? file = await _smbService.downloadFile(share, remotePath, localPath);
+    setState(() => _isLoading = false);
+    if (file != null) _loadExcelData(file.path);
+    else _showError("오류", "파일 다운로드 실패");
+  }
+
+  Future<void> _syncAllPdfs() async {
+    _forgetFocus();
+    if (_originalItems.isEmpty) return;
+    List<ItemModel> targets = _originalItems.where((i) => !i.isSubheading).toList();
+    setState(() => _isSyncing = true);
+    try {
+      String shareWithRest = _pdfFolderPath.replaceFirst("smb://", "");
+      if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
+      int firstSlash = shareWithRest.indexOf("/");
+      String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
+      String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
+      const int batchSize = 5;
+      for (int i = 0; i < targets.length; i += batchSize) {
+        final chunk = targets.skip(i).take(batchSize);
+        await Future.wait(chunk.map((item) {
+          String cleanCode = item.itemCode.trim();
+          String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
+          String localFilePath = "$_baseDownloadPath/CheckSheet/$cleanCode.pdf";
+          return _smbService.downloadFile(share, remoteFilePath, localFilePath);
+        }));
+      }
+      _showSnackBar("✅ ${targets.length}개 품목 동기화 완료!");
+    } catch (e) { debugPrint("Sync Error: $e"); }
+    finally { setState(() => _isSyncing = false); }
+  }
+
+  Future<void> _openCustomPicker(String mode) async {
+    _forgetFocus();
+    final prefs = await SharedPreferences.getInstance();
+    String startPath = prefs.getString('lastDir') ?? "$_baseDownloadPath/CheckSheet";
+    if (!Directory(startPath).existsSync()) startPath = _baseDownloadPath;
+    if (!mounted) return;
+    _showFileBrowser(mode, startPath);
+  }
+
+  void _showFileBrowser(String mode, String initialPath) {
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final dir = Directory(initialPath);
+          List<FileSystemEntity> entities = [];
+          try {
+            entities = dir.listSync().where((e) {
+              if (e is Directory) return true;
+              if (mode == 'file') return e.path.endsWith('.xlsx') || e.path.endsWith('.xls');
+              return e.path.endsWith('.pdf');
+            }).toList();
+            entities.sort((a, b) => p.basename(a.path).toLowerCase().compareTo(p.basename(b.path).toLowerCase()));
+          } catch (_) {}
+          return AlertDialog(
+            title: Text(p.basename(initialPath)),
+            content: SizedBox(width: double.maxFinite, height: 400, child: Column(children: [
+              ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showFileBrowser(mode, p.dirname(initialPath)); }),
+              Expanded(child: ListView.builder(itemCount: entities.length, itemBuilder: (c, i) {
+                final e = entities[i];
+                final isDir = e is Directory;
+                return ListTile(leading: Icon(isDir ? Icons.folder : Icons.description, color: isDir ? Colors.amber : Colors.blue), title: Text(p.basename(e.path)), onTap: () {
+                  if (isDir) { Navigator.pop(ctx); _showFileBrowser(mode, e.path); }
+                  else if (mode == 'file') { Navigator.pop(ctx); _loadExcelData(e.path); }
+                });
+              })),
+            ])),
+            actions: [
+              if (mode == 'dir') TextButton(onPressed: () { setState(() => _pdfFolderPath = initialPath); _saveSettings(); Navigator.pop(ctx); }, child: const Text("현재 폴더 선택")),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _handleClose() {
+    _forgetFocus();
+    if (_originalItems.isEmpty) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("리스트 닫기"),
+        content: const Text("현재 리스트를 닫으시겠습니까?\n저장되지 않은 변경사항은 사라질 수 있습니다."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _originalItems = []; _displayItems = [];
+                _currentFileName = "파일을 선택하세요"; _excelPath = "";
+                _isSorted = false; _currentSortCol = "";
+                _searchController.clear(); _searchQuery = "";
+                _showUnfinishedOnly = false; _selectedSectionHeader = null;
+              });
+              _saveSettings();
+              Navigator.pop(ctx);
+              _showSnackBar("리스트가 닫혔습니다.");
+            },
+            child: const Text("예", style: TextStyle(color: Colors.red)),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _handleRefresh() {
+    _forgetFocus();
+    if (_excelPath.isEmpty) { _showSnackBar("열려 있는 파일이 없습니다."); return; }
+    if (File(_excelPath).existsSync()) {
+      _loadExcelData(_excelPath);
+      _showSnackBar("🔄 리스트를 다시 읽어왔습니다.");
+    } else { _showError("새로고침 실패", "파일을 찾을 수 없습니다."); }
+  }
+
+  void _showComplementDialog(ItemModel item) {
+    _forgetFocus();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _dialogBtn("부족", Colors.orange, () { item.complement = "부족"; item.complete = false; }),
+            _dialogBtn("재작업", Colors.red, () { item.complement = "재작업"; item.complete = false; }),
+            const Divider(),
+            _dialogBtn("지우기", Colors.grey, () { item.complement = ""; }),
+            _dialogBtn("선택취소", Colors.blueGrey, () {}),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showProcessDialog(ItemModel item) {
+    _forgetFocus();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ..._processList.map((p) => _dialogBtn(p, Colors.blueGrey[700]!, () { item.process = p; })),
+                const Divider(),
+                _dialogBtn("지우기", Colors.grey, () { item.process = ""; }),
+                _dialogBtn("선택취소", Colors.blueGrey, () {}),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dialogBtn(String label, Color color, VoidCallback onSelected) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color, foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 50),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        onPressed: () {
+          setState(onSelected);
+          if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
+          Navigator.pop(context);
+        },
+        child: Text(label),
+      ),
+    );
+  }
+
   void _deleteSelectedRows() {
     if (_selectedIndices.isEmpty) return;
     showDialog(
@@ -353,8 +614,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           TextButton(onPressed: () {
             setState(() {
               _originalItems.removeWhere((item) => _selectedIndices.contains(item.realIndex));
-              _isEditMode = false;
-              _selectedIndices.clear();
+              _isEditMode = false; _selectedIndices.clear();
             });
             _applyFilterAndSort();
             Navigator.pop(ctx);
@@ -365,196 +625,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ [신규] 섹션 전체 선택/해제 로직
   void _toggleSectionSelection(String headerTitle) {
     String? currentHeader;
     List<int> sectionRealIndices = [];
     for (var item in _originalItems) {
-      if (item.isSubheading) {
-        currentHeader = item.itemCode;
-      } else if (currentHeader == headerTitle) {
-        sectionRealIndices.add(item.realIndex);
-      }
+      if (item.isSubheading) currentHeader = item.itemCode;
+      else if (currentHeader == headerTitle) sectionRealIndices.add(item.realIndex);
     }
-
     setState(() {
       bool allSelected = sectionRealIndices.every((idx) => _selectedIndices.contains(idx));
-      if (allSelected) {
-        _selectedIndices.removeAll(sectionRealIndices);
-      } else {
-        _selectedIndices.addAll(sectionRealIndices);
-      }
+      if (allSelected) _selectedIndices.removeAll(sectionRealIndices);
+      else _selectedIndices.addAll(sectionRealIndices);
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    bool isSmbPdf = _pdfFolderPath.startsWith("smb://");
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start, 
-          children: [
-            const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), 
-            Text(_currentFileName, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
-          ]
-        ),
-        backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
-        foregroundColor: Colors.white,
-        actions: _isEditMode ? [
-          TextButton.icon(
-            onPressed: _deleteSelectedRows, 
-            icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
-            label: Text("확인(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))
-          ),
-          TextButton(
-            onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); }),
-            child: const Text("취소", style: TextStyle(color: Colors.white))
-          ),
-        ] : [
-          IconButton(onPressed: _handleRefresh, icon: const Icon(Icons.refresh, color: Colors.cyanAccent), tooltip: "새로고침"),
-          IconButton(onPressed: _handleClose, icon: const Icon(Icons.close, color: Colors.redAccent), tooltip: "리스트 닫기"),
-          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly) 
-            TextButton(onPressed: () {
-                setState(() { _isSorted = false; _currentSortCol = ""; _selectedSectionHeader = null; _showUnfinishedOnly = false; });
-                _applyFilterAndSort();
-            }, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
-          TextButton.icon(onPressed: () { _forgetFocus(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (!_isEditMode) Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                children: [
-                  _topBtn("설정", _openSettings, isDark),
-                  const SizedBox(width: 4),
-                  _topBtn("엑셀선택", () => _pickSource('file'), isDark),
-                  const SizedBox(width: 4),
-                  _topBtn("PDF폴더", () => _pickSource('dir'), isDark),
-                  const SizedBox(width: 4),
-                  // ❗ 행삭제 버튼 추가
-                  ElevatedButton(
-                    onPressed: () => setState(() => _isEditMode = true),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[700], foregroundColor: Colors.white, minimumSize: const Size(60, 45)),
-                    child: const Text("행삭제", style: TextStyle(fontSize: 12)),
-                  ),
-                  const SizedBox(width: 4),
-                  if (isSmbPdf) ...[
-                    ElevatedButton(
-                      onPressed: _isSyncing ? null : _syncAllPdfs,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(80, 45), padding: const EdgeInsets.symmetric(horizontal: 8)),
-                      child: Text(_isSyncing ? "동기화중..." : "PDF동기화", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                  ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("리셋", style: TextStyle(fontSize: 12))),
-                  const SizedBox(width: 4),
-                  ElevatedButton(onPressed: () { _forgetFocus(); _manualSave(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("저장", style: TextStyle(fontSize: 12))),
-                ],
-              ),
-            ),
-            
-            // ❗ [개편] 검색바(4/5 축소) + 요약정보(확장) Row
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 4, // ❗ 4/5 크기로 축소
-                    child: TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      decoration: InputDecoration(
-                        hintText: "품목코드 검색",
-                        // ❗ 빈칸이고 포커스 없을 때만 돋보기 표시 (간격 최소화)
-                        prefixIcon: (_searchController.text.isEmpty && !_searchFocusNode.hasFocus) 
-                            ? const Icon(Icons.search, size: 20) : null,
-                        prefixIconConstraints: const BoxConstraints(minWidth: 30),
-                        suffixIcon: _searchController.text.isNotEmpty 
-                          ? IconButton(icon: const Icon(Icons.clear, size: 20), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); _applyFilterAndSort(); }) 
-                          : null,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
-                      ),
-                      onChanged: (val) { setState(() => _searchQuery = val); _applyFilterAndSort(); },
-                    ),
-                  ),
-                  Expanded(
-                    flex: 6, // ❗ 요약 정보 공간 확장
-                    child: _buildSummaryWidget(isDark),
-                  ),
-                ],
-              ),
-            ),
-
-            _buildHeader(context),
-            Expanded(
-              child: _isLoading ? const Center(child: CircularProgressIndicator()) : Listener(
-                // ❗ [핵심] 스와이프 다중 선택을 위한 리스너
-                onPointerMove: (event) {
-                  if (!_isEditMode) return;
-                  final RenderBox box = context.findRenderObject() as RenderBox;
-                  final result = WidgetsBinding.instance.hitTestInView(event.position, event.viewId);
-                  // 정밀 좌표 계산을 위해 개별 Row에서 처리하도록 로직 분산
-                },
-                child: ListView.builder(
-                  itemCount: _displayItems.length,
-                  itemBuilder: (ctx, idx) {
-                    final item = _displayItems[idx];
-                    if (item.isSubheading) {
-                      return GestureDetector(
-                        onTap: () {
-                          if (_isEditMode) _toggleSectionSelection(item.itemCode);
-                          else {
-                            setState(() {
-                              if (_selectedSectionHeader == item.itemCode) _selectedSectionHeader = null;
-                              else _selectedSectionHeader = item.itemCode;
-                            });
-                            _applyFilterAndSort();
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), 
-                          color: _selectedSectionHeader == item.itemCode ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300]), 
-                          width: double.infinity, 
-                          child: Row(
-                            children: [
-                              Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                              if (_selectedSectionHeader == item.itemCode) const Padding(
-                                padding: EdgeInsets.only(left: 8.0),
-                                child: Icon(Icons.check_circle, size: 16, color: Colors.blueAccent),
-                              ),
-                              const Spacer(),
-                              if (_isEditMode) Icon(
-                                _isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank,
-                                color: Colors.blue,
-                              ),
-                            ],
-                          )
-                        ),
-                      );
-                    }
-                    return _buildDataRow(item, isDark);
-                  },
-                ),
-              ),
-            ),
-            if (_isSyncing) const LinearProgressIndicator(minHeight: 2, color: Colors.orange),
-            Offstage(child: TextField(focusNode: _dummyFocusNode, readOnly: true)),
-          ],
-        ),
-      ),
-    );
-  }
-
   bool _isSectionSelected(String header) {
-    String? current;
-    List<int> indices = [];
+    String? current; List<int> indices = [];
     for (var i in _originalItems) {
       if (i.isSubheading) current = i.itemCode;
       else if (current == header) indices.add(i.realIndex);
@@ -571,20 +657,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     int shortages = dataItems.where((i) => i.complement == "부족").length;
     int reworks = dataItems.where((i) => i.complement == "재작업").length;
     double percent = total > 0 ? (completed / total) * 100 : 0;
-    
     List<String> parts = ["전체 $total", "완료 $completed", "미완 $incomplete"];
     if (shortages > 0) parts.add("부족 $shortages");
     if (reworks > 0) parts.add("재작업 $reworks");
     parts.add("${percent.toStringAsFixed(1)}%");
 
     return InkWell(
-      onTap: () {
-        setState(() => _showUnfinishedOnly = !_showUnfinishedOnly);
-        _applyFilterAndSort();
-      },
+      onTap: () { setState(() => _showUnfinishedOnly = !_showUnfinishedOnly); _applyFilterAndSort(); },
       child: Container(
-        alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.only(left: 8),
+        alignment: Alignment.centerLeft, padding: const EdgeInsets.only(left: 8),
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Row(
@@ -593,14 +674,160 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               const SizedBox(width: 4),
               Text(
                 "[${parts.join(' / ')}]",
-                style: TextStyle(
-                  fontSize: 14, // ❗ 글자 크기 확대
-                  fontWeight: FontWeight.bold,
-                  color: _showUnfinishedOnly ? Colors.orangeAccent : (isDark ? Colors.white70 : Colors.blueGrey[800])
-                ),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _showUnfinishedOnly ? Colors.orangeAccent : (isDark ? Colors.white70 : Colors.blueGrey[800])),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _topBtn(String label, VoidCallback onTap, bool isDark) {
+    return Expanded(child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(minimumSize: const Size(0, 45), padding: EdgeInsets.zero), child: Text(label, style: const TextStyle(fontSize: 12))));
+  }
+
+  Future<void> _handleItemClick(ItemModel item) async {
+    _forgetFocus();
+    if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
+    if (_pdfFolderPath.startsWith("smb://")) {
+      setState(() => _isLoading = true);
+      try {
+        String shareWithRest = _pdfFolderPath.replaceFirst("smb://", "");
+        if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
+        int firstSlash = shareWithRest.indexOf("/");
+        String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
+        String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
+        String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf";
+        String localFilePath = "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf";
+        await _smbService.downloadFile(share, remoteFilePath, localFilePath);
+      } catch (e) { debugPrint("SMB Error: $e"); }
+      finally { setState(() => _isLoading = false); }
+    }
+    if (!mounted) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(
+      items: _displayItems.where((i) => !i.isSubheading).toList(),
+      initialIndex: _displayItems.where((i) => !i.isSubheading).toList().indexOf(item),
+      pdfFolderPath: _pdfFolderPath, smbService: _smbService,
+      onStatusUpdate: (it, type) {
+        if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) it.complement = ""; }); }
+        else { setState(() {}); }
+        if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
+      },
+    )));
+  }
+
+  void _showResetConfirm() {
+    _forgetFocus();
+    if (_originalItems.isEmpty) return;
+    showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("데이터 리셋"), content: const Text("모든 체크와 비고를 지우시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")), TextButton(onPressed: () { _resetAllData(); Navigator.pop(ctx); }, child: const Text("예", style: TextStyle(color: Colors.red)))]));
+  }
+
+  void _resetAllData() {
+    setState(() { 
+      for (var item in _originalItems) { item.complete = false; item.complement = ""; item.process = ""; item.remarks = ""; } 
+      _displayItems = List.from(_originalItems); _isSorted = false; _currentSortCol = ""; 
+      _selectedSectionHeader = null; _showUnfinishedOnly = false;
+    });
+    if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    bool isSmbPdf = _pdfFolderPath.startsWith("smb://");
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(_currentFileName, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)]),
+        backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
+        foregroundColor: Colors.white,
+        actions: _isEditMode ? [
+          TextButton.icon(onPressed: _deleteSelectedRows, icon: const Icon(Icons.delete_forever, color: Colors.redAccent), label: Text("확인(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
+          TextButton(onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); }), child: const Text("취소", style: TextStyle(color: Colors.white))),
+        ] : [
+          IconButton(onPressed: _handleRefresh, icon: const Icon(Icons.refresh, color: Colors.cyanAccent), tooltip: "새로고침"),
+          IconButton(onPressed: _handleClose, icon: const Icon(Icons.close, color: Colors.redAccent), tooltip: "리스트 닫기"),
+          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly) 
+            TextButton(onPressed: () { setState(() { _isSorted = false; _currentSortCol = ""; _selectedSectionHeader = null; _showUnfinishedOnly = false; }); _applyFilterAndSort(); }, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
+          TextButton.icon(onPressed: () { _forgetFocus(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (!_isEditMode) Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                children: [
+                  _topBtn("설정", _openSettings, isDark),
+                  const SizedBox(width: 4),
+                  _topBtn("엑셀선택", () => _pickSource('file'), isDark),
+                  const SizedBox(width: 4),
+                  _topBtn("PDF폴더", () => _pickSource('dir'), isDark),
+                  const SizedBox(width: 4),
+                  ElevatedButton(onPressed: () => setState(() => _isEditMode = true), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[700], foregroundColor: Colors.white, minimumSize: const Size(60, 45)), child: const Text("행삭제", style: TextStyle(fontSize: 12))),
+                  const SizedBox(width: 4),
+                  if (isSmbPdf) ...[
+                    ElevatedButton(onPressed: _isSyncing ? null : _syncAllPdfs, style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(80, 45), padding: const EdgeInsets.symmetric(horizontal: 8)), child: Text(_isSyncing ? "동기화중..." : "PDF동기화", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+                    const SizedBox(width: 4),
+                  ],
+                  ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("리셋", style: TextStyle(fontSize: 12))),
+                  const SizedBox(width: 4),
+                  ElevatedButton(onPressed: () { _forgetFocus(); _manualSave(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("저장", style: TextStyle(fontSize: 12))),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: TextField(
+                      controller: _searchController, focusNode: _searchFocusNode,
+                      decoration: InputDecoration(
+                        hintText: "품목코드 검색",
+                        prefixIcon: (_searchController.text.isEmpty && !_searchFocusNode.hasFocus) ? const Icon(Icons.search, size: 20) : null,
+                        prefixIconConstraints: const BoxConstraints(minWidth: 30),
+                        suffixIcon: _searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 20), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); _applyFilterAndSort(); }) : null,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
+                      ),
+                      onChanged: (val) { setState(() => _searchQuery = val); _applyFilterAndSort(); },
+                    ),
+                  ),
+                  Expanded(flex: 6, child: _buildSummaryWidget(isDark)),
+                ],
+              ),
+            ),
+            _buildHeader(context),
+            Expanded(
+              child: _isLoading ? const Center(child: CircularProgressIndicator()) : ListView.builder(
+                itemCount: _displayItems.length,
+                itemBuilder: (ctx, idx) {
+                  final item = _displayItems[idx];
+                  if (item.isSubheading) {
+                    return GestureDetector(
+                      onTap: () {
+                        if (_isEditMode) _toggleSectionSelection(item.itemCode);
+                        else {
+                          setState(() { if (_selectedSectionHeader == item.itemCode) _selectedSectionHeader = null; else _selectedSectionHeader = item.itemCode; });
+                          _applyFilterAndSort();
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), color: _selectedSectionHeader == item.itemCode ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300]), width: double.infinity, 
+                        child: Row(children: [Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)), if (_selectedSectionHeader == item.itemCode) const Padding(padding: EdgeInsets.only(left: 8.0), child: Icon(Icons.check_circle, size: 16, color: Colors.blueAccent)), const Spacer(), if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue)]),
+                      ),
+                    );
+                  }
+                  return _buildDataRow(item, isDark);
+                },
+              ),
+            ),
+            if (_isSyncing) const LinearProgressIndicator(minHeight: 2, color: Colors.orange),
+            Offstage(child: TextField(focusNode: _dummyFocusNode, readOnly: true)),
+          ],
         ),
       ),
     );
@@ -608,107 +835,29 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Widget _buildDataRow(ItemModel item, bool isDark) {
     final bool isSelected = _selectedIndices.contains(item.realIndex);
-    final Color? rowColor = _isEditMode 
-        ? (isSelected ? Colors.blue.withOpacity(0.2) : null)
-        : (item.complete ? (isDark ? Colors.green.withOpacity(0.2) : Colors.green[50]) : null);
-
-    return MouseRegion( // 드래그 감지용
-      onEnter: (_) {
-        if (_isEditMode && _draggedIndices.isNotEmpty) {
-          setState(() {
-            if (_selectedIndices.contains(item.realIndex)) _selectedIndices.remove(item.realIndex);
-            else _selectedIndices.add(item.realIndex);
-          });
-        }
+    final Color? rowColor = _isEditMode ? (isSelected ? Colors.blue.withOpacity(0.2) : null) : (item.complete ? (isDark ? Colors.green.withOpacity(0.2) : Colors.green[50]) : null);
+    return GestureDetector(
+      onPanStart: (_) { if (!_isEditMode) return; _draggedIndices.clear(); _draggedIndices.add(item.realIndex); setState(() { if (_selectedIndices.contains(item.realIndex)) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); },
+      onPanUpdate: (details) {
+        if (!_isEditMode) return;
+        // 드래그 중 다른 행 감지는 MouseRegion 또는 정밀 터치 좌표 계산이 필요하지만 모바일 성능을 위해 탭과 개별 드래그 시작 위주로 최적화
       },
-      child: GestureDetector(
-        // ❗ [핵심] 스와이프(드래그) 다중 선택 구현
-        onPanStart: (_) {
-          if (!_isEditMode) return;
-          _draggedIndices.clear();
-          _draggedIndices.add(item.realIndex);
-          setState(() {
-            if (_selectedIndices.contains(item.realIndex)) _selectedIndices.remove(item.realIndex);
-            else _selectedIndices.add(item.realIndex);
-          });
-        },
-        onPanUpdate: (details) {
-          if (!_isEditMode) return;
-          // 이 부분은 리스트뷰 스크롤과 충돌할 수 있어 MouseRegion enter로 보완하거나 
-          // HitTest를 통해 현재 손가락 위치의 아이템을 찾아 반전시킵니다.
-        },
-        onTap: () {
-          if (_isEditMode) {
-            setState(() {
-              if (_selectedIndices.contains(item.realIndex)) _selectedIndices.remove(item.realIndex);
-              else _selectedIndices.add(item.realIndex);
-            });
-          }
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            color: rowColor,
-            border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))
-          ),
-          height: 45,
-          child: Row(
-            children: [
-              // ❗ 편집 모드 전용 체크박스 열
-              if (_isEditMode) Container(
-                width: 35,
-                alignment: Alignment.center,
-                child: Icon(isSelected ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
-              ),
-              InkWell(onTap: _forgetFocus, child: SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))),
-              Expanded(flex: 5, child: InkWell(
-                onTap: _isEditMode ? null : () => _handleItemClick(item), 
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  alignment: Alignment.centerLeft,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              )),
-              InkWell(onTap: _forgetFocus, child: SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))),
-              _checkBtn(item.complete, Colors.green, _isEditMode ? null : () { 
-                _forgetFocus(); 
-                setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); 
-                if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
-                if (_showUnfinishedOnly) _applyFilterAndSort();
-              }, isDark),
-              _textBtn(item.complement, Colors.orange, _isEditMode ? null : () => _showComplementDialog(item), isDark),
-              _textBtn(item.process, Colors.blueGrey, _isEditMode ? null : () => _showProcessDialog(item), isDark),
-              Expanded(flex: 3, child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4), 
-                child: Stack(
-                  alignment: Alignment.centerRight,
-                  children: [
-                    TextField(
-                      enabled: !_isEditMode, // 편집 모드 시 비활성화
-                      controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)),
-                      style: const TextStyle(fontSize: 13),
-                      decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: ''),
-                      onChanged: (val) { item.remarks = val; setState(() {}); },
-                      onTapOutside: (event) { _forgetFocus(); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); },
-                      onSubmitted: (val) { item.remarks = val; _forgetFocus(); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); },
-                    ),
-                    if (item.remarks.isNotEmpty && !_isEditMode)
-                      GestureDetector(
-                        onTap: () {
-                          setState(() => item.remarks = "");
-                          if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
-                        },
-                        child: Icon(Icons.cancel, size: 18, color: Colors.grey[600]),
-                      ),
-                  ],
-                )
-              )),
-            ],
-          ),
-        ),
+      onTap: () { if (_isEditMode) setState(() { if (_selectedIndices.contains(item.realIndex)) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); },
+      child: Container(
+        decoration: BoxDecoration(color: rowColor, border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45,
+        child: Row(children: [
+          if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSelected ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
+          InkWell(onTap: _forgetFocus, child: SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))),
+          Expanded(flex: 5, child: InkWell(onTap: _isEditMode ? null : () => _handleItemClick(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), alignment: Alignment.centerLeft, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))),
+          InkWell(onTap: _forgetFocus, child: SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))),
+          _checkBtn(item.complete, Colors.green, _isEditMode ? null : () { _forgetFocus(); setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); if (_showUnfinishedOnly) _applyFilterAndSort(); }, isDark),
+          _textBtn(item.complement, Colors.orange, _isEditMode ? null : () => _showComplementDialog(item), isDark),
+          _textBtn(item.process, Colors.blueGrey, _isEditMode ? null : () => _showProcessDialog(item), isDark),
+          Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Stack(alignment: Alignment.centerRight, children: [
+            TextField(enabled: !_isEditMode, controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)), style: const TextStyle(fontSize: 13), decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: ''), onChanged: (val) { item.remarks = val; setState(() {}); }, onTapOutside: (event) { _forgetFocus(); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); }, onSubmitted: (val) { item.remarks = val; _forgetFocus(); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); }),
+            if (item.remarks.isNotEmpty && !_isEditMode) GestureDetector(onTap: () { setState(() => item.remarks = ""); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); }, child: Icon(Icons.cancel, size: 18, color: Colors.grey[600])),
+          ]))),
+        ]),
       ),
     );
   }
@@ -716,74 +865,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Widget _buildHeader(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      color: isDark ? Colors.grey[900] : Colors.grey[800],
-      height: 40,
-      child: Row(
-        children: [
-          if (_isEditMode) const SizedBox(width: 35),
-          _headerBtn("No", "no", 35),
-          Expanded(flex: 5, child: _headerBtn("품목코드", "itemCode", null)),
-          _headerBtn("수량", "quantity", 40),
-          _headerBtn("완료", "complete", 50),
-          _headerBtn("보완", null, 50),
-          _headerBtn("공정", null, 50),
-          const Expanded(flex: 3, child: Center(child: Text("비고", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)))),
-        ],
-      ),
+      color: isDark ? Colors.grey[900] : Colors.grey[800], height: 40,
+      child: Row(children: [if (_isEditMode) const SizedBox(width: 35), _headerBtn("No", "no", 35), Expanded(flex: 5, child: _headerBtn("품목코드", "itemCode", null)), _headerBtn("수량", "quantity", 40), _headerBtn("완료", "complete", 50), _headerBtn("보완", null, 50), _headerBtn("공정", null, 50), const Expanded(flex: 3, child: Center(child: Text("비고", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold))))]),
     );
   }
 
   Widget _headerBtn(String label, String? colKey, double? width) {
     bool isTarget = colKey != null && _currentSortCol == colKey;
-    return InkWell(
-      onTap: colKey == null ? null : () => _sortBy(colKey),
-      child: Container(
-        width: width,
-        alignment: Alignment.center,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-            if (isTarget) Icon(_isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: Colors.yellow, size: 18),
-          ],
-        ),
-      ),
-    );
+    return InkWell(onTap: colKey == null ? null : () => _sortBy(colKey), child: Container(width: width, alignment: Alignment.center, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)), if (isTarget) Icon(_isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: Colors.yellow, size: 18)])));
   }
 
   Widget _checkBtn(bool val, Color color, VoidCallback? onTap, bool isDark) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        width: 50,
-        alignment: Alignment.center,
-        color: val ? color.withOpacity(0.4) : (isDark ? Colors.white10 : Colors.grey[100]),
-        child: val ? Icon(Icons.check, color: isDark ? Colors.white : color, size: 24) : null,
-      ),
-    );
+    return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: val ? color.withOpacity(0.4) : (isDark ? Colors.white10 : Colors.grey[100]), child: val ? Icon(Icons.check, color: isDark ? Colors.white : color, size: 24) : null));
   }
 
   Widget _textBtn(String text, Color color, VoidCallback? onTap, bool isDark) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        width: 50,
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        alignment: Alignment.center,
-        color: text.isNotEmpty ? color.withOpacity(0.3) : (isDark ? Colors.white10 : Colors.grey[100]),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : (text.isNotEmpty ? color : Colors.black),
-            ),
-          ),
-        ),
-      ),
-    );
+    return InkWell(onTap: onTap, child: Container(width: 50, padding: const EdgeInsets.symmetric(horizontal: 2), alignment: Alignment.center, color: text.isNotEmpty ? color.withOpacity(0.3) : (isDark ? Colors.white10 : Colors.grey[100]), child: FittedBox(fit: BoxFit.scaleDown, child: Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : (text.isNotEmpty ? color : Colors.black))))));
   }
 
   void _showError(String title, String msg) {
@@ -799,6 +896,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     if (_excelPath.isEmpty) return;
     bool ok = await _excelService.saveExcel(_excelPath, _originalItems);
     if (ok && !silent) _showSnackBar("💾 저장 성공!");
-    else if (!ok) _showError("저장 실패", "다른 앱에서 사용 중이거나 권한이 없습니다.");
+    else if (!ok) _showError("저장 실패", "파일 쓰기 권한이 없습니다.");
   }
 }
