@@ -618,7 +618,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             });
             _applyFilterAndSort();
             Navigator.pop(ctx);
-            _showSnackBar("삭제되었습니다. 엑셀 반영을 위해 [저장]을 눌러주세요.");
+            if (_autoSave && _excelPath.isNotEmpty) {
+              _manualSave(silent: true);
+              _showSnackBar("🗑️ 삭제 및 자동 저장되었습니다.");
+            } else {
+              _showSnackBar("삭제되었습니다. 엑셀 반영을 위해 [저장]을 눌러주세요.");
+            }
           }, child: const Text("삭제", style: TextStyle(color: Colors.red))),
         ],
       ),
