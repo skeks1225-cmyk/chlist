@@ -37,10 +37,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   final String _baseDownloadPath = "/storage/emulated/0/Download";
   final FocusNode _dummyFocusNode = FocusNode();
 
-  // ❗ 공정 목록 업데이트 (절곡 추가)
   List<String> _processList = ['레이저', '탭', '버링탭', 'CS', '헤밍', 'ZB', '절곡', '압입', '리베팅'];
 
-  // ❗ 검색 관련 변수
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
 
@@ -83,7 +81,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         prefs.getString('smbUser') ?? "",
         prefs.getString('smbPass') ?? "",
       );
-      // ❗ 기본값에도 절곡 반영
       _processList = prefs.getStringList('processList') ?? ['레이저', '탭', '버링탭', 'CS', '헤밍', 'ZB', '절곡', '압입', '리베팅'];
     });
     if (_excelPath.isNotEmpty && File(_excelPath).existsSync()) _loadExcelData(_excelPath);
@@ -129,21 +126,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     FocusScope.of(context).requestFocus(_dummyFocusNode);
   }
 
-  // ❗ 검색 및 정렬 통합 적용 함수
   void _applyFilterAndSort() {
     List<ItemModel> results = List.from(_originalItems);
-
-    // 1. 검색 적용 (Everything 스타일)
     if (_searchQuery.isNotEmpty) {
       final queryParts = _searchQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty);
       results = results.where((item) {
-        if (item.isSubheading) return false; // 검색 시 소제목 제외
+        if (item.isSubheading) return false;
         final targetStr = (item.itemCode + item.remarks).toLowerCase();
         return queryParts.every((part) => targetStr.contains(part));
       }).toList();
     }
-
-    // 2. 정렬 적용
     if (_isSorted) {
       results = results.where((i) => !i.isSubheading).toList();
       results.sort((a, b) {
@@ -165,7 +157,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         return _isAscending ? cmp : -cmp;
       });
     }
-
     setState(() {
       _displayItems = results;
     });
@@ -563,19 +554,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ 요약 정보 계산기
+  // ❗ [개선] 지능형 요약 정보 계산기 (부족/재작업이 0이면 숨김)
   Widget _buildSummaryInfo() {
     if (_originalItems.isEmpty) return const SizedBox.shrink();
     final dataItems = _originalItems.where((i) => !i.isSubheading);
     int total = dataItems.length;
     int completed = dataItems.where((i) => i.complete).length;
     int shortages = dataItems.where((i) => i.complement == "부족").length;
+    int reworks = dataItems.where((i) => i.complement == "재작업").length;
     double percent = total > 0 ? (completed / total) * 100 : 0;
     
+    // 표시할 정보들을 리스트에 담음
+    List<String> parts = ["전체 $total", "완료 $completed"];
+    if (shortages > 0) parts.add("부족 $shortages");
+    if (reworks > 0) parts.add("재작업 $reworks");
+    parts.add("${percent.toStringAsFixed(1)}%");
+
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: Text(
-        "[전체 $total / 완료 $completed / 부족 $shortages / ${percent.toStringAsFixed(1)}%]",
+        "[${parts.join(' / ')}]",
         style: const TextStyle(fontSize: 11, color: Colors.white70),
       ),
     );
@@ -596,7 +594,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               children: [
                 Flexible(child: Text(_currentFileName, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
                 const SizedBox(width: 8),
-                _buildSummaryInfo(), // ❗ 요약 정보 추가
+                _buildSummaryInfo(), 
               ],
             )
           ]
@@ -638,7 +636,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ),
             ),
             
-            // ❗ [신규] 에브리띵 스타일 검색바
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
               child: TextField(
