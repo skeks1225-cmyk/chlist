@@ -128,14 +128,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _applyFilterAndSort() {
     List<ItemModel> results = List.from(_originalItems);
+    
+    // ❗ [수정] 오직 품목코드만 검색되도록 변경
     if (_searchQuery.isNotEmpty) {
       final queryParts = _searchQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty);
       results = results.where((item) {
         if (item.isSubheading) return false;
-        final targetStr = (item.itemCode + item.remarks).toLowerCase();
+        final targetStr = item.itemCode.toLowerCase(); // 비고 제외
         return queryParts.every((part) => targetStr.contains(part));
       }).toList();
     }
+
     if (_isSorted) {
       results = results.where((i) => !i.isSubheading).toList();
       results.sort((a, b) {
@@ -554,8 +557,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ [개선] 지능형 요약 정보 계산기 (부족/재작업이 0이면 숨김)
-  Widget _buildSummaryInfo() {
+  // ❗ [개편] 요약 정보를 단순 텍스트 위젯으로 변경 (검색창 옆 배치용)
+  Widget _buildSummaryWidget(bool isDark) {
     if (_originalItems.isEmpty) return const SizedBox.shrink();
     final dataItems = _originalItems.where((i) => !i.isSubheading);
     int total = dataItems.length;
@@ -564,17 +567,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     int reworks = dataItems.where((i) => i.complement == "재작업").length;
     double percent = total > 0 ? (completed / total) * 100 : 0;
     
-    // 표시할 정보들을 리스트에 담음
     List<String> parts = ["전체 $total", "완료 $completed"];
     if (shortages > 0) parts.add("부족 $shortages");
     if (reworks > 0) parts.add("재작업 $reworks");
     parts.add("${percent.toStringAsFixed(1)}%");
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: Text(
-        "[${parts.join(' / ')}]",
-        style: const TextStyle(fontSize: 11, color: Colors.white70),
+    return Container(
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.only(left: 8),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          "[${parts.join(' / ')}]",
+          style: TextStyle(
+            fontSize: 11, 
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white70 : Colors.blueGrey[800]
+          ),
+        ),
       ),
     );
   }
@@ -586,17 +596,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        // ❗ [수정] 파일명만 깔끔하게 표시
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start, 
           children: [
             const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), 
-            Row(
-              children: [
-                Flexible(child: Text(_currentFileName, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
-                const SizedBox(width: 8),
-                _buildSummaryInfo(), 
-              ],
-            )
+            Text(_currentFileName, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
           ]
         ),
         backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
@@ -636,23 +641,37 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ),
             ),
             
+            // ❗ [개편] 검색바(50%) + 요약정보(50%) Row
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: "품목코드 또는 비고 검색 (예: 4 383)",
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchController.text.isNotEmpty 
-                    ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); _applyFilterAndSort(); }) 
-                    : null,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                ),
-                onChanged: (val) {
-                  setState(() => _searchQuery = val);
-                  _applyFilterAndSort();
-                },
+              child: Row(
+                children: [
+                  // 1. 검색바 (왼쪽 50%)
+                  Expanded(
+                    flex: 5,
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: "품목코드 검색",
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        suffixIcon: _searchController.text.isNotEmpty 
+                          ? IconButton(icon: const Icon(Icons.clear, size: 20), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); _applyFilterAndSort(); }) 
+                          : null,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                      ),
+                      onChanged: (val) {
+                        setState(() => _searchQuery = val);
+                        _applyFilterAndSort();
+                      },
+                    ),
+                  ),
+                  // 2. 요약 정보 (오른쪽 50%)
+                  Expanded(
+                    flex: 5,
+                    child: _buildSummaryWidget(isDark),
+                  ),
+                ],
               ),
             ),
 
@@ -746,20 +765,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             ),
           )),
           InkWell(onTap: _forgetFocus, child: SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))),
-          
           _checkBtn(item.complete, Colors.green, () { 
             _forgetFocus(); 
-            setState(() { 
-              item.complete = !item.complete; 
-              if (item.complete) item.complement = ""; 
-            }); 
+            setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); 
             if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
           }, isDark),
-
           _textBtn(item.complement, Colors.orange, () => _showComplementDialog(item), isDark),
-
           _textBtn(item.process, Colors.blueGrey, () => _showProcessDialog(item), isDark),
-
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: TextField(
             controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)),
             style: const TextStyle(fontSize: 13),
