@@ -200,6 +200,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           case 'itemCode': cmp = a.itemCode.compareTo(b.itemCode); break;
           case 'quantity': cmp = (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0); break;
           case 'complete': cmp = (a.complete ? 1 : 0).compareTo(b.complete ? 1 : 0); break;
+          case 'complement': cmp = a.complement.compareTo(b.complement); break;
+          case 'process': cmp = a.process.compareTo(b.process); break;
+          case 'remarks': cmp = a.remarks.compareTo(b.remarks); break;
         }
         return _isAscending ? cmp : -cmp;
       });
@@ -283,7 +286,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         ElevatedButton.icon(
                           onPressed: () async {
                             String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
-                            _showError(err == null ? "성공" : "오류", err == null ? "✅ 접속 성공!" : "접속 실패: $err");
+                            if (err == null) {
+                              Navigator.pop(ctx); // 설정창 닫기
+                              _openSmbShares('file'); // 즉시 공유목록 탐색 실행
+                            } else {
+                              _showError("오류", "접속 실패: $err");
+                            }
                           },
                           icon: const Icon(Icons.check_circle_outline),
                           label: const Text("접속 테스트"),
@@ -571,7 +579,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ..._processList.map((p) => _dialogBtn(p, Colors.blueGrey[700]!, () { item.process = p; })),
+                GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  childAspectRatio: 2.5,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  children: _processList.map((p) => ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueGrey[700], foregroundColor: Colors.white,
+                      textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () {
+                      setState(() { item.process = p; });
+                      if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
+                      Navigator.pop(context);
+                    },
+                    child: Text(p),
+                  )).toList(),
+                ),
                 const Divider(),
                 _dialogBtn("지우기", Colors.grey, () { item.process = ""; }),
                 _dialogBtn("선택취소", Colors.blueGrey, () {}),
@@ -873,7 +900,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       color: isDark ? Colors.grey[900] : Colors.grey[800], height: 40,
-      child: Row(children: [if (_isEditMode) const SizedBox(width: 35), _headerBtn("No", "no", 35), Expanded(flex: 5, child: _headerBtn("품목코드", "itemCode", null)), _headerBtn("수량", "quantity", 40), _headerBtn("완료", "complete", 50), _headerBtn("보완", null, 50), _headerBtn("공정", null, 50), const Expanded(flex: 3, child: Center(child: Text("비고", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold))))]),
+      child: Row(children: [
+        if (_isEditMode) const SizedBox(width: 35), 
+        _headerBtn("No", "no", 35), 
+        Expanded(flex: 5, child: _headerBtn("품목코드", "itemCode", null)), 
+        _headerBtn("수량", "quantity", 40), 
+        _headerBtn("완료", "complete", 50), 
+        _headerBtn("보완", "complement", 50), 
+        _headerBtn("공정", "process", 50), 
+        Expanded(flex: 3, child: _headerBtn("비고", "remarks", null))
+      ]),
     );
   }
 
