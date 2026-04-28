@@ -37,7 +37,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   final String _baseDownloadPath = "/storage/emulated/0/Download";
   final FocusNode _dummyFocusNode = FocusNode();
 
-  List<String> _processList = ['레이저', '탭', '버링탭', 'CS', '헤밍', 'ZB', '절곡', '압입', '리베팅'];
+  // ❗ [순서변경] CS를 탭 위로 배치
+  List<String> _processList = ['레이저', 'CS', '탭', '버링탭', '헤밍', 'ZB', '절곡', '압입', '리베팅'];
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
@@ -81,7 +82,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         prefs.getString('smbUser') ?? "",
         prefs.getString('smbPass') ?? "",
       );
-      _processList = prefs.getStringList('processList') ?? ['레이저', '탭', '버링탭', 'CS', '헤밍', 'ZB', '절곡', '압입', '리베팅'];
+      // ❗ [순서변경] 기본값 업데이트 적용
+      _processList = prefs.getStringList('processList') ?? ['레이저', 'CS', '탭', '버링탭', '헤밍', 'ZB', '절곡', '압입', '리베팅'];
     });
     if (_excelPath.isNotEmpty && File(_excelPath).existsSync()) _loadExcelData(_excelPath);
   }
@@ -128,17 +130,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _applyFilterAndSort() {
     List<ItemModel> results = List.from(_originalItems);
-    
-    // ❗ [수정] 오직 품목코드만 검색되도록 변경
     if (_searchQuery.isNotEmpty) {
       final queryParts = _searchQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty);
       results = results.where((item) {
         if (item.isSubheading) return false;
-        final targetStr = item.itemCode.toLowerCase(); // 비고 제외
+        final targetStr = item.itemCode.toLowerCase();
         return queryParts.every((part) => targetStr.contains(part));
       }).toList();
     }
-
     if (_isSorted) {
       results = results.where((i) => !i.isSubheading).toList();
       results.sort((a, b) {
@@ -557,7 +556,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ [개편] 요약 정보를 단순 텍스트 위젯으로 변경 (검색창 옆 배치용)
   Widget _buildSummaryWidget(bool isDark) {
     if (_originalItems.isEmpty) return const SizedBox.shrink();
     final dataItems = _originalItems.where((i) => !i.isSubheading);
@@ -596,7 +594,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        // ❗ [수정] 파일명만 깔끔하게 표시
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start, 
           children: [
@@ -641,12 +638,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ),
             ),
             
-            // ❗ [개편] 검색바(50%) + 요약정보(50%) Row
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
               child: Row(
                 children: [
-                  // 1. 검색바 (왼쪽 50%)
                   Expanded(
                     flex: 5,
                     child: TextField(
@@ -666,7 +661,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       },
                     ),
                   ),
-                  // 2. 요약 정보 (오른쪽 50%)
                   Expanded(
                     flex: 5,
                     child: _buildSummaryWidget(isDark),
@@ -702,8 +696,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("데이터 리셋"), content: const Text("모든 체크와 비고를 지우시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")), TextButton(onPressed: () { _resetAllData(); Navigator.pop(ctx); }, child: const Text("예", style: TextStyle(color: Colors.red)))]));
   }
 
+  // ❗ [수정] 리셋 시 공정(process)까지 초기화하도록 강화
   void _resetAllData() {
-    setState(() { for (var item in _originalItems) { item.complete = false; item.complement = ""; item.remarks = ""; } _displayItems = List.from(_originalItems); _isSorted = false; _currentSortCol = ""; });
+    setState(() { 
+      for (var item in _originalItems) { 
+        item.complete = false; 
+        item.complement = ""; 
+        item.process = ""; // ❗ 공정 초기화 추가
+        item.remarks = ""; 
+      } 
+      _displayItems = List.from(_originalItems); 
+      _isSorted = false; 
+      _currentSortCol = ""; 
+    });
     if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
   }
 
@@ -765,6 +770,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             ),
           )),
           InkWell(onTap: _forgetFocus, child: SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))),
+          
           _checkBtn(item.complete, Colors.green, () { 
             _forgetFocus(); 
             setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); 
@@ -772,14 +778,35 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           }, isDark),
           _textBtn(item.complement, Colors.orange, () => _showComplementDialog(item), isDark),
           _textBtn(item.process, Colors.blueGrey, () => _showProcessDialog(item), isDark),
-          Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: TextField(
-            controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)),
-            style: const TextStyle(fontSize: 13),
-            decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: ''),
-            onChanged: (val) => item.remarks = val,
-            onTapOutside: (event) { _forgetFocus(); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); },
-            onSubmitted: (val) { item.remarks = val; _forgetFocus(); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); },
-          ))),
+          
+          // ❗ [수정] 비고란 X 버튼 추가
+          Expanded(flex: 3, child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4), 
+            child: Stack(
+              alignment: Alignment.centerRight,
+              children: [
+                TextField(
+                  controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)),
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: ''),
+                  onChanged: (val) {
+                    item.remarks = val;
+                    setState(() {}); // X 버튼 표시 여부 갱신용
+                  },
+                  onTapOutside: (event) { _forgetFocus(); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); },
+                  onSubmitted: (val) { item.remarks = val; _forgetFocus(); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); },
+                ),
+                if (item.remarks.isNotEmpty)
+                  GestureDetector(
+                    onTap: () {
+                      setState(() => item.remarks = "");
+                      if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
+                    },
+                    child: Icon(Icons.cancel, size: 18, color: Colors.grey[600]),
+                  ),
+              ],
+            )
+          )),
         ],
       ),
     );

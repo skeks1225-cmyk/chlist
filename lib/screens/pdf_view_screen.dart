@@ -165,16 +165,22 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         fillColor: isDark ? Colors.black26 : Colors.grey[100],
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.check_circle, color: Colors.blue),
-                          onPressed: () {
-                            item.remarks = _remarksController.text;
-                            widget.onStatusUpdate(item, 'remarks');
-                            FocusScope.of(context).unfocus();
-                          },
-                        ),
+                        // ❗ [수정] V 버튼 제거 및 X 버튼(지우기) 탑재
+                        suffixIcon: _remarksController.text.isNotEmpty 
+                          ? IconButton(
+                              icon: const Icon(Icons.cancel, color: Colors.grey),
+                              onPressed: () {
+                                setState(() => _remarksController.clear());
+                                item.remarks = "";
+                                widget.onStatusUpdate(item, 'remarks');
+                              },
+                            )
+                          : null,
                       ),
-                      onChanged: (val) => item.remarks = val,
+                      onChanged: (val) {
+                        item.remarks = val;
+                        setState(() {}); // X 버튼 표시 갱신용
+                      },
                       onSubmitted: (val) {
                         item.remarks = val;
                         widget.onStatusUpdate(item, 'remarks');
@@ -188,7 +194,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         widget.onStatusUpdate(item, 'complete'); 
                         setState(() {}); 
                       }),
-                      // ❗ 부족/재작업 버튼이 '보완' 상태를 업데이트하도록 변경
                       _statusBtn("부족", Colors.orange, item.complement == "부족", () { 
                         item.complement = item.complement == "부족" ? "" : "부족";
                         item.complete = false;
