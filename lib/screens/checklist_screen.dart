@@ -623,6 +623,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ],
       ),
     );
+  }
+
   void _toggleSectionSelection(String headerTitle) {
     String? currentHeader;
     List<int> sectionRealIndices = [];
@@ -842,11 +844,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final bool isSelected = _selectedIndices.contains(item.realIndex);
     final Color? rowColor = _isEditMode ? (isSelected ? Colors.blue.withOpacity(0.2) : null) : (item.complete ? (isDark ? Colors.green.withOpacity(0.2) : Colors.green[50]) : null);
     return GestureDetector(
-      onPanStart: (_) { if (!_isEditMode) return; _draggedIndices.clear(); _draggedIndices.add(item.realIndex); setState(() { if (_selectedIndices.contains(item.realIndex)) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); },
-      onPanUpdate: (details) {
-        if (!_isEditMode) return;
-        // 드래그 중 다른 행 감지는 MouseRegion 또는 정밀 터치 좌표 계산이 필요하지만 모바일 성능을 위해 탭과 개별 드래그 시작 위주로 최적화
-      },
       onTap: () { if (_isEditMode) setState(() { if (_selectedIndices.contains(item.realIndex)) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); },
       child: Container(
         decoration: BoxDecoration(color: rowColor, border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45,
