@@ -148,17 +148,19 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     );
   }
 
-  // ❗ 화면 양옆 4개의 이동 버튼 위젯
-  Widget _navCircleBtn(IconData icon, VoidCallback onTap, bool isDark) {
+  // ❗ 품목코드와 동일한 파란색 화살표 버튼 (배경 없음)
+  Widget _navArrowBtn(IconData icon, VoidCallback onTap, bool isDark) {
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Container(
-        width: 55, height: 55, // 현재 버튼 세로 크기와 동일하게 설정
-        decoration: BoxDecoration(
-          color: (isDark ? Colors.white : Colors.black).withOpacity(0.3),
-          shape: BoxShape.circle,
+        width: 55, height: 55,
+        alignment: Alignment.center,
+        child: Icon(
+          icon, 
+          color: isDark ? Colors.blue[300] : Colors.blue[700], // 리스트 품목코드 색상과 동일
+          size: 45, 
         ),
-        child: Icon(icon, color: Colors.white, size: 30),
       ),
     );
   }
@@ -193,13 +195,11 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor)))
                         : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
                 
-                // ❗ 좌측 위(이전), 아래(다음) 버튼
-                Positioned(left: 10, top: MediaQuery.of(context).size.height * 0.22, child: _navCircleBtn(Icons.expand_less, _prev, isDark)),
-                Positioned(left: 10, bottom: MediaQuery.of(context).size.height * 0.15, child: _navCircleBtn(Icons.expand_more, _next, isDark)),
-                
-                // ❗ 우측 위(이전), 아래(다음) 버튼
-                Positioned(right: 10, top: MediaQuery.of(context).size.height * 0.22, child: _navCircleBtn(Icons.expand_less, _prev, isDark)),
-                Positioned(right: 10, bottom: MediaQuery.of(context).size.height * 0.15, child: _navCircleBtn(Icons.expand_more, _next, isDark)),
+                // ❗ 좌측/우측 맨 위(이전), 맨 아래(다음) 파란색 화살표 배치
+                Positioned(left: 10, top: 10, child: _navArrowBtn(Icons.arrow_upward, _prev, isDark)),
+                Positioned(left: 10, bottom: 10, child: _navArrowBtn(Icons.arrow_downward, _next, isDark)),
+                Positioned(right: 10, top: 10, child: _navArrowBtn(Icons.arrow_upward, _prev, isDark)),
+                Positioned(right: 10, bottom: 10, child: _navArrowBtn(Icons.arrow_downward, _next, isDark)),
               ],
             ),
           ),
