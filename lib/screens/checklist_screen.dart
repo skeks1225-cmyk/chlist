@@ -138,6 +138,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   void _forgetFocus() {
+    if (!mounted) return;
     _searchFocusNode.unfocus();
     FocusScope.of(context).requestFocus(_dummyFocusNode);
   }
@@ -256,7 +257,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final userController = TextEditingController(text: prefs.getString('smbUser'));
     final passController = TextEditingController(text: prefs.getString('smbPass'));
     final newProcessController = TextEditingController();
-    bool obscurePass = true; // 비밀번호 숨김 상태 변수
+    bool obscurePass = true; 
 
     showDialog(
       context: context,
@@ -299,7 +300,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                           onPressed: () async {
                             String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
                             if (err == null) {
-                              // 접속 성공 시 공유 목록 가져오기
                               List<String> shares = await _smbService.listShares();
                               String shareMsg = shares.isNotEmpty 
                                   ? "\n\n[공유 목록]\n${shares.join('\n')}" 
@@ -903,10 +903,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           _checkBtn(item.complete, Colors.green, _isEditMode ? null : () { _forgetFocus(); setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); if (_showUnfinishedOnly) _applyFilterAndSort(); }, isDark),
           _textBtn(item.complement, Colors.orange, _isEditMode ? null : () => _showComplementDialog(item), isDark),
           _textBtn(item.process, Colors.blueGrey, _isEditMode ? null : () => _showProcessDialog(item), isDark),
-          Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Stack(alignment: Alignment.centerRight, children: [
-            TextField(enabled: !_isEditMode, controller: TextEditingController(text: item.remarks)..selection = TextSelection.fromPosition(TextPosition(offset: item.remarks.length)), style: const TextStyle(fontSize: 13), decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: ''), onChanged: (val) { item.remarks = val; setState(() {}); }, onTapOutside: (event) { _forgetFocus(); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); }, onSubmitted: (val) { item.remarks = val; _forgetFocus(); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); }),
-            if (item.remarks.isNotEmpty && !_isEditMode) GestureDetector(onTap: () { setState(() => item.remarks = ""); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); }, child: Icon(Icons.cancel, size: 18, color: Colors.grey[600])),
-          ]))),
+          Expanded(flex: 3, child: _RemarksCell(
+            item: item, 
+            enabled: !_isEditMode, 
+            onSave: () {
+              if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true);
+            },
+            onForgetFocus: _forgetFocus,
+          )),
         ]),
       ),
     );
@@ -956,5 +960,100 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     bool ok = await _excelService.saveExcel(_excelPath, _originalItems);
     if (ok && !silent) _showSnackBar("💾 저장 성공!");
     else if (!ok) _showError("저장 실패", "파일 쓰기 권한이 없습니다.");
+  }
+}
+
+class _RemarksCell extends StatefulWidget {
+  final ItemModel item;
+  final bool enabled;
+  final VoidCallback onSave;
+  final VoidCallback onForgetFocus;
+
+  const _RemarksCell({
+    required this.item,
+    required this.enabled,
+    required this.onSave,
+    required this.onForgetFocus,
+  });
+
+  @override
+  State<_RemarksCell> createState() => _RemarksCellState();
+}
+
+class _RemarksCellState extends State<_RemarksCell> {
+  late TextEditingController _controller;
+  late FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.item.remarks);
+    _focusNode = FocusNode();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus) {
+      // 포커스를 잃었을 때 데이터 저장
+      widget.item.remarks = _controller.text;
+      widget.onSave();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_RemarksCell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 외부(예: 뷰어)에서 비고가 변경된 경우 반영
+    if (widget.item.remarks != _controller.text && !_focusNode.hasFocus) {
+      _controller.text = widget.item.remarks;
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Stack(
+        alignment: Alignment.centerRight,
+        children: [
+          TextField(
+            focusNode: _focusNode,
+            enabled: widget.enabled,
+            controller: _controller,
+            style: const TextStyle(fontSize: 13),
+            decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: ''),
+            onChanged: (val) => widget.item.remarks = val,
+            onSubmitted: (val) {
+              widget.item.remarks = val;
+              widget.onSave();
+              widget.onForgetFocus();
+            },
+            onTapOutside: (_) {
+              widget.onForgetFocus();
+            },
+          ),
+          if (_controller.text.isNotEmpty && widget.enabled)
+            Positioned(
+              right: 0,
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _controller.clear());
+                  widget.item.remarks = "";
+                  widget.onSave();
+                },
+                child: Icon(Icons.cancel, size: 18, color: Colors.grey[600]),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
