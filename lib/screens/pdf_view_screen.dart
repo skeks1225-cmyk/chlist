@@ -148,18 +148,18 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     );
   }
 
-  // ❗ 품목코드와 동일한 파란색 화살표 버튼 (배경 없음)
+  // ❗ 디자인이 수정된 네비게이션 버튼 (작은 크기, < > 모양)
   Widget _navArrowBtn(IconData icon, VoidCallback onTap, bool isDark) {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        width: 55, height: 55,
+        width: 55, height: 55, // 터치 영역은 원형 그대로 유지
         alignment: Alignment.center,
         child: Icon(
           icon, 
-          color: isDark ? Colors.blue[300] : Colors.blue[700], // 리스트 품목코드 색상과 동일
-          size: 45, 
+          color: isDark ? Colors.blue[300] : Colors.blue[700], 
+          size: 28, // 크기를 하단 버튼 아이콘 수준으로 축소
         ),
       ),
     );
@@ -195,11 +195,11 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor)))
                         : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
                 
-                // ❗ 좌측/우측 맨 위(이전), 맨 아래(다음) 파란색 화살표 배치
-                Positioned(left: 10, top: 10, child: _navArrowBtn(Icons.arrow_upward, _prev, isDark)),
-                Positioned(left: 10, bottom: 10, child: _navArrowBtn(Icons.arrow_downward, _next, isDark)),
-                Positioned(right: 10, top: 10, child: _navArrowBtn(Icons.arrow_upward, _prev, isDark)),
-                Positioned(right: 10, bottom: 10, child: _navArrowBtn(Icons.arrow_downward, _next, isDark)),
+                // ❗ 위치가 중앙으로 더 모인 < > 모양 버튼
+                Positioned(left: 10, top: 80, child: _navArrowBtn(Icons.arrow_back_ios_new, _prev, isDark)),
+                Positioned(left: 10, bottom: 80, child: _navArrowBtn(Icons.arrow_forward_ios, _next, isDark)),
+                Positioned(right: 10, top: 80, child: _navArrowBtn(Icons.arrow_back_ios_new, _prev, isDark)),
+                Positioned(right: 10, bottom: 80, child: _navArrowBtn(Icons.arrow_forward_ios, _next, isDark)),
               ],
             ),
           ),
@@ -271,8 +271,19 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              if (subText.isNotEmpty) Text(subText, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal), overflow: TextOverflow.ellipsis),
+              Text(
+                label, 
+                style: TextStyle(
+                  fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal, 
+                  fontSize: subText.isEmpty ? 15 : 12,
+                ),
+              ),
+              if (subText.isNotEmpty) 
+                Text(
+                  subText, 
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), 
+                  overflow: TextOverflow.ellipsis,
+                ),
             ],
           ),
         ),
