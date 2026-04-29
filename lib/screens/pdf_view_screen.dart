@@ -9,7 +9,7 @@ class PdfViewerScreen extends StatefulWidget {
   final int initialIndex;
   final String pdfFolderPath;
   final SmbService smbService;
-  final List<String> processList; // ❗ 공정 목록 추가
+  final List<String> processList;
   final Function(ItemModel, String) onStatusUpdate;
 
   const PdfViewerScreen({
@@ -18,7 +18,7 @@ class PdfViewerScreen extends StatefulWidget {
     required this.initialIndex,
     required this.pdfFolderPath,
     required this.smbService,
-    required this.processList, // ❗ 공정 목록 주입
+    required this.processList,
     required this.onStatusUpdate,
   });
 
@@ -86,7 +86,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
   }
 
-  // ❗ 보완 선택 다이얼로그 (리스트와 동일)
   void _showComplementDialog(ItemModel item) {
     showDialog(
       context: context,
@@ -106,7 +105,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     );
   }
 
-  // ❗ 공정 선택 다이얼로그 (리스트와 동일하게 2열 배치)
   void _showProcessDialog(ItemModel item) {
     showDialog(
       context: context,
@@ -150,6 +148,21 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     );
   }
 
+  // ❗ 화면 양옆 4개의 이동 버튼 위젯
+  Widget _navCircleBtn(IconData icon, VoidCallback onTap, bool isDark) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 55, height: 55, // 현재 버튼 세로 크기와 동일하게 설정
+        decoration: BoxDecoration(
+          color: (isDark ? Colors.white : Colors.black).withOpacity(0.3),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white, size: 30),
+      ),
+    );
+  }
+
   @override
   void dispose() { _remarksController.dispose(); super.dispose(); }
 
@@ -172,11 +185,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       body: Column(
         children: [
           Expanded(
-            child: _isLoading 
-                ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
-                : (_currentPdfPath.isNotEmpty
-                    ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor)))
-                    : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
+            child: Stack(
+              children: [
+                _isLoading 
+                    ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
+                    : (_currentPdfPath.isNotEmpty
+                        ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor)))
+                        : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
+                
+                // ❗ 좌측 위(이전), 아래(다음) 버튼
+                Positioned(left: 10, top: MediaQuery.of(context).size.height * 0.22, child: _navCircleBtn(Icons.expand_less, _prev, isDark)),
+                Positioned(left: 10, bottom: MediaQuery.of(context).size.height * 0.15, child: _navCircleBtn(Icons.expand_more, _next, isDark)),
+                
+                // ❗ 우측 위(이전), 아래(다음) 버튼
+                Positioned(right: 10, top: MediaQuery.of(context).size.height * 0.22, child: _navCircleBtn(Icons.expand_less, _prev, isDark)),
+                Positioned(right: 10, bottom: MediaQuery.of(context).size.height * 0.15, child: _navCircleBtn(Icons.expand_more, _next, isDark)),
+              ],
+            ),
           ),
           SafeArea(
             child: Container(
