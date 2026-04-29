@@ -9,6 +9,7 @@ class PdfViewerScreen extends StatefulWidget {
   final int initialIndex;
   final String pdfFolderPath;
   final SmbService smbService;
+  final List<String> processList; // ❗ 공정 목록 추가
   final Function(ItemModel, String) onStatusUpdate;
 
   const PdfViewerScreen({
@@ -17,6 +18,7 @@ class PdfViewerScreen extends StatefulWidget {
     required this.initialIndex,
     required this.pdfFolderPath,
     required this.smbService,
+    required this.processList, // ❗ 공정 목록 주입
     required this.onStatusUpdate,
   });
 
@@ -68,13 +70,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     });
   }
 
-  void _showError(String title, String msg) {
-    showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(title), content: Text(msg), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
-  }
-
-  void _resetFit() {
-    _loadPdf(); 
-  }
+  void _resetFit() { _loadPdf(); }
 
   void _next() {
     if (_currentIndex < widget.items.length - 1) {
@@ -90,11 +86,72 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _remarksController.dispose();
-    super.dispose();
+  // ❗ 보완 선택 다이얼로그 (리스트와 동일)
+  void _showComplementDialog(ItemModel item) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _dialogBtn("부족", Colors.orange, () { item.complement = "부족"; item.complete = false; }),
+            _dialogBtn("재작업", Colors.red, () { item.complement = "재작업"; item.complete = false; }),
+            const Divider(),
+            _dialogBtn("지우기", Colors.grey, () { item.complement = ""; }),
+            _dialogBtn("선택취소", Colors.blueGrey, () {}),
+          ],
+        ),
+      ),
+    );
   }
+
+  // ❗ 공정 선택 다이얼로그 (리스트와 동일하게 2열 배치)
+  void _showProcessDialog(ItemModel item) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GridView.count(
+                  shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2, childAspectRatio: 2.5,
+                  mainAxisSpacing: 8, crossAxisSpacing: 8,
+                  children: widget.processList.map((p) => ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[700], foregroundColor: Colors.white, textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                    onPressed: () { setState(() { item.process = p; }); widget.onStatusUpdate(item, 'process'); Navigator.pop(ctx); },
+                    child: Text(p),
+                  )).toList(),
+                ),
+                const Divider(),
+                _dialogBtn("지우기", Colors.grey, () { item.process = ""; }),
+                _dialogBtn("선택취소", Colors.blueGrey, () {}),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dialogBtn(String label, Color color, VoidCallback onSelected) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        onPressed: () { setState(onSelected); widget.onStatusUpdate(widget.items[_currentIndex], 'update'); Navigator.pop(context); },
+        child: Text(label),
+      ),
+    );
+  }
+
+  @override
+  void dispose() { _remarksController.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
@@ -108,10 +165,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
         foregroundColor: Colors.white,
         actions: [
-          TextButton(
-            onPressed: _resetFit,
-            child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16)),
-          ),
+          TextButton(onPressed: _resetFit, child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16))),
         ],
       ),
       backgroundColor: isDark ? Colors.black : Colors.grey[200],
@@ -121,31 +175,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             child: _isLoading 
                 ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
                 : (_currentPdfPath.isNotEmpty
-                    ? Container(
-                        color: viewerBgColor,
-                        child: PdfViewer.file(
-                          _currentPdfPath,
-                          key: _viewerKey,
-                          controller: _pdfController,
-                          params: PdfViewerParams(
-                            maxScale: 15.0,
-                            backgroundColor: viewerBgColor,
-                            onViewerReady: (document, controller) {
-                              debugPrint("뷰어 로드 완료");
-                            },
-                          ),
-                        ),
-                      )
-                    : Center(child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.error_outline, color: Colors.red, size: 50),
-                          const SizedBox(height: 10),
-                          Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)),
-                          const SizedBox(height: 5),
-                          Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12)),
-                        ],
-                      ))),
+                    ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor)))
+                    : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
           ),
           SafeArea(
             child: Container(
@@ -159,82 +190,31 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       controller: _remarksController,
                       style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15),
                       decoration: InputDecoration(
-                        hintText: "비고 입력...",
-                        hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
-                        filled: true,
-                        fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                        hintText: "비고 입력...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                        filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100],
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        // ❗ [수정] V 버튼 제거 및 X 버튼(지우기) 탑재
-                        suffixIcon: _remarksController.text.isNotEmpty 
-                          ? IconButton(
-                              icon: const Icon(Icons.cancel, color: Colors.grey),
-                              onPressed: () {
-                                setState(() => _remarksController.clear());
-                                item.remarks = "";
-                                widget.onStatusUpdate(item, 'remarks');
-                              },
-                            )
-                          : null,
+                        suffixIcon: _remarksController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.cancel, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) : null,
                       ),
-                      onChanged: (val) {
-                        item.remarks = val;
-                        setState(() {}); // X 버튼 표시 갱신용
-                      },
-                      onSubmitted: (val) {
-                        item.remarks = val;
-                        widget.onStatusUpdate(item, 'remarks');
-                      },
+                      onChanged: (val) { item.remarks = val; setState(() {}); },
+                      onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); },
                     ),
                   ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _statusBtn("완료", Colors.green, item.complete, () { 
-                        widget.onStatusUpdate(item, 'complete'); 
-                        setState(() {}); 
-                      }),
-                      _statusBtn("부족", Colors.orange, item.complement == "부족", () { 
-                        item.complement = item.complement == "부족" ? "" : "부족";
-                        item.complete = false;
-                        widget.onStatusUpdate(item, 'complement'); 
-                        setState(() {}); 
-                      }),
-                      _statusBtn("재작업", Colors.red, item.complement == "재작업", () { 
-                        item.complement = item.complement == "재작업" ? "" : "재작업";
-                        item.complete = false;
-                        widget.onStatusUpdate(item, 'complement'); 
-                        setState(() {}); 
-                      }),
+                      _statusBtn("완료", Colors.green, item.complete, () { widget.onStatusUpdate(item, 'complete'); setState(() {}); }),
+                      _statusBtn("보완", Colors.orange, item.complement.isNotEmpty, () => _showComplementDialog(item)),
+                      _statusBtn("공정", Colors.blueGrey, item.process.isNotEmpty, () => _showProcessDialog(item)),
                     ],
                   ),
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      ElevatedButton.icon(
-                        onPressed: _prev, 
-                        icon: const Icon(Icons.arrow_back), 
-                        label: const Text("이전", style: TextStyle(fontSize: 15)),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(100, 45),
-                          backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50],
-                          foregroundColor: isDark ? Colors.white : Colors.blueGrey[900],
-                        )
-                      ),
-                      Text("${_currentIndex + 1} / ${widget.items.length}", 
-                        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: _next, 
-                        icon: const Icon(Icons.arrow_forward), 
-                        label: const Text("다음", style: TextStyle(fontSize: 15)),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(100, 45),
-                          backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50],
-                          foregroundColor: isDark ? Colors.white : Colors.blueGrey[900],
-                        )
-                      ),
+                      ElevatedButton.icon(onPressed: _prev, icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: isDark ? Colors.white : Colors.blueGrey[900])),
+                      Text("${_currentIndex + 1} / ${widget.items.length}", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
+                      ElevatedButton.icon(onPressed: _next, icon: const Icon(Icons.arrow_forward), label: const Text("다음", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: isDark ? Colors.white : Colors.blueGrey[900])),
                     ],
                   )
                 ],
@@ -247,15 +227,31 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   Widget _statusBtn(String label, Color color, bool active, VoidCallback onTap) {
-    return ElevatedButton(
-      onPressed: onTap,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: active ? color : Colors.grey[400]?.withOpacity(0.5), 
-        foregroundColor: active ? Colors.white : Colors.black54,
-        minimumSize: const Size(100, 50),
-        elevation: active ? 2 : 0,
+    final item = widget.items[_currentIndex];
+    String subText = "";
+    if (label == "보완") subText = item.complement;
+    if (label == "공정") subText = item.process;
+
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: ElevatedButton(
+          onPressed: onTap,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: active ? color : Colors.grey[400]?.withOpacity(0.5), 
+            foregroundColor: active ? Colors.white : Colors.black54,
+            minimumSize: const Size(0, 55), padding: EdgeInsets.zero,
+            elevation: active ? 2 : 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              if (subText.isNotEmpty) Text(subText, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal), overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
       ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
     );
   }
 }

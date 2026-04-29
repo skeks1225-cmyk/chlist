@@ -764,6 +764,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       items: _displayItems.where((i) => !i.isSubheading).toList(),
       initialIndex: _displayItems.where((i) => !i.isSubheading).toList().indexOf(item),
       pdfFolderPath: _pdfFolderPath, smbService: _smbService,
+      processList: _processList, // ❗ 공정 목록 전달
       onStatusUpdate: (it, type) {
         if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) it.complement = ""; }); }
         else { setState(() {}); }
