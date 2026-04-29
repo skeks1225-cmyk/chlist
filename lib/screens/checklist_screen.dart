@@ -256,6 +256,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final userController = TextEditingController(text: prefs.getString('smbUser'));
     final passController = TextEditingController(text: prefs.getString('smbPass'));
     final newProcessController = TextEditingController();
+    bool obscurePass = true; // 비밀번호 숨김 상태 변수
 
     showDialog(
       context: context,
@@ -281,14 +282,29 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         const SizedBox(height: 10),
                         TextField(controller: userController, decoration: const InputDecoration(labelText: "ID", border: OutlineInputBorder())),
                         const SizedBox(height: 10),
-                        TextField(controller: passController, decoration: const InputDecoration(labelText: "PW", border: OutlineInputBorder()), obscureText: true),
+                        TextField(
+                          controller: passController, 
+                          obscureText: obscurePass,
+                          decoration: InputDecoration(
+                            labelText: "PW", 
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              icon: Icon(obscurePass ? Icons.visibility : Icons.visibility_off),
+                              onPressed: () => setDialogState(() => obscurePass = !obscurePass),
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 20),
                         ElevatedButton.icon(
                           onPressed: () async {
                             String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text);
                             if (err == null) {
-                              Navigator.pop(ctx); // 설정창 닫기
-                              _openSmbShares('file'); // 즉시 공유목록 탐색 실행
+                              // 접속 성공 시 공유 목록 가져오기
+                              List<String> shares = await _smbService.listShares();
+                              String shareMsg = shares.isNotEmpty 
+                                  ? "\n\n[공유 목록]\n${shares.join('\n')}" 
+                                  : "\n\n공유 폴더를 찾을 수 없습니다.";
+                              _showError("성공", "✅ 접속 성공!$shareMsg");
                             } else {
                               _showError("오류", "접속 실패: $err");
                             }
