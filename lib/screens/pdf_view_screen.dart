@@ -148,18 +148,17 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     );
   }
 
-  // ❗ 하단 버튼과 100% 동일한 아이콘 및 크기(24) 적용
   Widget _navArrowBtn(IconData icon, VoidCallback onTap, bool isDark) {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        width: 55, height: 55, // 터치 영역 유지
+        width: 55, height: 55,
         alignment: Alignment.center,
         child: Icon(
           icon, 
           color: isDark ? Colors.blue[300] : Colors.blue[700], 
-          size: 24, // ❗ 하단 버튼 아이콘 크기와 완벽히 일치
+          size: 24, 
         ),
       ),
     );
@@ -195,11 +194,17 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor)))
                         : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
                 
-                // ❗ 하단 버튼과 동일한 모양/크기의 화살표 배치
-                Positioned(left: 10, top: 80, child: _navArrowBtn(Icons.arrow_back, _prev, isDark)),
-                Positioned(left: 10, bottom: 80, child: _navArrowBtn(Icons.arrow_forward, _next, isDark)),
-                Positioned(right: 10, top: 80, child: _navArrowBtn(Icons.arrow_back, _prev, isDark)),
-                Positioned(right: 10, bottom: 80, child: _navArrowBtn(Icons.arrow_forward, _next, isDark)),
+                // ❗ 좌측 하단에 모아진 이전(<-)/다음(->) 버튼
+                Positioned(
+                  left: 5, 
+                  bottom: 80, 
+                  child: Row(
+                    children: [
+                      _navArrowBtn(Icons.arrow_back, _prev, isDark),
+                      _navArrowBtn(Icons.arrow_forward, _next, isDark),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
