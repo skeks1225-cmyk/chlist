@@ -53,7 +53,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   // ❗ 포커싱 및 스크롤 관련 변수
   final ItemScrollController _itemScrollController = ItemScrollController();
-  final ItemPositionsListener _itemPositionsListener = ItemPositionsListener();
+  final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
   int? _highlightedRealIndex;
 
   @override
