@@ -17,6 +17,7 @@ class ExcelService {
 
       String lastMainNo = "";
       int subIndex = 0;
+      String currentSubheadingTitle = ""; // ❗ 현재 추적 중인 부분제목
 
       for (int i = 1; i < sheet.maxRows; i++) {
         var row = sheet.rows[i];
@@ -30,8 +31,11 @@ class ExcelService {
         if (code.isEmpty && rawNo.isEmpty && qty.isEmpty) continue;
 
         bool isSub = (rawNo.isEmpty && qty.isEmpty && code.isNotEmpty);
-        String displayNo = rawNo;
+        if (isSub) {
+          currentSubheadingTitle = code;
+        }
 
+        String displayNo = rawNo;
         if (rawNo.isNotEmpty) {
           lastMainNo = rawNo;
           subIndex = 0;
@@ -52,6 +56,7 @@ class ExcelService {
           process: _getSafe(row, 5),
           remarks: _getSafe(row, 6),
           isSubheading: isSub,
+          subheadingTitle: isSub ? "" : currentSubheadingTitle, // ❗ 부분제목 저장
         ));
       }
       return items;

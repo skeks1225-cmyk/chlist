@@ -9,6 +9,7 @@ class ItemModel {
   String process;    
   String remarks;
   bool isSubheading;
+  String subheadingTitle; // ❗ 해당 항목이 속한 부분제목
 
   ItemModel({
     required this.realIndex,
@@ -21,6 +22,7 @@ class ItemModel {
     this.process = "",
     this.remarks = "",
     this.isSubheading = false,
+    this.subheadingTitle = "",
   }) {
     // ❗ "null" 문자열 방어 코드 (생성 시점에 빈값으로 치환)
     if (this.no.toLowerCase() == "null") this.no = "";
@@ -30,5 +32,6 @@ class ItemModel {
     if (this.complement.toLowerCase() == "null") this.complement = "";
     if (this.process.toLowerCase() == "null") this.process = "";
     if (this.remarks.toLowerCase() == "null") this.remarks = "";
+    if (this.subheadingTitle.toLowerCase() == "null") this.subheadingTitle = "";
   }
 }

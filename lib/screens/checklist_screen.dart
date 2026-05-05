@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../models/item_model.dart';
 import '../services/excel_service.dart';
 import '../services/smb_service.dart';
@@ -49,21 +50,39 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   // ❗ 행 삭제(편집) 모드 관련 변수
   bool _isEditMode = false;
   final Set<int> _selectedIndices = {}; // realIndex 저장
-  final Set<int> _draggedIndices = {}; // 드래그 중 반전 중복 방지
+
+  // ❗ 포커싱 및 스크롤 관련 변수
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener = ItemPositionsListener();
+  int? _highlightedRealIndex;
 
   @override
   void initState() {
     super.initState();
     _initApp();
     _searchFocusNode.addListener(() => setState(() {})); 
+    _itemPositionsListener.itemPositions.addListener(_onScroll);
   }
 
   @override
   void dispose() {
+    _itemPositionsListener.itemPositions.removeListener(_onScroll);
     _dummyFocusNode.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_highlightedRealIndex != null) {
+      setState(() => _highlightedRealIndex = null);
+    }
+  }
+
+  void _clearHighlight() {
+    if (_highlightedRealIndex != null) {
+      setState(() => _highlightedRealIndex = null);
+    }
   }
 
   Future<void> _initApp() async {
@@ -813,80 +832,86 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            if (!_isEditMode) Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                children: [
-                  _topBtn("설정", _openSettings, isDark),
-                  const SizedBox(width: 4),
-                  _topBtn("엑셀선택", () => _pickSource('file'), isDark),
-                  const SizedBox(width: 4),
-                  _topBtn("PDF폴더", () => _pickSource('dir'), isDark),
-                  const SizedBox(width: 4),
-                  ElevatedButton(onPressed: () => setState(() => _isEditMode = true), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[700], foregroundColor: Colors.white, minimumSize: const Size(60, 45)), child: const Text("행삭제", style: TextStyle(fontSize: 12))),
-                  const SizedBox(width: 4),
-                  if (isSmbPdf) ...[
-                    ElevatedButton(onPressed: _isSyncing ? null : _syncAllPdfs, style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(80, 45), padding: const EdgeInsets.symmetric(horizontal: 8)), child: Text(_isSyncing ? "동기화중..." : "PDF동기화", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+        child: GestureDetector(
+          onTap: _clearHighlight,
+          behavior: HitTestBehavior.translucent,
+          child: Column(
+            children: [
+              if (!_isEditMode) Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Row(
+                  children: [
+                    _topBtn("설정", _openSettings, isDark),
                     const SizedBox(width: 4),
+                    _topBtn("엑셀선택", () => _pickSource('file'), isDark),
+                    const SizedBox(width: 4),
+                    _topBtn("PDF폴더", () => _pickSource('dir'), isDark),
+                    const SizedBox(width: 4),
+                    ElevatedButton(onPressed: () => setState(() => _isEditMode = true), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[700], foregroundColor: Colors.white, minimumSize: const Size(60, 45)), child: const Text("행삭제", style: TextStyle(fontSize: 12))),
+                    const SizedBox(width: 4),
+                    if (isSmbPdf) ...[
+                      ElevatedButton(onPressed: _isSyncing ? null : _syncAllPdfs, style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(80, 45), padding: const EdgeInsets.symmetric(horizontal: 8)), child: Text(_isSyncing ? "동기화중..." : "PDF동기화", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+                      const SizedBox(width: 4),
+                    ],
+                    ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("리셋", style: TextStyle(fontSize: 12))),
+                    const SizedBox(width: 4),
+                    ElevatedButton(onPressed: () { _forgetFocus(); _manualSave(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("저장", style: TextStyle(fontSize: 12))),
                   ],
-                  ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("리셋", style: TextStyle(fontSize: 12))),
-                  const SizedBox(width: 4),
-                  ElevatedButton(onPressed: () { _forgetFocus(); _manualSave(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("저장", style: TextStyle(fontSize: 12))),
-                ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 4,
-                    child: TextField(
-                      controller: _searchController, focusNode: _searchFocusNode,
-                      decoration: InputDecoration(
-                        hintText: "품목코드 검색",
-                        prefixIcon: (_searchController.text.isEmpty && !_searchFocusNode.hasFocus) ? const Icon(Icons.search, size: 20) : null,
-                        prefixIconConstraints: const BoxConstraints(minWidth: 30),
-                        suffixIcon: _searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 20), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); _applyFilterAndSort(); }) : null,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: TextField(
+                        controller: _searchController, focusNode: _searchFocusNode,
+                        decoration: InputDecoration(
+                          hintText: "품목코드 검색",
+                          prefixIcon: (_searchController.text.isEmpty && !_searchFocusNode.hasFocus) ? const Icon(Icons.search, size: 20) : null,
+                          prefixIconConstraints: const BoxConstraints(minWidth: 30),
+                          suffixIcon: _searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 20), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); _applyFilterAndSort(); }) : null,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
+                        ),
+                        onChanged: (val) { setState(() => _searchQuery = val); _applyFilterAndSort(); },
                       ),
-                      onChanged: (val) { setState(() => _searchQuery = val); _applyFilterAndSort(); },
                     ),
-                  ),
-                  Expanded(flex: 6, child: _buildSummaryWidget(isDark)),
-                ],
+                    Expanded(flex: 6, child: _buildSummaryWidget(isDark)),
+                  ],
+                ),
               ),
-            ),
-            _buildHeader(context),
-            Expanded(
-              child: _isLoading ? const Center(child: CircularProgressIndicator()) : ListView.builder(
-                itemCount: _displayItems.length,
-                itemBuilder: (ctx, idx) {
-                  final item = _displayItems[idx];
-                  if (item.isSubheading) {
-                    return GestureDetector(
-                      onTap: () {
-                        if (_isEditMode) _toggleSectionSelection(item.itemCode);
-                        else {
-                          setState(() { if (_selectedSectionHeader == item.itemCode) _selectedSectionHeader = null; else _selectedSectionHeader = item.itemCode; });
-                          _applyFilterAndSort();
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), color: _selectedSectionHeader == item.itemCode ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300]), width: double.infinity, 
-                        child: Row(children: [Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)), if (_selectedSectionHeader == item.itemCode) const Padding(padding: EdgeInsets.only(left: 8.0), child: Icon(Icons.check_circle, size: 16, color: Colors.blueAccent)), const Spacer(), if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue)]),
-                      ),
-                    );
-                  }
-                  return _buildDataRow(item, isDark);
-                },
+              _buildHeader(context),
+              Expanded(
+                child: _isLoading ? const Center(child: CircularProgressIndicator()) : ScrollablePositionedList.builder(
+                  itemScrollController: _itemScrollController,
+                  itemPositionsListener: _itemPositionsListener,
+                  itemCount: _displayItems.length,
+                  itemBuilder: (ctx, idx) {
+                    final item = _displayItems[idx];
+                    if (item.isSubheading) {
+                      return GestureDetector(
+                        onTap: () {
+                          if (_isEditMode) _toggleSectionSelection(item.itemCode);
+                          else {
+                            setState(() { if (_selectedSectionHeader == item.itemCode) _selectedSectionHeader = null; else _selectedSectionHeader = item.itemCode; });
+                            _applyFilterAndSort();
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), color: _selectedSectionHeader == item.itemCode ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300]), width: double.infinity, 
+                          child: Row(children: [Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)), if (_selectedSectionHeader == item.itemCode) const Padding(padding: EdgeInsets.only(left: 8.0), child: Icon(Icons.check_circle, size: 16, color: Colors.blueAccent)), const Spacer(), if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue)]),
+                        ),
+                      );
+                    }
+                    return _buildDataRow(item, isDark);
+                  },
+                ),
               ),
-            ),
-            if (_isSyncing) const LinearProgressIndicator(minHeight: 2, color: Colors.orange),
-            Offstage(child: TextField(focusNode: _dummyFocusNode, readOnly: true)),
-          ],
+              if (_isSyncing) const LinearProgressIndicator(minHeight: 2, color: Colors.orange),
+              Offstage(child: TextField(focusNode: _dummyFocusNode, readOnly: true)),
+            ],
+          ),
         ),
       ),
     );
@@ -1066,6 +1091,18 @@ class _RemarksCellState extends State<_RemarksCell> {
               child: GestureDetector(
                 onTap: () {
                   setState(() => _controller.clear());
+                  widget.item.remarks = "";
+                  widget.onSave();
+                },
+                child: Icon(Icons.cancel, size: 18, color: Colors.grey[600]),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+) => _controller.clear());
                   widget.item.remarks = "";
                   widget.onSave();
                 },
