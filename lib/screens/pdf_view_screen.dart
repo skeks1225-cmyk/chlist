@@ -173,37 +173,27 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color viewerBgColor = isDark ? Colors.black : Colors.grey[300]!;
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        Navigator.pop(context, _currentIndex);
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (item.subheadingTitle.isNotEmpty)
-                Text(
-                  item.subheadingTitle,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.white70),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              Text(item.itemCode, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
-          foregroundColor: Colors.white,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pop(context, _currentIndex),
-          ),
-          actions: [
-            TextButton(onPressed: _resetFit, child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16))),
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (item.subheadingTitle.isNotEmpty)
+              Text(
+                item.subheadingTitle,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.white70),
+                overflow: TextOverflow.ellipsis,
+              ),
+            Text(item.itemCode, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
-        backgroundColor: isDark ? Colors.black : Colors.grey[200],
+        backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
+        foregroundColor: Colors.white,
+        actions: [
+          TextButton(onPressed: _resetFit, child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16))),
+        ],
+      ),
+      backgroundColor: isDark ? Colors.black : Colors.grey[200],
       body: Column(
         children: [
           Expanded(
