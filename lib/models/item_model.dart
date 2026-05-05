@@ -13,7 +13,7 @@ class ItemModel {
   ItemModel({
     required this.realIndex,
     required this.no,
-    this.displayNo = "",
+    required this.displayNo,
     required this.itemCode,
     required this.quantity,
     this.complete = false,
@@ -21,5 +21,14 @@ class ItemModel {
     this.process = "",
     this.remarks = "",
     this.isSubheading = false,
-  });
+  }) {
+    // ❗ "null" 문자열 방어 코드 (생성 시점에 빈값으로 치환)
+    if (this.no.toLowerCase() == "null") this.no = "";
+    if (this.displayNo.toLowerCase() == "null") this.displayNo = "";
+    if (this.itemCode.toLowerCase() == "null") this.itemCode = "";
+    if (this.quantity.toLowerCase() == "null") this.quantity = "";
+    if (this.complement.toLowerCase() == "null") this.complement = "";
+    if (this.process.toLowerCase() == "null") this.process = "";
+    if (this.remarks.toLowerCase() == "null") this.remarks = "";
+  }
 }

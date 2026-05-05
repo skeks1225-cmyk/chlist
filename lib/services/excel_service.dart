@@ -22,19 +22,20 @@ class ExcelService {
         var row = sheet.rows[i];
         if (row.isEmpty) continue;
 
-        String no = _getSafe(row, 0).trim();
+        // ❗ 문자열 "null" 방지를 위해 _getSafe 로직 적용
+        String rawNo = _getSafe(row, 0).trim();
         String code = _getSafe(row, 1).trim();
         String qty = _getSafe(row, 2).trim();
 
-        if (code.isEmpty && no.isEmpty && qty.isEmpty) continue;
+        if (code.isEmpty && rawNo.isEmpty && qty.isEmpty) continue;
 
-        bool isSub = (no.isEmpty && qty.isEmpty && code.isNotEmpty);
-        String displayNo = no;
+        bool isSub = (rawNo.isEmpty && qty.isEmpty && code.isNotEmpty);
+        String displayNo = rawNo;
 
-        if (no.isNotEmpty) {
-          lastMainNo = no;
+        if (rawNo.isNotEmpty) {
+          lastMainNo = rawNo;
           subIndex = 0;
-          displayNo = no;
+          displayNo = rawNo;
         } else if (qty.isNotEmpty) {
           subIndex++;
           displayNo = lastMainNo.isNotEmpty ? "$lastMainNo-$subIndex" : "$subIndex";
@@ -42,8 +43,8 @@ class ExcelService {
 
         items.add(ItemModel(
           realIndex: i,
-          no: no,
-          displayNo: displayNo, // ❗ 가상 번호 할당 누락 수정
+          no: rawNo, // 엑셀에 저장될 원본 번호 (비어있으면 빈값)
+          displayNo: displayNo, // 화면에 보여줄 가상 번호
           itemCode: code,
           quantity: qty,
           complete: _getSafe(row, 3).toUpperCase() == "V",
@@ -59,9 +60,11 @@ class ExcelService {
     }
   }
 
+  // ❗ 실제 문자열 "null"이 반환되는 문제를 원천 차단
   String _getSafe(List<Data?> row, int idx) {
-    if (idx < 0 || idx >= row.length || row[idx] == null) return "";
-    return row[idx]!.value.toString();
+    if (idx < 0 || idx >= row.length || row[idx] == null || row[idx]!.value == null) return "";
+    String val = row[idx]!.value.toString();
+    return (val.toLowerCase() == "null") ? "" : val;
   }
 
   Future<bool> saveExcel(String path, List<ItemModel> items) async {
@@ -78,6 +81,7 @@ class ExcelService {
       for (int i = 0; i < items.length; i++) {
         var item = items[i];
         int r = i + 1;
+        // ❗ item.no가 빈값인 경우 확실하게 빈 문자열로 저장
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: r), TextCellValue(item.no));
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: r), TextCellValue(item.itemCode));
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: r), TextCellValue(item.quantity));
