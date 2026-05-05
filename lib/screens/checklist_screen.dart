@@ -1102,15 +1102,3 @@ class _RemarksCellState extends State<_RemarksCell> {
     );
   }
 }
-) => _controller.clear());
-                  widget.item.remarks = "";
-                  widget.onSave();
-                },
-                child: Icon(Icons.cancel, size: 18, color: Colors.grey[600]),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
