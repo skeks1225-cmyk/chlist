@@ -197,7 +197,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       results.sort((a, b) {
         int cmp = 0;
         switch (_currentSortCol) {
-          case 'no': cmp = (int.tryParse(a.no) ?? 0).compareTo(int.tryParse(b.no) ?? 0); break;
+          case 'no': 
+            // ❗ 가상 번호(2-1 등) 정렬 대응
+            cmp = _compareDisplayNo(a.displayNo, b.displayNo);
+            break;
           case 'itemCode': cmp = a.itemCode.compareTo(b.itemCode); break;
           case 'quantity': cmp = (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0); break;
           case 'complete': cmp = (a.complete ? 1 : 0).compareTo(b.complete ? 1 : 0); break;
@@ -898,7 +901,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         decoration: BoxDecoration(color: rowColor, border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45,
         child: Row(children: [
           if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSelected ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
-          InkWell(onTap: _forgetFocus, child: SizedBox(width: 35, child: Text(item.no, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))),
+          InkWell(onTap: _forgetFocus, child: SizedBox(width: 35, child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 5, child: InkWell(onTap: _isEditMode ? null : () => _handleItemClick(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), alignment: Alignment.centerLeft, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))),
           InkWell(onTap: _forgetFocus, child: SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))),
           _checkBtn(item.complete, Colors.green, _isEditMode ? null : () { _forgetFocus(); setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); if (_showUnfinishedOnly) _applyFilterAndSort(); }, isDark),
@@ -961,6 +964,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     bool ok = await _excelService.saveExcel(_excelPath, _originalItems);
     if (ok && !silent) _showSnackBar("💾 저장 성공!");
     else if (!ok) _showError("저장 실패", "파일 쓰기 권한이 없습니다.");
+  }
+
+  // ❗ 가상 번호(예: 2, 2-1, 10-1) 정렬을 위한 비교 함수
+  int _compareDisplayNo(String a, String b) {
+    List<String> partA = a.split('-');
+    List<String> partB = b.split('-');
+    
+    int mainA = int.tryParse(partA[0]) ?? 0;
+    int mainB = int.tryParse(partB[0]) ?? 0;
+    
+    if (mainA != mainB) return mainA.compareTo(mainB);
+    
+    int subA = (partA.length > 1) ? (int.tryParse(partA[1]) ?? 0) : 0;
+    int subB = (partB.length > 1) ? (int.tryParse(partB[1]) ?? 0) : 0;
+    
+    return subA.compareTo(subB);
   }
 }
 

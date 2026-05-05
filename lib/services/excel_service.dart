@@ -15,22 +15,36 @@ class ExcelService {
       var sheet = excel.tables[excel.tables.keys.first];
       if (sheet == null || sheet.maxRows <= 1) return [];
 
+      String lastMainNo = "";
+      int subIndex = 0;
+
       for (int i = 1; i < sheet.maxRows; i++) {
         var row = sheet.rows[i];
         if (row.isEmpty) continue;
 
-        String no = _getSafe(row, 0);
-        String code = _getSafe(row, 1);
-        String qty = _getSafe(row, 2);
+        String no = _getSafe(row, 0).trim();
+        String code = _getSafe(row, 1).trim();
+        String qty = _getSafe(row, 2).trim();
 
         if (code.isEmpty && no.isEmpty && qty.isEmpty) continue;
 
         bool isSub = (no.isEmpty && qty.isEmpty && code.isNotEmpty);
+        String displayNo = no;
 
-        // ❗ 기존 'V' 데이터 무시하고 글자 데이터 그대로 읽기
+        if (no.isNotEmpty) {
+          lastMainNo = no;
+          subIndex = 0;
+          displayNo = no;
+        } else if (qty.isNotEmpty) {
+          // ❗ 수량이 있는 하위 품목인 경우 가상 번호 부여
+          subIndex++;
+          displayNo = lastMainNo.isNotEmpty ? "$lastMainNo-$subIndex" : "$subIndex";
+        }
+
         items.add(ItemModel(
           realIndex: i,
           no: no,
+          displayNo: displayNo,
           itemCode: code,
           quantity: qty,
           complete: _getSafe(row, 3).toUpperCase() == "V",
