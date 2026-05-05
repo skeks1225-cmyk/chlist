@@ -36,7 +36,6 @@ class ExcelService {
           subIndex = 0;
           displayNo = no;
         } else if (qty.isNotEmpty) {
-          // ❗ 수량이 있는 하위 품목인 경우 가상 번호 부여
           subIndex++;
           displayNo = lastMainNo.isNotEmpty ? "$lastMainNo-$subIndex" : "$subIndex";
         }
@@ -44,7 +43,7 @@ class ExcelService {
         items.add(ItemModel(
           realIndex: i,
           no: no,
-          displayNo: displayNo,
+          displayNo: displayNo, // ❗ 가상 번호 할당 누락 수정
           itemCode: code,
           quantity: qty,
           complete: _getSafe(row, 3).toUpperCase() == "V",
