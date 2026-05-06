@@ -877,8 +877,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ],
       ),
       body: SafeArea(
-        child: GestureDetector(
-          onTap: _clearHighlight,
+        child: Listener(
+          onPointerDown: (_) => _clearHighlight(), // ❗ 사용자가 화면에 손을 대는 순간 하이라이트 제거
           behavior: HitTestBehavior.translucent,
           child: Column(
             children: [
