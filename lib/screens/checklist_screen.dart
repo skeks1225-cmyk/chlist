@@ -111,18 +111,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         targetOffset = _scrollController.position.maxScrollExtent;
       }
 
-      // ❗ 스크롤 이동 완료 후 하이라이트 표시
-      _scrollController.animateTo(
-        targetOffset,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      ).then((_) {
-        if (mounted) {
-          setState(() {
-            _highlightedRealIndex = foundRealIndex;
-          });
-        }
-      });
+      // ❗ 즉시 이동 및 하이라이트 표시
+      _scrollController.jumpTo(targetOffset);
+      if (mounted) {
+        setState(() {
+          _highlightedRealIndex = foundRealIndex;
+        });
+      }
     }
   }
 
