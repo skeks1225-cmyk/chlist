@@ -62,23 +62,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     super.initState();
     _initApp();
     _searchFocusNode.addListener(() => setState(() {})); 
-    _scrollController.addListener(_clearHighlightOnScroll);
   }
 
   @override
   void dispose() {
-    _scrollController.removeListener(_clearHighlightOnScroll);
     _scrollController.dispose();
     _dummyFocusNode.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
-  }
-
-  void _clearHighlightOnScroll() {
-    if (_highlightedRealIndex != null) {
-      setState(() => _highlightedRealIndex = null);
-    }
   }
 
   void _clearHighlight() {
@@ -91,13 +83,48 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   void _scrollToItem(String itemCode) {
     int targetIndex = -1;
     double offset = 0.0;
+    int? foundRealIndex;
 
     for (int i = 0; i < _displayItems.length; i++) {
       final item = _displayItems[i];
       if (!item.isSubheading && item.itemCode == itemCode) {
         targetIndex = i;
-        _highlightedRealIndex = item.realIndex;
+        foundRealIndex = item.realIndex;
         break;
+      }
+      // 누적 높이 계산
+      offset += item.isSubheading ? _subheadingHeight : _itemHeight;
+    }
+
+    if (targetIndex != -1 && foundRealIndex != null) {
+      // ❗ 이동 전 이전 하이라이트 제거
+      setState(() => _highlightedRealIndex = null);
+
+      // 화면 중앙 계산: (항목 위치) - (화면 높이 / 2) + (항목 높이 / 2)
+      final screenHeight = MediaQuery.of(context).size.height;
+      final appBarHeight = kToolbarHeight + 50; 
+      double targetOffset = offset - (screenHeight / 2) + (appBarHeight / 2) + (_itemHeight / 2);
+
+      // 범위 제한 (맨 위 또는 맨 아래)
+      if (targetOffset < 0) targetOffset = 0;
+      if (targetOffset > _scrollController.position.maxScrollExtent) {
+        targetOffset = _scrollController.position.maxScrollExtent;
+      }
+
+      // ❗ 스크롤 이동 완료 후 하이라이트 표시
+      _scrollController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      ).then((_) {
+        if (mounted) {
+          setState(() {
+            _highlightedRealIndex = foundRealIndex;
+          });
+        }
+      });
+    }
+  }
       }
       // 누적 높이 계산
       offset += item.isSubheading ? _subheadingHeight : _itemHeight;
