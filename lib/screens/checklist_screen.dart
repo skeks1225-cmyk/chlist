@@ -125,31 +125,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       });
     }
   }
-      }
-      // 누적 높이 계산
-      offset += item.isSubheading ? _subheadingHeight : _itemHeight;
-    }
-
-    if (targetIndex != -1) {
-      setState(() {});
-      // 화면 중앙 계산: (항목 위치) - (화면 높이 / 2) + (항목 높이 / 2)
-      final screenHeight = MediaQuery.of(context).size.height;
-      final appBarHeight = kToolbarHeight + 50; // 대략적인 상단 바 높이
-      double targetOffset = offset - (screenHeight / 2) + (appBarHeight / 2) + (_itemHeight / 2);
-
-      // 범위 제한 (맨 위 또는 맨 아래)
-      if (targetOffset < 0) targetOffset = 0;
-      if (targetOffset > _scrollController.position.maxScrollExtent) {
-        targetOffset = _scrollController.position.maxScrollExtent;
-      }
-
-      _scrollController.animateTo(
-        targetOffset,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
-    }
-  }
 
   Future<void> _initApp() async {
     if (Platform.isAndroid) {
