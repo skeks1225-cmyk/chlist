@@ -1163,9 +1163,3 @@ class _RemarksCellState extends State<_RemarksCell> {
     );
   }
 }
-      ),
-        ],
-      ),
-    );
-  }
-}
