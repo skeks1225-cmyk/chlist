@@ -968,17 +968,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Widget _buildDataRow(ItemModel item, bool isDark) {
     final bool isSelected = _selectedIndices.contains(item.realIndex);
     final Color? rowColor = _isEditMode ? (isSelected ? Colors.blue.withOpacity(0.2) : null) : (item.complete ? (isDark ? Colors.green.withOpacity(0.2) : Colors.green[50]) : null);
+    
+    // ❗ 줄 전체 하이라이트 여부
+    final bool isHighlighted = item.realIndex == _highlightedRealIndex;
+
     return GestureDetector(
       onTap: () { if (_isEditMode) setState(() { if (_selectedIndices.contains(item.realIndex)) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); },
       child: Container(
-        decoration: BoxDecoration(color: rowColor, border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45,
+        decoration: BoxDecoration(
+          color: rowColor, 
+          border: isHighlighted 
+              ? Border.all(color: Colors.blue, width: 2) // ❗ 줄 전체 파란색 테두리
+              : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))
+        ), 
+        height: 45,
         child: Row(children: [
           if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSelected ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
           InkWell(onTap: _forgetFocus, child: SizedBox(width: 35, child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 5, child: InkWell(onTap: _isEditMode ? null : () => _handleItemClick(item), child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8), 
             alignment: Alignment.centerLeft, 
-            decoration: item.realIndex == _highlightedRealIndex ? BoxDecoration(border: Border.all(color: Colors.blue, width: 2)) : null,
             child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))),
           InkWell(onTap: _forgetFocus, child: SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))),
           _checkBtn(item.complete, Colors.green, _isEditMode ? null : () { _forgetFocus(); setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); if (_autoSave && _excelPath.isNotEmpty) _manualSave(silent: true); if (_showUnfinishedOnly) _applyFilterAndSort(); }, isDark),
@@ -1149,6 +1158,12 @@ class _RemarksCellState extends State<_RemarksCell> {
                 child: Icon(Icons.cancel, size: 18, color: Colors.grey[600]),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+      ),
         ],
       ),
     );
