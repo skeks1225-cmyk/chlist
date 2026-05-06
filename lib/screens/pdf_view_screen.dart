@@ -204,75 +204,76 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           ],
         ),
         backgroundColor: isDark ? Colors.black : Colors.grey[200],
-      body: Column(
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                _isLoading 
-                    ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
-                    : (_currentPdfPath.isNotEmpty
-                        ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor)))
-                        : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
-                
-                // ❗ 좌측 하단에 모아진 이전(<-)/다음(->) 버튼
-                Positioned(
-                  left: 5, 
-                  bottom: 80, 
-                  child: Row(
-                    children: [
-                      _navArrowBtn(Icons.arrow_back, _prev, isDark),
-                      _navArrowBtn(Icons.arrow_forward, _next, isDark),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SafeArea(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-              color: isDark ? Colors.grey[900] : Colors.white,
-              child: Column(
+        body: Column(
+          children: [
+            Expanded(
+              child: Stack(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: TextField(
-                      controller: _remarksController,
-                      style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15),
-                      decoration: InputDecoration(
-                        hintText: "비고 입력...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
-                        filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100],
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        suffixIcon: _remarksController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.cancel, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) : null,
-                      ),
-                      onChanged: (val) { item.remarks = val; setState(() {}); },
-                      onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); },
+                  _isLoading 
+                      ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
+                      : (_currentPdfPath.isNotEmpty
+                          ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor)))
+                          : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
+                  
+                  // ❗ 좌측 하단에 모아진 이전(<-)/다음(->) 버튼
+                  Positioned(
+                    left: 5, 
+                    bottom: 80, 
+                    child: Row(
+                      children: [
+                        _navArrowBtn(Icons.arrow_back, _prev, isDark),
+                        _navArrowBtn(Icons.arrow_forward, _next, isDark),
+                      ],
                     ),
                   ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _statusBtn("완료", Colors.green, item.complete, () { widget.onStatusUpdate(item, 'complete'); setState(() {}); }),
-                      _statusBtn("보완", Colors.orange, item.complement.isNotEmpty, () => _showComplementDialog(item)),
-                      _statusBtn("공정", Colors.blueGrey, item.process.isNotEmpty, () => _showProcessDialog(item)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      ElevatedButton.icon(onPressed: _prev, icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: isDark ? Colors.white : Colors.blueGrey[900])),
-                      Text("${_currentIndex + 1} / ${widget.items.length}", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
-                      ElevatedButton.icon(onPressed: _next, icon: const Icon(Icons.arrow_forward), label: const Text("다음", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: isDark ? Colors.white : Colors.blueGrey[900])),
-                    ],
-                  )
                 ],
               ),
             ),
-          )
-        ],
+            SafeArea(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                color: isDark ? Colors.grey[900] : Colors.white,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: TextField(
+                        controller: _remarksController,
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15),
+                        decoration: InputDecoration(
+                          hintText: "비고 입력...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                          filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          suffixIcon: _remarksController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.cancel, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) : null,
+                        ),
+                        onChanged: (val) { item.remarks = val; setState(() {}); },
+                        onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); },
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _statusBtn("완료", Colors.green, item.complete, () { widget.onStatusUpdate(item, 'complete'); setState(() {}); }),
+                        _statusBtn("보완", Colors.orange, item.complement.isNotEmpty, () => _showComplementDialog(item)),
+                        _statusBtn("공정", Colors.blueGrey, item.process.isNotEmpty, () => _showProcessDialog(item)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        ElevatedButton.icon(onPressed: _prev, icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: isDark ? Colors.white : Colors.blueGrey[900])),
+                        Text("${_currentIndex + 1} / ${widget.items.length}", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ElevatedButton.icon(onPressed: _next, icon: const Icon(Icons.arrow_forward), label: const Text("다음", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: isDark ? Colors.white : Colors.blueGrey[900])),
+                      ],
+                    )
+                  ],
+                ),
+              ),
+            )
+          ],
+        ),
       ),
     );
   }
