@@ -42,6 +42,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = "";
+  String _remarksFilterQuery = ""; // 비고란 필터 쿼리 추가
 
   bool _showUnfinishedOnly = false; 
   String? _selectedSectionHeader; 
@@ -233,6 +234,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         }).toList();
       }
 
+      // ❗ 비고란 필터 추가
+      if (_remarksFilterQuery.isNotEmpty) {
+        final queryParts = _remarksFilterQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty);
+        sectionItems = sectionItems.where((item) {
+          final targetStr = item.remarks.toLowerCase();
+          return queryParts.every((part) => targetStr.contains(part));
+        }).toList();
+      }
+
       if (_showUnfinishedOnly) {
         sectionItems = sectionItems.where((item) => !item.complete).toList();
       }
@@ -277,18 +287,65 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     setState(() {
       _isSorted = false;
       _currentSortCol = "";
+      _remarksFilterQuery = ""; // 비고 필터 초기화 추가
     });
     _applyFilterAndSort();
   }
 
   void _sortBy(String col) {
     _forgetFocus();
+    if (col == 'remarks') {
+      _showRemarksFilterDialog();
+      return;
+    }
     setState(() {
       if (_currentSortCol == col) _isAscending = !_isAscending;
       else { _currentSortCol = col; _isAscending = true; }
       _isSorted = true;
     });
     _applyFilterAndSort();
+  }
+
+  void _showRemarksFilterDialog() {
+    final controller = TextEditingController(text: _remarksFilterQuery);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("비고 필터", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: "필터링할 글자 입력",
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (val) {
+            setState(() => _remarksFilterQuery = val);
+            _applyFilterAndSort();
+            Navigator.pop(ctx);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() => _remarksFilterQuery = "");
+              _applyFilterAndSort();
+              Navigator.pop(ctx);
+            },
+            child: const Text("필터해제"),
+          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
+          TextButton(
+            onPressed: () {
+              setState(() => _remarksFilterQuery = controller.text);
+              _applyFilterAndSort();
+              Navigator.pop(ctx);
+            },
+            child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickSource(String mode) async {
@@ -868,8 +925,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ] : [
           IconButton(onPressed: _handleRefresh, icon: const Icon(Icons.refresh, color: Colors.cyanAccent), tooltip: "새로고침"),
           IconButton(onPressed: _handleClose, icon: const Icon(Icons.close, color: Colors.redAccent), tooltip: "리스트 닫기"),
-          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly) 
-            TextButton(onPressed: () { setState(() { _isSorted = false; _currentSortCol = ""; _selectedSectionHeader = null; _showUnfinishedOnly = false; }); _applyFilterAndSort(); }, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
+          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty) 
+            TextButton(onPressed: () { setState(() { _isSorted = false; _currentSortCol = ""; _selectedSectionHeader = null; _showUnfinishedOnly = false; _remarksFilterQuery = ""; }); _applyFilterAndSort(); }, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
           TextButton.icon(onPressed: () { _forgetFocus(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
         ],
       ),
