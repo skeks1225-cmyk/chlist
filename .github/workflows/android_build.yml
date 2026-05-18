@@ -24,6 +24,7 @@ jobs:
 
       # ❗ 메인 앱 빌드로 복구
       - name: Build Main App
+        working-directory: 체크시트어플
         run: |
           flutter clean
           flutter pub get
@@ -33,4 +34,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: CheckSheet-Main-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: 체크시트어플/build/app/outputs/flutter-apk/app-release.apk
