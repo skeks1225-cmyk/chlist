@@ -46,6 +46,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   bool _showUnfinishedOnly = false; 
   String? _selectedSectionHeader; 
+  bool _isSubheadingViewMode = false; // ❗ 부분제목만 보기 모드
 
   // ❗ 행 삭제(편집) 모드 관련 변수
   bool _isEditMode = false;
@@ -201,6 +202,33 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _applyFilterAndSort() {
     List<ItemModel> results = [];
+    
+    // ❗ 부분제목만 보기 모드 처리
+    if (_isSubheadingViewMode) {
+      results = _originalItems.where((i) => i.isSubheading).toList();
+      
+      // 검색어가 있으면 부분제목 타이틀에서 검색
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery.toLowerCase();
+        results = results.where((i) => i.itemCode.toLowerCase().contains(query)).toList();
+      }
+
+      if (results.isEmpty) {
+        // 부분제목이 하나도 없는 경우 "부분제목 없음" 표시용 가상 아이템 추가
+        results.add(ItemModel(
+          realIndex: -1, 
+          no: "", 
+          displayNo: "", 
+          itemCode: "부분제목 없음", 
+          quantity: "", 
+          isSubheading: true
+        ));
+      }
+      
+      setState(() { _displayItems = results; });
+      return;
+    }
+
     String? currentHeader;
     Map<String, List<ItemModel>> sectionMap = {};
     List<String> headerOrder = [];
@@ -925,8 +953,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ] : [
           IconButton(onPressed: _handleRefresh, icon: const Icon(Icons.refresh, color: Colors.cyanAccent), tooltip: "새로고침"),
           IconButton(onPressed: _handleClose, icon: const Icon(Icons.close, color: Colors.redAccent), tooltip: "리스트 닫기"),
-          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty) 
-            TextButton(onPressed: () { setState(() { _isSorted = false; _currentSortCol = ""; _selectedSectionHeader = null; _showUnfinishedOnly = false; _remarksFilterQuery = ""; }); _applyFilterAndSort(); }, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
+          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _isSubheadingViewMode) 
+            TextButton(onPressed: () { setState(() { _isSorted = false; _currentSortCol = ""; _selectedSectionHeader = null; _showUnfinishedOnly = false; _remarksFilterQuery = ""; _isSubheadingViewMode = false; }); _applyFilterAndSort(); }, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
           TextButton.icon(onPressed: () { _forgetFocus(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
         ],
       ),
@@ -945,6 +973,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     _topBtn("엑셀선택", () => _pickSource('file'), isDark),
                     const SizedBox(width: 4),
                     _topBtn("PDF폴더", () => _pickSource('dir'), isDark),
+                    const SizedBox(width: 4),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() { _isSubheadingViewMode = !_isSubheadingViewMode; });
+                        _applyFilterAndSort();
+                      }, 
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isSubheadingViewMode ? Colors.blue : Colors.blueGrey[700], 
+                        foregroundColor: Colors.white, 
+                        minimumSize: const Size(60, 45)
+                      ), 
+                      child: const Text("부분제목", style: TextStyle(fontSize: 12))
+                    ),
                     const SizedBox(width: 4),
                     ElevatedButton(onPressed: () => setState(() => _isEditMode = true), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[700], foregroundColor: Colors.white, minimumSize: const Size(60, 45)), child: const Text("행삭제", style: TextStyle(fontSize: 12))),
                     const SizedBox(width: 4),
@@ -991,7 +1032,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       return GestureDetector(
                         onTap: () {
                           if (_isEditMode) _toggleSectionSelection(item.itemCode);
-                          else {
+                          else if (_isSubheadingViewMode) {
+                            if (item.realIndex == -1) {
+                              setState(() => _isSubheadingViewMode = false);
+                            } else {
+                              setState(() {
+                                _selectedSectionHeader = item.itemCode;
+                                _isSubheadingViewMode = false;
+                              });
+                            }
+                            _applyFilterAndSort();
+                          } else {
                             setState(() { if (_selectedSectionHeader == item.itemCode) _selectedSectionHeader = null; else _selectedSectionHeader = item.itemCode; });
                             _applyFilterAndSort();
                           }
