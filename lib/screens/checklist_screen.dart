@@ -58,6 +58,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   int? _highlightedRealIndex;
   final double _subheadingHeight = 40.0;
   final double _itemHeight = 45.0;
+  double _preSearchScrollOffset = 0.0; // ❗ 검색 전 스크롤 위치 저장용
 
   @override
   void initState() {
@@ -1060,10 +1061,34 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                           hintText: "품목코드 검색",
                           prefixIcon: (_searchController.text.isEmpty && !_searchFocusNode.hasFocus) ? const Icon(Icons.search, size: 20) : null,
                           prefixIconConstraints: const BoxConstraints(minWidth: 30),
-                          suffixIcon: _searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 20), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); _applyFilterAndSort(); }) : null,
+                          suffixIcon: _searchController.text.isNotEmpty ? IconButton(
+                            icon: const Icon(Icons.clear, size: 20), 
+                            onPressed: () { 
+                              _searchController.clear(); 
+                              setState(() => _searchQuery = ""); 
+                              _applyFilterAndSort(); 
+                              // ❗ 검색어 삭제 시 이전 위치로 복구
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (_scrollController.hasClients) _scrollController.jumpTo(_preSearchScrollOffset);
+                              });
+                            }
+                          ) : null,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
                         ),
-                        onChanged: (val) { setState(() => _searchQuery = val); _applyFilterAndSort(); },
+                        onChanged: (val) { 
+                          // ❗ 검색 시작 시점의 위치 저장
+                          if (_searchQuery.isEmpty && val.isNotEmpty) {
+                            _preSearchScrollOffset = _scrollController.offset;
+                          }
+                          setState(() => _searchQuery = val); 
+                          _applyFilterAndSort(); 
+                          // ❗ 검색어를 다 지웠을 때 이전 위치로 복구
+                          if (val.isEmpty) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (_scrollController.hasClients) _scrollController.jumpTo(_preSearchScrollOffset);
+                            });
+                          }
+                        },
                       ),
                     ),
                     Expanded(flex: 6, child: _buildSummaryWidget(isDark)),
