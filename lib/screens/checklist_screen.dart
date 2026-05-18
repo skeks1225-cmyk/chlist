@@ -47,6 +47,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _showUnfinishedOnly = false; 
   String? _selectedSectionHeader; 
   bool _isSubheadingViewMode = false; // ❗ 부분제목만 보기 모드
+  bool _showMainNumbersOnly = false; // ❗ 원본 번호가 있는 항목만 보기 모드
 
   // ❗ 행 삭제(편집) 모드 관련 변수
   bool _isEditMode = false;
@@ -276,6 +277,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         sectionItems = sectionItems.where((item) => !item.complete).toList();
       }
 
+      // ❗ 'No' 필터링 (원본 번호가 있는 항목만 보기)
+      if (_showMainNumbersOnly) {
+        sectionItems = sectionItems.where((item) => item.no.isNotEmpty).toList();
+      }
+
       if (sectionItems.isNotEmpty) {
         if (header != "ROOT") {
           results.add(_originalItems.firstWhere((i) => i.isSubheading && i.itemCode == header));
@@ -317,6 +323,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _isSorted = false;
       _currentSortCol = "";
       _remarksFilterQuery = ""; // 비고 필터 초기화 추가
+      _showMainNumbersOnly = false; // 'No' 필터 초기화 추가
     });
     _applyFilterAndSort();
   }
@@ -327,6 +334,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _showRemarksFilterDialog();
       return;
     }
+    // ❗ 'No' 헤더는 필터링 토글로 동작
+    if (col == 'no') {
+      setState(() {
+        _showMainNumbersOnly = !_showMainNumbersOnly;
+      });
+      _applyFilterAndSort();
+      return;
+    }
+
     setState(() {
       if (_currentSortCol == col) _isAscending = !_isAscending;
       else { _currentSortCol = col; _isAscending = true; }
@@ -1204,7 +1220,30 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Widget _headerBtn(String label, String? colKey, double? width) {
     bool isTarget = colKey != null && _currentSortCol == colKey;
-    return InkWell(onTap: colKey == null ? null : () => _sortBy(colKey), child: Container(width: width, alignment: Alignment.center, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)), if (isTarget) Icon(_isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: Colors.yellow, size: 18)])));
+    // ❗ 'No' 필터 활성화 여부 확인
+    bool isNoFilterActive = colKey == 'no' && _showMainNumbersOnly;
+    
+    return InkWell(
+      onTap: colKey == null ? null : () => _sortBy(colKey), 
+      child: Container(
+        width: width, 
+        alignment: Alignment.center, 
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center, 
+          children: [
+            Text(
+              label, 
+              style: TextStyle(
+                color: isNoFilterActive ? Colors.yellow : Colors.white, // ❗ 필터 활성 시 노란색
+                fontWeight: FontWeight.bold, 
+                fontSize: 13
+              )
+            ), 
+            if (isTarget) Icon(_isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: Colors.yellow, size: 18)
+          ]
+        )
+      )
+    );
   }
 
   Widget _checkBtn(bool val, Color color, VoidCallback? onTap, bool isDark) {
