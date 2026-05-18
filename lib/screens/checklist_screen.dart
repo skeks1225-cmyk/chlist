@@ -982,8 +982,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ] : [
           IconButton(onPressed: _handleRefresh, icon: const Icon(Icons.refresh, color: Colors.cyanAccent), tooltip: "새로고침"),
           IconButton(onPressed: _handleClose, icon: const Icon(Icons.close, color: Colors.redAccent), tooltip: "리스트 닫기"),
-          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _isSubheadingViewMode) 
-            TextButton(onPressed: () { setState(() { _isSorted = false; _currentSortCol = ""; _selectedSectionHeader = null; _showUnfinishedOnly = false; _remarksFilterQuery = ""; _isSubheadingViewMode = false; }); _applyFilterAndSort(); }, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
+          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _isSubheadingViewMode || _showMainNumbersOnly) 
+            TextButton(
+              onPressed: () { 
+                setState(() { 
+                  _isSorted = false; 
+                  _currentSortCol = ""; 
+                  _selectedSectionHeader = null; 
+                  _showUnfinishedOnly = false; 
+                  _remarksFilterQuery = ""; 
+                  _isSubheadingViewMode = false; 
+                  _showMainNumbersOnly = false; // ❗ 'No' 필터 초기화 추가
+                }); 
+                _applyFilterAndSort(); 
+              }, 
+              child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))
+            ),
           TextButton.icon(onPressed: () { _forgetFocus(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
         ],
       ),
