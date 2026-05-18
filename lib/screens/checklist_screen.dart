@@ -882,7 +882,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Widget _topBtn(String label, VoidCallback onTap, bool isDark) {
-    return Expanded(child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(minimumSize: const Size(0, 45), padding: EdgeInsets.zero), child: Text(label, style: const TextStyle(fontSize: 12))));
+    return Expanded(
+      child: ElevatedButton(
+        onPressed: onTap, 
+        style: ElevatedButton.styleFrom(
+          minimumSize: const Size(0, 45), 
+          padding: EdgeInsets.zero
+        ), 
+        child: FittedBox(
+          fit: BoxFit.scaleDown, 
+          child: Text(label, style: const TextStyle(fontSize: 12))
+        )
+      )
+    );
   }
 
   Future<void> _handleItemClick(ItemModel item) async {
@@ -982,20 +994,57 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _isSubheadingViewMode ? Colors.blue : Colors.blueGrey[700], 
                         foregroundColor: Colors.white, 
-                        minimumSize: const Size(60, 45)
+                        minimumSize: const Size(45, 45),
+                        padding: EdgeInsets.zero,
                       ), 
-                      child: const Text("부분제목", style: TextStyle(fontSize: 12))
+                      child: const FittedBox(fit: BoxFit.scaleDown, child: Text("부분제목", style: TextStyle(fontSize: 12)))
                     ),
                     const SizedBox(width: 4),
-                    ElevatedButton(onPressed: () => setState(() => _isEditMode = true), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[700], foregroundColor: Colors.white, minimumSize: const Size(60, 45)), child: const Text("행삭제", style: TextStyle(fontSize: 12))),
+                    ElevatedButton(
+                      onPressed: () => setState(() => _isEditMode = true), 
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueGrey[700], 
+                        foregroundColor: Colors.white, 
+                        minimumSize: const Size(45, 45),
+                        padding: EdgeInsets.zero,
+                      ), 
+                      child: const FittedBox(fit: BoxFit.scaleDown, child: Text("행삭제", style: TextStyle(fontSize: 12)))
+                    ),
                     const SizedBox(width: 4),
                     if (isSmbPdf) ...[
-                      ElevatedButton(onPressed: _isSyncing ? null : _syncAllPdfs, style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(80, 45), padding: const EdgeInsets.symmetric(horizontal: 8)), child: Text(_isSyncing ? "동기화중..." : "PDF동기화", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+                      ElevatedButton(
+                        onPressed: _isSyncing ? null : _syncAllPdfs, 
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange[800], 
+                          foregroundColor: Colors.white, 
+                          minimumSize: const Size(60, 45), 
+                          padding: const EdgeInsets.symmetric(horizontal: 4)
+                        ), 
+                        child: FittedBox(fit: BoxFit.scaleDown, child: Text(_isSyncing ? "동기화중..." : "PDF동기화", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))
+                      ),
                       const SizedBox(width: 4),
                     ],
-                    ElevatedButton(onPressed: _showResetConfirm, style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("리셋", style: TextStyle(fontSize: 12))),
+                    ElevatedButton(
+                      onPressed: _showResetConfirm, 
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red[700], 
+                        foregroundColor: Colors.white, 
+                        minimumSize: const Size(40, 45),
+                        padding: EdgeInsets.zero,
+                      ), 
+                      child: const FittedBox(fit: BoxFit.scaleDown, child: Text("리셋", style: TextStyle(fontSize: 12)))
+                    ),
                     const SizedBox(width: 4),
-                    ElevatedButton(onPressed: () { _forgetFocus(); _manualSave(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, minimumSize: const Size(50, 45)), child: const Text("저장", style: TextStyle(fontSize: 12))),
+                    ElevatedButton(
+                      onPressed: () { _forgetFocus(); _manualSave(); }, 
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green[700], 
+                        foregroundColor: Colors.white, 
+                        minimumSize: const Size(40, 45),
+                        padding: EdgeInsets.zero,
+                      ), 
+                      child: const FittedBox(fit: BoxFit.scaleDown, child: Text("저장", style: TextStyle(fontSize: 12)))
+                    ),
                   ],
                 ),
               ),
