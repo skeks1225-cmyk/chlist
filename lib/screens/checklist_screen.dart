@@ -34,6 +34,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   String _currentSortCol = ""; 
   bool _isAscending = true;   
 
+  // ❗ 필터 관련 상태 변수 추가
+  final Map<String, Set<String>> _columnFilters = {
+    'complete': {},
+    'complement': {},
+    'process': {},
+  };
+  String _remarksExcludeQuery = "";
+  String _remarksIncludeLogic = "AND"; // ❗ 기본값 AND
+  String _remarksExcludeLogic = "OR";  // ❗ 기본값 OR
+
   final String _baseDownloadPath = "/storage/emulated/0/Download";
   final FocusNode _dummyFocusNode = FocusNode();
 
@@ -42,7 +52,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = "";
-  String _remarksFilterQuery = ""; // 비고란 필터 쿼리 추가
+  String _remarksFilterQuery = ""; // 비고란 포함 필터 쿼리
 
   bool _showUnfinishedOnly = false; 
   String? _selectedSectionHeader; 
@@ -181,6 +191,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         _selectedSectionHeader = null;
         _isEditMode = false;
         _selectedIndices.clear();
+        // 필터 초기화
+        _remarksFilterQuery = "";
+        _remarksExcludeQuery = "";
+        _remarksIncludeLogic = "AND";
+        _remarksExcludeLogic = "OR";
+        _columnFilters.forEach((key, value) => value.clear());
       });
       _saveSettings();
       _saveLastDir(path);
@@ -256,6 +272,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       if (_selectedSectionHeader != null && header != _selectedSectionHeader) continue;
       List<ItemModel> sectionItems = List.from(sectionMap[header]!);
 
+      // 1. 품목코드 검색 필터
       if (_searchQuery.isNotEmpty) {
         final queryParts = _searchQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty);
         sectionItems = sectionItems.where((item) {
@@ -264,12 +281,44 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         }).toList();
       }
 
-      // ❗ 비고란 필터 추가
+      // 2. 컬럼별 체크박스 필터 (완료, 보완, 공정)
+      _columnFilters.forEach((col, selectedValues) {
+        if (selectedValues.isNotEmpty) {
+          sectionItems = sectionItems.where((item) {
+            String val = "";
+            if (col == 'complete') val = item.complete ? "완료" : "미완료";
+            else if (col == 'complement') val = item.complement.isEmpty ? "(빈칸)" : item.complement;
+            else if (col == 'process') val = item.process.isEmpty ? "(빈칸)" : item.process;
+            return selectedValues.contains(val);
+          }).toList();
+        }
+      });
+
+      // 3. 비고 포함 필터 (AND/OR)
       if (_remarksFilterQuery.isNotEmpty) {
         final queryParts = _remarksFilterQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty);
         sectionItems = sectionItems.where((item) {
           final targetStr = item.remarks.toLowerCase();
-          return queryParts.every((part) => targetStr.contains(part));
+          if (_remarksIncludeLogic == "AND") {
+            return queryParts.every((part) => targetStr.contains(part));
+          } else {
+            return queryParts.any((part) => targetStr.contains(part));
+          }
+        }).toList();
+      }
+
+      // 4. 비고 제외 필터 (AND/OR)
+      if (_remarksExcludeQuery.isNotEmpty) {
+        final excludeParts = _remarksExcludeQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty);
+        sectionItems = sectionItems.where((item) {
+          final targetStr = item.remarks.toLowerCase();
+          bool shouldExclude = false;
+          if (_remarksExcludeLogic == "AND") {
+            shouldExclude = excludeParts.every((part) => targetStr.contains(part));
+          } else {
+            shouldExclude = excludeParts.any((part) => targetStr.contains(part));
+          }
+          return !shouldExclude;
         }).toList();
       }
 
@@ -292,15 +341,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       }
     }
 
-    if (_isSorted) {
+    if (_isSorted && _currentSortCol.isNotEmpty) {
       results = results.where((i) => !i.isSubheading).toList();
       results.sort((a, b) {
         int cmp = 0;
         switch (_currentSortCol) {
-          case 'no': 
-            // ❗ 가상 번호(2-1 등) 정렬 대응
-            cmp = _compareDisplayNo(a.displayNo, b.displayNo);
-            break;
+          case 'no': cmp = _compareDisplayNo(a.displayNo, b.displayNo); break;
           case 'itemCode': cmp = a.itemCode.compareTo(b.itemCode); break;
           case 'quantity': cmp = (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0); break;
           case 'complete': cmp = (a.complete ? 1 : 0).compareTo(b.complete ? 1 : 0); break;
@@ -322,73 +368,158 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     setState(() {
       _isSorted = false;
       _currentSortCol = "";
-      _remarksFilterQuery = ""; // 비고 필터 초기화 추가
-      _showMainNumbersOnly = false; // 'No' 필터 초기화 추가
+      _remarksFilterQuery = "";
+      _remarksExcludeQuery = "";
+      _remarksIncludeLogic = "AND";
+      _remarksExcludeLogic = "OR";
+      _showMainNumbersOnly = false;
+      _columnFilters.forEach((key, value) => value.clear());
+      _showUnfinishedOnly = false;
+      _selectedSectionHeader = null;
+      _isSubheadingViewMode = false;
     });
     _applyFilterAndSort();
   }
 
   void _sortBy(String col) {
     _forgetFocus();
-    if (col == 'remarks') {
-      _showRemarksFilterDialog();
-      return;
-    }
-    // ❗ 'No' 헤더는 필터링 토글로 동작
+    // ❗ 'No' 헤더는 필터링 토글로 동작 유지
     if (col == 'no') {
-      setState(() {
-        _showMainNumbersOnly = !_showMainNumbersOnly;
-      });
+      setState(() => _showMainNumbersOnly = !_showMainNumbersOnly);
       _applyFilterAndSort();
       return;
     }
 
-    setState(() {
-      if (_currentSortCol == col) _isAscending = !_isAscending;
-      else { _currentSortCol = col; _isAscending = true; }
-      _isSorted = true;
-    });
-    _applyFilterAndSort();
+    _showFilterDialog(col);
   }
 
-  void _showRemarksFilterDialog() {
-    final controller = TextEditingController(text: _remarksFilterQuery);
+  void _showFilterDialog(String col) {
+    List<String> options = [];
+    if (col == 'complete') {
+      options = ["완료", "미완료"];
+    } else if (col == 'complement') {
+      options = ["부족", "재작업", "(빈칸)"];
+    } else if (col == 'process') {
+      options = _originalItems.where((i) => !i.isSubheading && i.process.isNotEmpty).map((i) => i.process).toSet().toList();
+      options.sort();
+      options.add("(빈칸)");
+    }
+
+    bool localIsSorted = _isSorted && _currentSortCol == col;
+    bool localIsAscending = _isAscending;
+    Set<String> localFilters = Set.from(_columnFilters[col] ?? {});
+    
+    // 비고 전용 컨트롤러
+    final includeController = TextEditingController(text: _remarksFilterQuery);
+    final excludeController = TextEditingController(text: _remarksExcludeQuery);
+    String localIncludeLogic = _remarksIncludeLogic;
+    String localExcludeLogic = _remarksExcludeLogic;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("비고 필터", style: TextStyle(fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: "필터링할 글자 입력",
-            border: OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          title: Text("$col 설정", style: const TextStyle(fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("정렬", style: TextStyle(fontWeight: FontWeight.bold)),
+                  RadioListTile<bool?>(
+                    title: const Text("오름차순"), value: true, groupValue: localIsSorted ? localIsAscending : null,
+                    onChanged: (val) => setModalState(() { localIsSorted = true; localIsAscending = true; }),
+                    contentPadding: EdgeInsets.zero, dense: true,
+                  ),
+                  RadioListTile<bool?>(
+                    title: const Text("내림차순"), value: false, groupValue: localIsSorted ? localIsAscending : null,
+                    onChanged: (val) => setModalState(() { localIsSorted = true; localIsAscending = false; }),
+                    contentPadding: EdgeInsets.zero, dense: true,
+                  ),
+                  RadioListTile<bool?>(
+                    title: const Text("정렬 안함"), value: null, groupValue: localIsSorted ? localIsAscending : null,
+                    onChanged: (val) => setModalState(() { localIsSorted = false; }),
+                    contentPadding: EdgeInsets.zero, dense: true,
+                  ),
+                  const Divider(),
+                  if (col == 'remarks') ...[
+                    const Text("포함 필터 (띄어쓰기 구분)", style: TextStyle(fontWeight: FontWeight.bold)),
+                    TextField(controller: includeController, decoration: const InputDecoration(hintText: "포함할 단어")),
+                    Row(
+                      children: [
+                        const Text("로직: "),
+                        Radio<String>(value: "AND", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)),
+                        const Text("AND"),
+                        Radio<String>(value: "OR", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)),
+                        const Text("OR"),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    const Text("제외 필터 (띄어쓰기 구분)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                    TextField(controller: excludeController, decoration: const InputDecoration(hintText: "제외할 단어")),
+                    Row(
+                      children: [
+                        const Text("로직: "),
+                        Radio<String>(value: "AND", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)),
+                        const Text("AND"),
+                        Radio<String>(value: "OR", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)),
+                        const Text("OR"),
+                      ],
+                    ),
+                  ] else if (options.isNotEmpty) ...[
+                    const Text("필터 (다중 선택 가능)", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ...options.map((opt) => CheckboxListTile(
+                      title: Text(opt), value: localFilters.contains(opt),
+                      onChanged: (val) => setModalState(() { if (val!) localFilters.add(opt); else localFilters.remove(opt); }),
+                      contentPadding: EdgeInsets.zero, dense: true, controlType: ListTileControlType.leading,
+                    )),
+                  ],
+                ],
+              ),
+            ),
           ),
-          onSubmitted: (val) {
-            setState(() => _remarksFilterQuery = val);
-            _applyFilterAndSort();
-            Navigator.pop(ctx);
-          },
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
+            TextButton(onPressed: () {
+              setModalState(() {
+                localIsSorted = false;
+                localFilters.clear();
+                includeController.clear();
+                excludeController.clear();
+                localIncludeLogic = "AND";
+                localExcludeLogic = "OR";
+              });
+              setState(() {
+                _isSorted = false;
+                if (_columnFilters.containsKey(col)) _columnFilters[col]!.clear();
+                if (col == 'remarks') { _remarksFilterQuery = ""; _remarksExcludeQuery = ""; }
+              });
+              _applyFilterAndSort();
+              Navigator.pop(ctx);
+            }, child: const Text("초기화")),
+            TextButton(onPressed: () {
+              setState(() {
+                _isSorted = localIsSorted;
+                if (localIsSorted) { _currentSortCol = col; _isAscending = localIsAscending; }
+                else if (_currentSortCol == col) { _currentSortCol = ""; }
+                
+                if (_columnFilters.containsKey(col)) {
+                  _columnFilters[col] = localFilters;
+                }
+                if (col == 'remarks') {
+                  _remarksFilterQuery = includeController.text;
+                  _remarksExcludeQuery = excludeController.text;
+                  _remarksIncludeLogic = localIncludeLogic;
+                  _remarksExcludeLogic = localExcludeLogic;
+                }
+              });
+              _applyFilterAndSort();
+              Navigator.pop(ctx);
+            }, child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold))),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() => _remarksFilterQuery = "");
-              _applyFilterAndSort();
-              Navigator.pop(ctx);
-            },
-            child: const Text("필터해제"),
-          ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
-          TextButton(
-            onPressed: () {
-              setState(() => _remarksFilterQuery = controller.text);
-              _applyFilterAndSort();
-              Navigator.pop(ctx);
-            },
-            child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
     );
   }
@@ -982,20 +1113,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ] : [
           IconButton(onPressed: _handleRefresh, icon: const Icon(Icons.refresh, color: Colors.cyanAccent), tooltip: "새로고침"),
           IconButton(onPressed: _handleClose, icon: const Icon(Icons.close, color: Colors.redAccent), tooltip: "리스트 닫기"),
-          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _isSubheadingViewMode || _showMainNumbersOnly) 
+          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _isSubheadingViewMode || _showMainNumbersOnly || _columnFilters.values.any((s) => s.isNotEmpty)) 
             TextButton(
-              onPressed: () { 
-                setState(() { 
-                  _isSorted = false; 
-                  _currentSortCol = ""; 
-                  _selectedSectionHeader = null; 
-                  _showUnfinishedOnly = false; 
-                  _remarksFilterQuery = ""; 
-                  _isSubheadingViewMode = false; 
-                  _showMainNumbersOnly = false; // ❗ 'No' 필터 초기화 추가
-                }); 
-                _applyFilterAndSort(); 
-              }, 
+              onPressed: _resetSort,
               child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))
             ),
           TextButton.icon(onPressed: () { _forgetFocus(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
@@ -1234,9 +1354,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Widget _headerBtn(String label, String? colKey, double? width) {
     bool isTarget = colKey != null && _currentSortCol == colKey;
-    // ❗ 'No' 필터 활성화 여부 확인
     bool isNoFilterActive = colKey == 'no' && _showMainNumbersOnly;
     
+    // ❗ 해당 열에 필터가 적용되어 있는지 확인
+    bool isFilterActive = false;
+    if (colKey == 'complete' || colKey == 'complement' || colKey == 'process') {
+      isFilterActive = _columnFilters[colKey!]?.isNotEmpty ?? false;
+    } else if (colKey == 'remarks') {
+      isFilterActive = _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty;
+    }
+
     return InkWell(
       onTap: colKey == null ? null : () => _sortBy(colKey), 
       child: Container(
@@ -1245,15 +1372,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center, 
           children: [
-            Text(
-              label, 
-              style: TextStyle(
-                color: isNoFilterActive ? Colors.yellow : Colors.white, // ❗ 필터 활성 시 노란색
-                fontWeight: FontWeight.bold, 
-                fontSize: 13
-              )
+            Flexible(
+              child: Text(
+                label, 
+                style: TextStyle(
+                  color: (isNoFilterActive || isFilterActive) ? Colors.yellow : Colors.white, 
+                  fontWeight: FontWeight.bold, 
+                  fontSize: 13
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
             ), 
-            if (isTarget) Icon(_isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: Colors.yellow, size: 18)
+            if (isTarget) Icon(_isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: Colors.yellow, size: 18),
+            if (isFilterActive && !isTarget) const Icon(Icons.filter_alt, color: Colors.yellow, size: 14),
           ]
         )
       )
