@@ -39,8 +39,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     'complete': {},
     'complement': {},
     'process': {},
+    'quantity': {},
   };
   String _remarksExcludeQuery = "";
+  String _quantitySearchQuery = ""; // ❗ 수량 직접 입력 검색어
   String _remarksIncludeLogic = "AND"; // ❗ 기본값 AND
   String _remarksExcludeLogic = "OR";  // ❗ 기본값 OR
 
@@ -281,15 +283,27 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         }).toList();
       }
 
-      // 2. 컬럼별 체크박스 필터 (완료, 보완, 공정)
+      // 2. 컬럼별 체크박스 필터 (완료, 보완, 공정, 수량)
       _columnFilters.forEach((col, selectedValues) {
-        if (selectedValues.isNotEmpty) {
+        if (selectedValues.isNotEmpty || (col == 'quantity' && _quantitySearchQuery.isNotEmpty)) {
           sectionItems = sectionItems.where((item) {
             String val = "";
             if (col == 'complete') val = item.complete ? "완료" : "미완료";
             else if (col == 'complement') val = item.complement.isEmpty ? "(빈칸)" : item.complement;
             else if (col == 'process') val = item.process.isEmpty ? "(빈칸)" : item.process;
-            return selectedValues.contains(val);
+            else if (col == 'quantity') val = item.quantity;
+
+            // 체크박스 선택 확인
+            bool isSelected = selectedValues.contains(val);
+            
+            // 수량의 경우 직접 입력 검색어도 확인 (정확한 일치)
+            if (col == 'quantity' && _quantitySearchQuery.isNotEmpty) {
+              final queryParts = _quantitySearchQuery.split(' ').where((p) => p.isNotEmpty);
+              bool isMatched = queryParts.any((p) => val == p); // ❗ 정확한 일치 검색
+              return isSelected || isMatched;
+            }
+            
+            return isSelected;
           }).toList();
         }
       });
@@ -370,6 +384,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _currentSortCol = "";
       _remarksFilterQuery = "";
       _remarksExcludeQuery = "";
+      _quantitySearchQuery = "";
       _remarksIncludeLogic = "AND";
       _remarksExcludeLogic = "OR";
       _showMainNumbersOnly = false;
@@ -1421,8 +1436,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     
     // ❗ 해당 열에 필터가 적용되어 있는지 확인
     bool isFilterActive = false;
-    if (colKey == 'complete' || colKey == 'complement' || colKey == 'process') {
+    if (colKey == 'complete' || colKey == 'complement' || colKey == 'process' || colKey == 'quantity') {
       isFilterActive = _columnFilters[colKey!]?.isNotEmpty ?? false;
+      if (colKey == 'quantity' && _quantitySearchQuery.isNotEmpty) isFilterActive = true;
     } else if (colKey == 'remarks') {
       isFilterActive = _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty;
     }
