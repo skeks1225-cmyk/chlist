@@ -398,6 +398,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _sortBy(String col) {
     _forgetFocus();
+    // ❗ 품목코드는 팝업 없이 즉시 정렬
+    if (col == 'itemCode') {
+      setState(() {
+        if (_currentSortCol == col) _isAscending = !_isAscending;
+        else { _currentSortCol = col; _isAscending = true; }
+        _isSorted = true;
+      });
+      _applyFilterAndSort();
+      return;
+    }
     // ❗ 'No' 헤더는 필터링 토글로 동작 유지
     if (col == 'no') {
       setState(() => _showMainNumbersOnly = !_showMainNumbersOnly);
