@@ -1192,9 +1192,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           TextButton.icon(onPressed: _deleteSelectedRows, icon: const Icon(Icons.delete_forever, color: Colors.redAccent), label: Text("확인(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
           TextButton(onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); }), child: const Text("취소", style: TextStyle(color: Colors.white))),
         ] : [
-          IconButton(onPressed: _handleRefresh, icon: const Icon(Icons.refresh, color: Colors.cyanAccent), tooltip: "새로고침"),
-          IconButton(onPressed: _handleClose, icon: const Icon(Icons.close, color: Colors.redAccent), tooltip: "리스트 닫기"),
-          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _isSubheadingViewMode || _showMainNumbersOnly || _columnFilters.values.any((s) => s.isNotEmpty)) 
+          TextButton(onPressed: _handleRefresh, child: const Text("새로고침", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
+          TextButton(onPressed: _handleClose, child: const Text("닫기", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
+          if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _quantitySearchQuery.isNotEmpty || _isSubheadingViewMode || _showMainNumbersOnly || _columnFilters.values.any((s) => s.isNotEmpty)) 
             TextButton(
               onPressed: _resetSort,
               child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))
@@ -1221,12 +1221,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     _topBtn("부분제목", () {
                       setState(() { _isSubheadingViewMode = !_isSubheadingViewMode; });
                       _applyFilterAndSort();
-                    }, bgColor: _isSubheadingViewMode ? Colors.blue : null),
+                    }, bgColor: _isSubheadingViewMode ? Colors.blue : Colors.indigo[800]),
                     const SizedBox(width: 4),
-                    _topBtn("행삭제", () => setState(() => _isEditMode = true)),
+                    _topBtn("행삭제", () => setState(() => _isEditMode = true), bgColor: Colors.orange[800]),
                     const SizedBox(width: 4),
                     if (isSmbPdf) ...[
-                      _topBtn("PDF동기화", _isSyncing ? null : _syncAllPdfs, bgColor: Colors.orange[800]),
+                      _topBtn("PDF동기화", _isSyncing ? null : _syncAllPdfs, bgColor: Colors.deepOrange[900]),
                       const SizedBox(width: 4),
                     ],
                     _topBtn("리셋", _showResetConfirm, bgColor: Colors.red[700]),
