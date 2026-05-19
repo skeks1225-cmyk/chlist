@@ -626,69 +626,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       ),
     );
   }
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                Expanded(child: Text(opt, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
-            TextButton(onPressed: () {
-              setModalState(() {
-                localIsSorted = false;
-                localFilters.clear();
-                includeController.clear();
-                excludeController.clear();
-                quantityController.clear();
-                localIncludeLogic = "AND";
-                localExcludeLogic = "OR";
-              });
-              setState(() {
-                _isSorted = false;
-                if (_columnFilters.containsKey(col)) _columnFilters[col]!.clear();
-                if (col == 'remarks') { _remarksFilterQuery = ""; _remarksExcludeQuery = ""; }
-                if (col == 'quantity') _quantitySearchQuery = "";
-              });
-              _applyFilterAndSort();
-              Navigator.pop(ctx);
-            }, child: const Text("초기화")),
-            TextButton(onPressed: () {
-              setState(() {
-                _isSorted = localIsSorted;
-                if (localIsSorted) { _currentSortCol = col; _isAscending = localIsAscending; }
-                else if (_currentSortCol == col) { _currentSortCol = ""; }
-                
-                if (_columnFilters.containsKey(col)) {
-                  _columnFilters[col] = localFilters;
-                }
-                if (col == 'remarks') {
-                  _remarksFilterQuery = includeController.text;
-                  _remarksExcludeQuery = excludeController.text;
-                  _remarksIncludeLogic = localIncludeLogic;
-                  _remarksExcludeLogic = localExcludeLogic;
-                }
-                if (col == 'quantity') {
-                  _quantitySearchQuery = quantityController.text;
-                }
-              });
-              _applyFilterAndSort();
-              Navigator.pop(ctx);
-            }, child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold))),
-          ],
-        ),
-      ),
-    );
-  }
 
   Future<void> _pickSource(String mode) async {
     _forgetFocus();
