@@ -473,7 +473,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     ...options.map((opt) => CheckboxListTile(
                       title: Text(opt), value: localFilters.contains(opt),
                       onChanged: (val) => setModalState(() { if (val!) localFilters.add(opt); else localFilters.remove(opt); }),
-                      contentPadding: EdgeInsets.zero, dense: true, controlType: ListTileControlType.leading,
+                      contentPadding: EdgeInsets.zero, dense: true, controlAffinity: ListTileControlAffinity.leading,
                     )),
                   ],
                 ],
