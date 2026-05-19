@@ -420,17 +420,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _showFilterDialog(String col) {
     List<String> options = [];
+    String titleText = "";
     if (col == 'complete') {
       options = ["완료", "미완료"];
+      titleText = "완료 설정";
     } else if (col == 'complement') {
       options = ["부족", "재작업", "(빈칸)"];
+      titleText = "보완 설정";
     } else if (col == 'process') {
       options = _originalItems.where((i) => !i.isSubheading && i.process.isNotEmpty).map((i) => i.process).toSet().toList();
       options.sort();
       options.add("(빈칸)");
+      titleText = "공정 설정";
     } else if (col == 'quantity') {
       options = _originalItems.where((i) => !i.isSubheading && i.quantity.isNotEmpty).map((i) => i.quantity).toSet().toList();
       options.sort((a, b) => (int.tryParse(a) ?? 0).compareTo(int.tryParse(b) ?? 0));
+      titleText = "수량 설정";
+    } else if (col == 'remarks') {
+      titleText = "비고 설정";
     }
 
     bool localIsSorted = _isSorted && _currentSortCol == col;
@@ -447,9 +454,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
-          title: Text("$col 설정", style: const TextStyle(fontWeight: FontWeight.bold)),
+          title: Text(titleText, style: const TextStyle(fontWeight: FontWeight.bold)),
           content: SizedBox(
-            width: 400, // ❗ 다이얼로그 너비 고정
+            width: 400, 
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -507,7 +514,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         children: options.map((opt) {
                           bool isSel = localFilters.contains(opt);
                           return SizedBox(
-                            width: 100, // ❗ 400 / 4 = 100 (4열 강제)
+                            width: 125, // ❗ 3열 강제 (여유 공간 확보)
                             child: InkWell(
                               onTap: () => setModalState(() { if (isSel) localFilters.remove(opt); else localFilters.add(opt); }),
                               child: Row(
@@ -533,9 +540,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         children: options.map((opt) {
                           bool isSel = localFilters.contains(opt);
                           double itemWidth;
-                          if (col == 'complete') itemWidth = 200; // ❗ 400 / 2 = 200 (2열 강제)
-                          else if (col == 'complement' || col == 'process') itemWidth = 133; // ❗ 400 / 3 = 133 (3열 강제)
-                          else itemWidth = 400;
+                          if (col == 'complete') itemWidth = 190; // ❗ 2열 강제
+                          else if (col == 'complement' || col == 'process') itemWidth = 125; // ❗ 3열 강제
+                          else itemWidth = 380;
 
                           return SizedBox(
                             width: itemWidth,
@@ -555,7 +562,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                                     value: isSel, 
                                     onChanged: (v) => setModalState(() {
                                       if (col == 'complete') {
-                                        if (isSel && !v!) localFilters.clear(); // 이미 체크된 걸 해제할 때
+                                        if (isSel && !v!) localFilters.clear();
                                         else { localFilters.clear(); if (v!) localFilters.add(opt); }
                                       } else {
                                         if (v!) localFilters.add(opt); else localFilters.remove(opt);
