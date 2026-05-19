@@ -429,7 +429,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       options.sort();
       options.add("(빈칸)");
     } else if (col == 'quantity') {
-      // ❗ 수량은 빈칸 제외하고 숫자순 정렬
       options = _originalItems.where((i) => !i.isSubheading && i.quantity.isNotEmpty).map((i) => i.quantity).toSet().toList();
       options.sort((a, b) => (int.tryParse(a) ?? 0).compareTo(int.tryParse(b) ?? 0));
     }
@@ -438,7 +437,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     bool localIsAscending = _isAscending;
     Set<String> localFilters = Set.from(_columnFilters[col] ?? {});
     
-    // 컨트롤러들
     final includeController = TextEditingController(text: _remarksFilterQuery);
     final excludeController = TextEditingController(text: _remarksExcludeQuery);
     final quantityController = TextEditingController(text: _quantitySearchQuery);
@@ -473,81 +471,161 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     onChanged: (val) => setModalState(() { localIsSorted = false; }),
                     contentPadding: EdgeInsets.zero, dense: true,
                   ),
-                  const Divider(),
-                  if (col == 'remarks') ...[
-                    const Text("포함 필터 (띄어쓰기 구분)", style: TextStyle(fontWeight: FontWeight.bold)),
-                    TextField(controller: includeController, decoration: const InputDecoration(hintText: "포함할 단어")),
-                    Row(
-                      children: [
-                        const Text("로직: "),
-                        Radio<String>(value: "AND", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)),
-                        const Text("AND"),
-                        Radio<String>(value: "OR", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)),
-                        const Text("OR"),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    const Text("제외 필터 (띄어쓰기 구분)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
-                    TextField(controller: excludeController, decoration: const InputDecoration(hintText: "제외할 단어")),
-                    Row(
-                      children: [
-                        const Text("로직: "),
-                        Radio<String>(value: "AND", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)),
-                        const Text("AND"),
-                        Radio<String>(value: "OR", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)),
-                        const Text("OR"),
-                      ],
-                    ),
-                  ] else if (col == 'quantity') ...[
-                    const Text("수량 직접 입력 (띄어쓰기 구분)", style: TextStyle(fontWeight: FontWeight.bold)),
-                    TextField(controller: quantityController, decoration: const InputDecoration(hintText: "찾을 수량 입력 (예: 10 25)"), keyboardType: TextInputType.number),
-                    const SizedBox(height: 15),
-                    const Text("항목 선택", style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 4, runSpacing: 0,
-                      children: options.map((opt) {
-                        bool isSel = localFilters.contains(opt);
-                        return SizedBox(
-                          width: (MediaQuery.of(context).size.width * 0.8) / 4 - 8, // ❗ 4열 배치
-                          child: InkWell(
-                            onTap: () => setModalState(() { if (isSel) localFilters.remove(opt); else localFilters.add(opt); }),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Checkbox(
-                                  value: isSel, 
-                                  onChanged: (v) => setModalState(() { if (v!) localFilters.add(opt); else localFilters.remove(opt); }),
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                Expanded(child: Text(opt, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
-                              ],
+                  if (col != 'itemCode') ...[
+                    const Divider(),
+                    if (col == 'remarks') ...[
+                      const Text("포함 필터 (띄어쓰기 구분)", style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextField(controller: includeController, decoration: const InputDecoration(hintText: "포함할 단어")),
+                      Row(
+                        children: [
+                          const Text("로직: "),
+                          Radio<String>(value: "AND", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)),
+                          const Text("AND"),
+                          Radio<String>(value: "OR", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)),
+                          const Text("OR"),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      const Text("제외 필터 (띄어쓰기 구분)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                      TextField(controller: excludeController, decoration: const InputDecoration(hintText: "제외할 단어")),
+                      Row(
+                        children: [
+                          const Text("로직: "),
+                          Radio<String>(value: "AND", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)),
+                          const Text("AND"),
+                          Radio<String>(value: "OR", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)),
+                          const Text("OR"),
+                        ],
+                      ),
+                    ] else if (col == 'quantity') ...[
+                      const Text("수량 직접 입력 (띄어쓰기 구분)", style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextField(controller: quantityController, decoration: const InputDecoration(hintText: "찾을 수량 입력 (예: 10 25)"), keyboardType: TextInputType.number),
+                      const SizedBox(height: 15),
+                      const Text("항목 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        children: options.map((opt) {
+                          bool isSel = localFilters.contains(opt);
+                          return SizedBox(
+                            width: (MediaQuery.of(context).size.width * 0.8) / 4, 
+                            child: InkWell(
+                              onTap: () => setModalState(() { if (isSel) localFilters.remove(opt); else localFilters.add(opt); }),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Checkbox(
+                                    value: isSel, 
+                                    onChanged: (v) => setModalState(() { if (v!) localFilters.add(opt); else localFilters.remove(opt); }),
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(opt, style: const TextStyle(fontSize: 12)))),
+                                ],
+                              ),
                             ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ] else ...[
-                    const Text("필터 (다중 선택 가능)", style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8, runSpacing: 0,
-                      children: options.map((opt) {
-                        bool isSel = localFilters.contains(opt);
-                        double itemWidth = (col == 'process') 
-                            ? (MediaQuery.of(context).size.width * 0.8) / 2 - 12 // ❗ 공정은 2열
-                            : (MediaQuery.of(context).size.width * 0.8) - 20;   // 나머지는 1열
-                        return SizedBox(
-                          width: itemWidth,
-                          child: InkWell(
-                            onTap: () => setModalState(() { if (isSel) localFilters.remove(opt); else localFilters.add(opt); }),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Checkbox(
-                                  value: isSel, 
-                                  onChanged: (v) => setModalState(() { if (v!) localFilters.add(opt); else localFilters.remove(opt); }),
+                          );
+                        }).toList(),
+                      ),
+                    ] else if (options.isNotEmpty) ...[
+                      const Text("필터", style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        children: options.map((opt) {
+                          bool isSel = localFilters.contains(opt);
+                          double itemWidth;
+                          if (col == 'complete') itemWidth = (MediaQuery.of(context).size.width * 0.8) / 2;
+                          else if (col == 'complement') itemWidth = (MediaQuery.of(context).size.width * 0.8) / 3;
+                          else if (col == 'process') itemWidth = (MediaQuery.of(context).size.width * 0.8) / 3;
+                          else itemWidth = (MediaQuery.of(context).size.width * 0.8);
+
+                          return SizedBox(
+                            width: itemWidth,
+                            child: InkWell(
+                              onTap: () => setModalState(() {
+                                if (col == 'complete') {
+                                  if (isSel) localFilters.clear();
+                                  else { localFilters.clear(); localFilters.add(opt); }
+                                } else {
+                                  if (isSel) localFilters.remove(opt); else localFilters.add(opt);
+                                }
+                              }),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Checkbox(
+                                    value: isSel, 
+                                    onChanged: (v) => setModalState(() {
+                                      if (col == 'complete') {
+                                        localFilters.clear();
+                                        if (v!) localFilters.add(opt);
+                                      } else {
+                                        if (v!) localFilters.add(opt); else localFilters.remove(opt);
+                                      }
+                                    }),
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(opt, style: const TextStyle(fontSize: 12)))),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
+            TextButton(onPressed: () {
+              setModalState(() {
+                localIsSorted = false;
+                localFilters.clear();
+                includeController.clear();
+                excludeController.clear();
+                quantityController.clear();
+                localIncludeLogic = "AND";
+                localExcludeLogic = "OR";
+              });
+              setState(() {
+                _isSorted = false;
+                if (_columnFilters.containsKey(col)) _columnFilters[col]!.clear();
+                if (col == 'remarks') { _remarksFilterQuery = ""; _remarksExcludeQuery = ""; }
+                if (col == 'quantity') _quantitySearchQuery = "";
+              });
+              _applyFilterAndSort();
+              Navigator.pop(ctx);
+            }, child: const Text("초기화")),
+            TextButton(onPressed: () {
+              setState(() {
+                _isSorted = localIsSorted;
+                if (localIsSorted) { _currentSortCol = col; _isAscending = localIsAscending; }
+                else if (_currentSortCol == col) { _currentSortCol = ""; }
+                
+                if (_columnFilters.containsKey(col)) {
+                  _columnFilters[col] = localFilters;
+                }
+                if (col == 'remarks') {
+                  _remarksFilterQuery = includeController.text;
+                  _remarksExcludeQuery = excludeController.text;
+                  _remarksIncludeLogic = localIncludeLogic;
+                  _remarksExcludeLogic = localExcludeLogic;
+                }
+                if (col == 'quantity') {
+                  _quantitySearchQuery = quantityController.text;
+                }
+              });
+              _applyFilterAndSort();
+              Navigator.pop(ctx);
+            }, child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold))),
+          ],
+        ),
+      ),
+    );
+  }
                                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   visualDensity: VisualDensity.compact,
                                 ),
