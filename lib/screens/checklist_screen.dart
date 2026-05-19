@@ -1107,17 +1107,20 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  Widget _topBtn(String label, VoidCallback onTap, bool isDark) {
+  Widget _topBtn(String label, VoidCallback? onTap, {Color? bgColor}) {
     return Expanded(
       child: ElevatedButton(
         onPressed: onTap, 
         style: ElevatedButton.styleFrom(
-          minimumSize: const Size(0, 45), 
-          padding: EdgeInsets.zero
+          backgroundColor: bgColor ?? Colors.blueGrey[700],
+          foregroundColor: Colors.white,
+          minimumSize: const Size(0, 45),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          padding: EdgeInsets.zero,
         ), 
         child: FittedBox(
           fit: BoxFit.scaleDown, 
-          child: Text(label, style: const TextStyle(fontSize: 12))
+          child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))
         )
       )
     );
