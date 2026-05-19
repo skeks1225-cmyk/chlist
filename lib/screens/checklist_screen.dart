@@ -449,7 +449,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         builder: (context, setModalState) => AlertDialog(
           title: Text("$col 설정", style: const TextStyle(fontWeight: FontWeight.bold)),
           content: SizedBox(
-            width: MediaQuery.of(context).size.width * 0.9,
+            width: 400, // ❗ 다이얼로그 너비 고정
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -507,7 +507,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         children: options.map((opt) {
                           bool isSel = localFilters.contains(opt);
                           return SizedBox(
-                            width: (MediaQuery.of(context).size.width * 0.8) / 4, 
+                            width: 100, // ❗ 400 / 4 = 100 (4열 강제)
                             child: InkWell(
                               onTap: () => setModalState(() { if (isSel) localFilters.remove(opt); else localFilters.add(opt); }),
                               child: Row(
@@ -533,10 +533,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         children: options.map((opt) {
                           bool isSel = localFilters.contains(opt);
                           double itemWidth;
-                          if (col == 'complete') itemWidth = (MediaQuery.of(context).size.width * 0.8) / 2;
-                          else if (col == 'complement') itemWidth = (MediaQuery.of(context).size.width * 0.8) / 3;
-                          else if (col == 'process') itemWidth = (MediaQuery.of(context).size.width * 0.8) / 3;
-                          else itemWidth = (MediaQuery.of(context).size.width * 0.8);
+                          if (col == 'complete') itemWidth = 200; // ❗ 400 / 2 = 200 (2열 강제)
+                          else if (col == 'complement' || col == 'process') itemWidth = 133; // ❗ 400 / 3 = 133 (3열 강제)
+                          else itemWidth = 400;
 
                           return SizedBox(
                             width: itemWidth,
@@ -556,8 +555,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                                     value: isSel, 
                                     onChanged: (v) => setModalState(() {
                                       if (col == 'complete') {
-                                        localFilters.clear();
-                                        if (v!) localFilters.add(opt);
+                                        if (isSel && !v!) localFilters.clear(); // 이미 체크된 걸 해제할 때
+                                        else { localFilters.clear(); if (v!) localFilters.add(opt); }
                                       } else {
                                         if (v!) localFilters.add(opt); else localFilters.remove(opt);
                                       }
