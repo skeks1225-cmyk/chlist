@@ -1236,13 +1236,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           TextButton.icon(onPressed: _deleteSelectedRows, icon: const Icon(Icons.delete_forever, color: Colors.redAccent), label: Text("확인(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
           TextButton(onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); }), child: const Text("취소", style: TextStyle(color: Colors.white))),
         ] : [
-          TextButton(onPressed: _handleRefresh, child: const Text("새로고침", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
-          TextButton(onPressed: _handleClose, child: const Text("닫기", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
           if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _quantitySearchQuery.isNotEmpty || _isSubheadingViewMode || _showMainNumbersOnly || _columnFilters.values.any((s) => s.isNotEmpty)) 
             TextButton(
               onPressed: _resetSort,
               child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))
             ),
+          TextButton(onPressed: _handleRefresh, child: const Text("새로고침", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
+          TextButton(onPressed: _handleClose, child: const Text("닫기", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
           TextButton.icon(onPressed: () { _forgetFocus(); setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red), label: Text(_autoSave ? "자동 ON" : "자동 OFF", style: const TextStyle(color: Colors.white))),
         ],
       ),
