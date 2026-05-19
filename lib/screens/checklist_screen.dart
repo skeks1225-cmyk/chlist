@@ -1223,11 +1223,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _isSubheadingViewMode ? Colors.blue : Colors.blueGrey[700], 
                         foregroundColor: Colors.white, 
-                        fixedSize: const Size(48, 48),
-                        shape: const CircleBorder(),
+                        minimumSize: const Size(45, 45),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         padding: EdgeInsets.zero,
                       ), 
-                      child: const FittedBox(fit: BoxFit.scaleDown, child: Text("부분\n제목", textAlign: TextAlign.center, style: TextStyle(fontSize: 10)))
+                      child: const FittedBox(fit: BoxFit.scaleDown, child: Text("부분제목", style: TextStyle(fontSize: 12)))
                     ),
                     const SizedBox(width: 4),
                     ElevatedButton(
@@ -1235,11 +1235,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blueGrey[700], 
                         foregroundColor: Colors.white, 
-                        fixedSize: const Size(48, 48),
-                        shape: const CircleBorder(),
+                        minimumSize: const Size(45, 45),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         padding: EdgeInsets.zero,
                       ), 
-                      child: const FittedBox(fit: BoxFit.scaleDown, child: Text("행\n삭제", textAlign: TextAlign.center, style: TextStyle(fontSize: 10)))
+                      child: const FittedBox(fit: BoxFit.scaleDown, child: Text("행삭제", style: TextStyle(fontSize: 12)))
                     ),
                     const SizedBox(width: 4),
                     if (isSmbPdf) ...[
@@ -1248,11 +1248,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.orange[800], 
                           foregroundColor: Colors.white, 
-                          fixedSize: const Size(48, 48),
-                          shape: const CircleBorder(),
-                          padding: const EdgeInsets.all(4)
+                          minimumSize: const Size(60, 45), 
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 4)
                         ), 
-                        child: FittedBox(fit: BoxFit.scaleDown, child: Text(_isSyncing ? "동기화" : "PDF\n동기화", textAlign: TextAlign.center, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold)))
+                        child: FittedBox(fit: BoxFit.scaleDown, child: Text(_isSyncing ? "동기화중..." : "PDF동기화", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))
                       ),
                       const SizedBox(width: 4),
                     ],
@@ -1261,11 +1261,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red[700], 
                         foregroundColor: Colors.white, 
-                        fixedSize: const Size(48, 48),
-                        shape: const CircleBorder(),
+                        minimumSize: const Size(40, 45),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         padding: EdgeInsets.zero,
                       ), 
-                      child: const FittedBox(fit: BoxFit.scaleDown, child: Text("리셋", style: TextStyle(fontSize: 11)))
+                      child: const FittedBox(fit: BoxFit.scaleDown, child: Text("리셋", style: TextStyle(fontSize: 12)))
                     ),
                     const SizedBox(width: 4),
                     ElevatedButton(
@@ -1273,11 +1273,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green[700], 
                         foregroundColor: Colors.white, 
-                        fixedSize: const Size(48, 48),
-                        shape: const CircleBorder(),
+                        minimumSize: const Size(40, 45),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         padding: EdgeInsets.zero,
                       ), 
-                      child: const FittedBox(fit: BoxFit.scaleDown, child: Text("저장", style: TextStyle(fontSize: 11)))
+                      child: const FittedBox(fit: BoxFit.scaleDown, child: Text("저장", style: TextStyle(fontSize: 12)))
                     ),
                   ],
                 ),
