@@ -403,15 +403,20 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       options = _originalItems.where((i) => !i.isSubheading && i.process.isNotEmpty).map((i) => i.process).toSet().toList();
       options.sort();
       options.add("(빈칸)");
+    } else if (col == 'quantity') {
+      // ❗ 수량은 빈칸 제외하고 숫자순 정렬
+      options = _originalItems.where((i) => !i.isSubheading && i.quantity.isNotEmpty).map((i) => i.quantity).toSet().toList();
+      options.sort((a, b) => (int.tryParse(a) ?? 0).compareTo(int.tryParse(b) ?? 0));
     }
 
     bool localIsSorted = _isSorted && _currentSortCol == col;
     bool localIsAscending = _isAscending;
     Set<String> localFilters = Set.from(_columnFilters[col] ?? {});
     
-    // 비고 전용 컨트롤러
+    // 컨트롤러들
     final includeController = TextEditingController(text: _remarksFilterQuery);
     final excludeController = TextEditingController(text: _remarksExcludeQuery);
+    final quantityController = TextEditingController(text: _quantitySearchQuery);
     String localIncludeLogic = _remarksIncludeLogic;
     String localExcludeLogic = _remarksExcludeLogic;
 
@@ -421,7 +426,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         builder: (context, setModalState) => AlertDialog(
           title: Text("$col 설정", style: const TextStyle(fontWeight: FontWeight.bold)),
           content: SizedBox(
-            width: double.maxFinite,
+            width: MediaQuery.of(context).size.width * 0.9,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -468,13 +473,66 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         const Text("OR"),
                       ],
                     ),
-                  ] else if (options.isNotEmpty) ...[
+                  ] else if (col == 'quantity') ...[
+                    const Text("수량 직접 입력 (띄어쓰기 구분)", style: TextStyle(fontWeight: FontWeight.bold)),
+                    TextField(controller: quantityController, decoration: const InputDecoration(hintText: "찾을 수량 입력 (예: 10 25)"), keyboardType: TextInputType.number),
+                    const SizedBox(height: 15),
+                    const Text("항목 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 4, runSpacing: 0,
+                      children: options.map((opt) {
+                        bool isSel = localFilters.contains(opt);
+                        return SizedBox(
+                          width: (MediaQuery.of(context).size.width * 0.8) / 4 - 8, // ❗ 4열 배치
+                          child: InkWell(
+                            onTap: () => setModalState(() { if (isSel) localFilters.remove(opt); else localFilters.add(opt); }),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Checkbox(
+                                  value: isSel, 
+                                  onChanged: (v) => setModalState(() { if (v!) localFilters.add(opt); else localFilters.remove(opt); }),
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                Expanded(child: Text(opt, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ] else ...[
                     const Text("필터 (다중 선택 가능)", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ...options.map((opt) => CheckboxListTile(
-                      title: Text(opt), value: localFilters.contains(opt),
-                      onChanged: (val) => setModalState(() { if (val!) localFilters.add(opt); else localFilters.remove(opt); }),
-                      contentPadding: EdgeInsets.zero, dense: true, controlAffinity: ListTileControlAffinity.leading,
-                    )),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8, runSpacing: 0,
+                      children: options.map((opt) {
+                        bool isSel = localFilters.contains(opt);
+                        double itemWidth = (col == 'process') 
+                            ? (MediaQuery.of(context).size.width * 0.8) / 2 - 12 // ❗ 공정은 2열
+                            : (MediaQuery.of(context).size.width * 0.8) - 20;   // 나머지는 1열
+                        return SizedBox(
+                          width: itemWidth,
+                          child: InkWell(
+                            onTap: () => setModalState(() { if (isSel) localFilters.remove(opt); else localFilters.add(opt); }),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Checkbox(
+                                  value: isSel, 
+                                  onChanged: (v) => setModalState(() { if (v!) localFilters.add(opt); else localFilters.remove(opt); }),
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                Expanded(child: Text(opt, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ],
                 ],
               ),
@@ -488,6 +546,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 localFilters.clear();
                 includeController.clear();
                 excludeController.clear();
+                quantityController.clear();
                 localIncludeLogic = "AND";
                 localExcludeLogic = "OR";
               });
@@ -495,6 +554,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 _isSorted = false;
                 if (_columnFilters.containsKey(col)) _columnFilters[col]!.clear();
                 if (col == 'remarks') { _remarksFilterQuery = ""; _remarksExcludeQuery = ""; }
+                if (col == 'quantity') _quantitySearchQuery = "";
               });
               _applyFilterAndSort();
               Navigator.pop(ctx);
@@ -513,6 +573,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   _remarksExcludeQuery = excludeController.text;
                   _remarksIncludeLogic = localIncludeLogic;
                   _remarksExcludeLogic = localExcludeLogic;
+                }
+                if (col == 'quantity') {
+                  _quantitySearchQuery = quantityController.text;
                 }
               });
               _applyFilterAndSort();
