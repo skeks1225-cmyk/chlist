@@ -510,73 +510,86 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       const SizedBox(height: 15),
                       const Text("항목 선택", style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
-                      Wrap(
-                        children: options.map((opt) {
-                          bool isSel = localFilters.contains(opt);
-                          return SizedBox(
-                            width: 100, // 3열 배치를 위해 너비 축소
-                            child: InkWell(
-                              onTap: () => setModalState(() { if (isSel) localFilters.remove(opt); else localFilters.add(opt); }),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Checkbox(
-                                    value: isSel, 
-                                    onChanged: (v) => setModalState(() { if (v!) localFilters.add(opt); else localFilters.remove(opt); }),
-                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                    visualDensity: VisualDensity.compact,
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          double itemWidth = constraints.maxWidth / 3; // 무조건 3열
+                          return Wrap(
+                            children: options.map((opt) {
+                              bool isSel = localFilters.contains(opt);
+                              return SizedBox(
+                                width: itemWidth,
+                                child: InkWell(
+                                  onTap: () => setModalState(() { if (isSel) localFilters.remove(opt); else localFilters.add(opt); }),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Checkbox(
+                                        value: isSel, 
+                                        onChanged: (v) => setModalState(() { if (v!) localFilters.add(opt); else localFilters.remove(opt); }),
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(opt, style: const TextStyle(fontSize: 12)))),
+                                    ],
                                   ),
-                                  Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(opt, style: const TextStyle(fontSize: 12)))),
-                                ],
-                              ),
-                            ),
+                                ),
+                              );
+                            }).toList(),
                           );
-                        }).toList(),
+                        }
                       ),
                     ] else if (options.isNotEmpty) ...[
                       const Text("필터", style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
-                      Wrap(
-                        children: options.map((opt) {
-                          bool isSel = localFilters.contains(opt);
+                      LayoutBuilder(
+                        builder: (context, constraints) {
                           double itemWidth;
-                          if (col == 'complete') itemWidth = 150; // 2열 배치를 위해 수정
-                          else if (col == 'complement' || col == 'process') itemWidth = 100; // 3열 배치를 위해 수정
-                          else itemWidth = 300;
+                          if (col == 'complete') {
+                            itemWidth = constraints.maxWidth / 2; // 무조건 2열
+                          } else if (col == 'complement' || col == 'process') {
+                            itemWidth = constraints.maxWidth / 3; // 무조건 3열
+                          } else {
+                            itemWidth = constraints.maxWidth; // 기본 1열
+                          }
 
-                          return SizedBox(
-                            width: itemWidth,
-                            child: InkWell(
-                              onTap: () => setModalState(() {
-                                if (col == 'complete') {
-                                  if (isSel) localFilters.clear();
-                                  else { localFilters.clear(); localFilters.add(opt); }
-                                } else {
-                                  if (isSel) localFilters.remove(opt); else localFilters.add(opt);
-                                }
-                              }),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Checkbox(
-                                    value: isSel, 
-                                    onChanged: (v) => setModalState(() {
-                                      if (col == 'complete') {
-                                        if (isSel && !v!) localFilters.clear();
-                                        else { localFilters.clear(); if (v!) localFilters.add(opt); }
-                                      } else {
-                                        if (v!) localFilters.add(opt); else localFilters.remove(opt);
-                                      }
-                                    }),
-                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                    visualDensity: VisualDensity.compact,
+                          return Wrap(
+                            children: options.map((opt) {
+                              bool isSel = localFilters.contains(opt);
+                              return SizedBox(
+                                width: itemWidth,
+                                child: InkWell(
+                                  onTap: () => setModalState(() {
+                                    if (col == 'complete') {
+                                      if (isSel) localFilters.clear();
+                                      else { localFilters.clear(); localFilters.add(opt); }
+                                    } else {
+                                      if (isSel) localFilters.remove(opt); else localFilters.add(opt);
+                                    }
+                                  }),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Checkbox(
+                                        value: isSel, 
+                                        onChanged: (v) => setModalState(() {
+                                          if (col == 'complete') {
+                                            if (isSel && !v!) localFilters.clear();
+                                            else { localFilters.clear(); if (v!) localFilters.add(opt); }
+                                          } else {
+                                            if (v!) localFilters.add(opt); else localFilters.remove(opt);
+                                          }
+                                        }),
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(opt, style: const TextStyle(fontSize: 12)))),
+                                    ],
                                   ),
-                                  Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(opt, style: const TextStyle(fontSize: 12)))),
-                                ],
-                              ),
-                            ),
+                                ),
+                              );
+                            }).toList(),
                           );
-                        }).toList(),
+                        }
                       ),
                     ],
                   ],
