@@ -514,7 +514,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         children: options.map((opt) {
                           bool isSel = localFilters.contains(opt);
                           return SizedBox(
-                            width: 125, // ❗ 3열 강제 (여유 공간 확보)
+                            width: 100, // 3열 배치를 위해 너비 축소
                             child: InkWell(
                               onTap: () => setModalState(() { if (isSel) localFilters.remove(opt); else localFilters.add(opt); }),
                               child: Row(
@@ -540,9 +540,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         children: options.map((opt) {
                           bool isSel = localFilters.contains(opt);
                           double itemWidth;
-                          if (col == 'complete') itemWidth = 190; // ❗ 2열 강제
-                          else if (col == 'complement' || col == 'process') itemWidth = 125; // ❗ 3열 강제
-                          else itemWidth = 380;
+                          if (col == 'complete') itemWidth = 150; // 2열 배치를 위해 수정
+                          else if (col == 'complement' || col == 'process') itemWidth = 100; // 3열 배치를 위해 수정
+                          else itemWidth = 300;
 
                           return SizedBox(
                             width: itemWidth,
