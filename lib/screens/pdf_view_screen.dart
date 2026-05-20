@@ -247,45 +247,40 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         backgroundColor: isDark ? Colors.black : Colors.grey[200],
         body: Column(
           children: [
+        body: Column(
+          children: [
             Expanded(
-              child: Stack(
-                children: [
-                  _isLoading 
-                      ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
-                      : (_currentPdfPath.isNotEmpty
-                          ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor)))
-                          : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
-                  
-                  // ❗ 좌측 하단에 모아진 이전(<-)/다음(->) 버튼
-                  Positioned(
-                    left: 5, 
-                    bottom: 80, 
-                    child: Row(
-                      children: [
-                        _navArrowBtn(Icons.arrow_back, _prev, isDark),
-                        _navArrowBtn(Icons.arrow_forward, _next, isDark),
-                      ],
-                    ),
-                  ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return Stack(
+                    children: [
+                      _isLoading 
+                          ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
+                          : (_currentPdfPath.isNotEmpty
+                              ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor)))
+                              : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
+                      
+                      // ❗ 좌측 하단에 모아진 이전(<-)/다음(->) 버튼
+                      Positioned(
+                        left: 5, 
+                        bottom: 80, 
+                        child: Row(
+                          children: [
+                            _navArrowBtn(Icons.arrow_back, _prev, isDark),
+                            _navArrowBtn(Icons.arrow_forward, _next, isDark),
+                          ],
+                        ),
+                      ),
 
-                  // ❗ 검색 결과 리스트 (검색창 위에 표시)
-                  if (_searchResults.isNotEmpty)
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        // ❗ 화면 전체 높이에서 상단 바 높이(kToolbarHeight)와 하단 여유 공간을 뺀 가용 높이 계산
-                        // 기기마다 다른 상단 상태바 높이까지 고려하기 위해 MediaQuery 사용
-                        final double statusBarHeight = MediaQuery.of(context).padding.top;
-                        final double appBarHeight = kToolbarHeight;
-                        // 하단에서부터 상단 바 밑까지의 최대 가용 높이 (여유분 10 제외)
-                        // 현재 Positioned가 Stack(Expanded 내부)에 있으므로 constraints.maxHeight가 가용 범위임
-                        final double maxListHeight = constraints.maxHeight - 10;
-
-                        return Positioned(
+                      // ❗ 검색 결과 리스트 (검색창 위에 표시)
+                      if (_searchResults.isNotEmpty)
+                        Positioned(
                           left: 8,
                           bottom: 2, // 하단 바 바로 위에 위치
                           child: Container(
                             width: MediaQuery.of(context).size.width * 0.45,
-                            constraints: BoxConstraints(maxHeight: maxListHeight),
+                            // ❗ 가용 높이 전체를 사용하여 상단 바 바로 밑까지 동적으로 조절
+                            constraints: BoxConstraints(maxHeight: constraints.maxHeight - 5),
                             decoration: BoxDecoration(
                               color: isDark ? Colors.grey[850] : Colors.white,
                               borderRadius: BorderRadius.circular(8),
@@ -314,10 +309,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                               ),
                             ),
                           ),
-                        );
-                      }
-                    ),
-                ],
+                        ),
+                    ],
+                  );
+                }
               ),
             ),
             SafeArea(
@@ -339,6 +334,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                               decoration: InputDecoration(
                                 hintText: "코드 검색...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
                                 prefixIcon: const Icon(Icons.search, size: 18),
+                                // ❗ 검색창 지우기(X) 버튼 추가
+                                suffixIcon: _searchController.text.isNotEmpty ? IconButton(
+                                  icon: const Icon(Icons.cancel, size: 18, color: Colors.grey),
+                                  onPressed: () {
+                                    setState(() {
+                                      _searchController.clear();
+                                      _searchResults = [];
+                                    });
+                                  },
+                                ) : null,
                                 filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100],
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
