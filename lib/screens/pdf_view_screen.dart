@@ -247,8 +247,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         backgroundColor: isDark ? Colors.black : Colors.grey[200],
         body: Column(
           children: [
-        body: Column(
-          children: [
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
