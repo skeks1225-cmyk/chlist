@@ -272,28 +272,35 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   if (_searchResults.isNotEmpty)
                     Positioned(
                       left: 8,
-                      bottom: 0, // 하단 바 높이에 맞춰 조절 (SafeArea 위쪽)
+                      bottom: 5, // 하단 바 바짝 위에 붙도록 조정
                       child: Container(
                         width: MediaQuery.of(context).size.width * 0.45,
                         constraints: const BoxConstraints(maxHeight: 250),
                         decoration: BoxDecoration(
                           color: isDark ? Colors.grey[850] : Colors.white,
                           borderRadius: BorderRadius.circular(8),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, -2))],
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, -2))
+                          ],
                         ),
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: _searchResults.length,
-                          separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-                          itemBuilder: (ctx, idx) {
-                            final res = _searchResults[idx];
-                            return ListTile(
-                              dense: true,
-                              title: Text(res.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)),
-                              trailing: res == item ? const Icon(Icons.check_circle, size: 16, color: Colors.blue) : null,
-                              onTap: () => _jumpToItem(res),
-                            );
-                          },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: ListView.separated(
+                            padding: EdgeInsets.zero, // 리스트 자체 패딩 제거
+                            shrinkWrap: true,
+                            itemCount: _searchResults.length,
+                            separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
+                            itemBuilder: (ctx, idx) {
+                              final res = _searchResults[idx];
+                              return ListTile(
+                                dense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                                title: Text(res.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)),
+                                trailing: res == item ? const Icon(Icons.check_circle, size: 16, color: Colors.blue) : null,
+                                onTap: () => _jumpToItem(res),
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ),
