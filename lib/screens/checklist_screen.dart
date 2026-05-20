@@ -1118,6 +1118,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Widget _buildSummaryWidget(bool isDark) {
     if (_originalItems.isEmpty) return const SizedBox.shrink();
+
+    // 1. 전체 데이터 통계
     final dataItems = _originalItems.where((i) => !i.isSubheading);
     int total = dataItems.length;
     int completed = dataItems.where((i) => i.complete).length;
@@ -1125,27 +1127,83 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     int shortages = dataItems.where((i) => i.complement == "부족").length;
     int reworks = dataItems.where((i) => i.complement == "재작업").length;
     double percent = total > 0 ? (completed / total) * 100 : 0;
+    
     List<String> parts = ["전체 $total", "완료 $completed", "미완 $incomplete"];
     if (shortages > 0) parts.add("부족 $shortages");
     if (reworks > 0) parts.add("재작업 $reworks");
     parts.add("${percent.toStringAsFixed(1)}%");
 
+    // 2. 필터링된 데이터 통계 (현재 표시 중인 항목들)
+    // _displayItems에서 가상 아이템(realIndex == -1) 및 부분제목 제외
+    final filteredDataItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList();
+    int fTotal = filteredDataItems.length;
+    int fCompleted = filteredDataItems.where((i) => i.complete).length;
+    int fIncomplete = fTotal - fCompleted;
+    int fShortages = filteredDataItems.where((i) => i.complement == "부족").length;
+    int fReworks = filteredDataItems.where((i) => i.complement == "재작업").length;
+    double fPercent = fTotal > 0 ? (fCompleted / fTotal) * 100 : 0;
+
+    List<String> fParts = ["필터 $fTotal", "완료 $fCompleted", "미완 $fIncomplete"];
+    if (fShortages > 0) fParts.add("부족 $fShortages");
+    if (fReworks > 0) fParts.add("재작업 $fReworks");
+    fParts.add("${fPercent.toStringAsFixed(1)}%");
+
+    // 필터가 적용된 상태인지 확인 (검색어, 컬럼 필터, 미완료만 보기 등)
+    bool isFiltered = total != fTotal || _showUnfinishedOnly;
+
     return InkWell(
-      onTap: () { setState(() => _showUnfinishedOnly = !_showUnfinishedOnly); _applyFilterAndSort(); },
+      onTap: () { 
+        setState(() => _showUnfinishedOnly = !_showUnfinishedOnly); 
+        _applyFilterAndSort(); 
+      },
       child: Container(
-        alignment: Alignment.centerLeft, padding: const EdgeInsets.only(left: 8),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            children: [
-              if (_showUnfinishedOnly) const Icon(Icons.filter_list, size: 14, color: Colors.orange),
-              const SizedBox(width: 4),
-              Text(
-                "[${parts.join(' / ')}]",
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _showUnfinishedOnly ? Colors.orangeAccent : (isDark ? Colors.white70 : Colors.blueGrey[800])),
+        alignment: Alignment.centerLeft, 
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 첫 번째 줄: 전체 통계
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                children: [
+                  if (_showUnfinishedOnly) const Icon(Icons.filter_list, size: 12, color: Colors.orange),
+                  if (_showUnfinishedOnly) const SizedBox(width: 4),
+                  Text(
+                    "[${parts.join(' / ')}]",
+                    style: TextStyle(
+                      fontSize: 13, 
+                      fontWeight: FontWeight.bold, 
+                      color: isDark ? Colors.white70 : Colors.blueGrey[800]
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            // 두 번째 줄: 필터링 통계 (필터 적용 시에만 표시)
+            if (isFiltered)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.search, size: 12, color: Colors.orangeAccent),
+                      const SizedBox(width: 4),
+                      Text(
+                        "[${fParts.join(' / ')}]",
+                        style: const TextStyle(
+                          fontSize: 13, 
+                          fontWeight: FontWeight.bold, 
+                          color: Colors.orangeAccent
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
