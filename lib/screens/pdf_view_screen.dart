@@ -270,39 +270,52 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
                   // ❗ 검색 결과 리스트 (검색창 위에 표시)
                   if (_searchResults.isNotEmpty)
-                    Positioned(
-                      left: 8,
-                      bottom: 5, // 하단 바 바짝 위에 붙도록 조정
-                      child: Container(
-                        width: MediaQuery.of(context).size.width * 0.45,
-                        constraints: const BoxConstraints(maxHeight: 250),
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.grey[850] : Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, -2))
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: ListView.separated(
-                            padding: EdgeInsets.zero, // 리스트 자체 패딩 제거
-                            shrinkWrap: true,
-                            itemCount: _searchResults.length,
-                            separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-                            itemBuilder: (ctx, idx) {
-                              final res = _searchResults[idx];
-                              return ListTile(
-                                dense: true,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                                title: Text(res.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)),
-                                trailing: res == item ? const Icon(Icons.check_circle, size: 16, color: Colors.blue) : null,
-                                onTap: () => _jumpToItem(res),
-                              );
-                            },
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        // ❗ 화면 전체 높이에서 상단 바 높이(kToolbarHeight)와 하단 여유 공간을 뺀 가용 높이 계산
+                        // 기기마다 다른 상단 상태바 높이까지 고려하기 위해 MediaQuery 사용
+                        final double statusBarHeight = MediaQuery.of(context).padding.top;
+                        final double appBarHeight = kToolbarHeight;
+                        // 하단에서부터 상단 바 밑까지의 최대 가용 높이 (여유분 10 제외)
+                        // 현재 Positioned가 Stack(Expanded 내부)에 있으므로 constraints.maxHeight가 가용 범위임
+                        final double maxListHeight = constraints.maxHeight - 10;
+
+                        return Positioned(
+                          left: 8,
+                          bottom: 2, // 하단 바 바로 위에 위치
+                          child: Container(
+                            width: MediaQuery.of(context).size.width * 0.45,
+                            constraints: BoxConstraints(maxHeight: maxListHeight),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.grey[850] : Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!),
+                              boxShadow: [
+                                BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, -2))
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: ListView.separated(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                itemCount: _searchResults.length,
+                                separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
+                                itemBuilder: (ctx, idx) {
+                                  final res = _searchResults[idx];
+                                  return ListTile(
+                                    dense: true,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                                    title: Text(res.itemCode, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)),
+                                    trailing: res == item ? const Icon(Icons.check_circle, size: 14, color: Colors.blue) : null,
+                                    onTap: () => _jumpToItem(res),
+                                  );
+                                },
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      }
                     ),
                 ],
               ),
