@@ -32,6 +32,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   final PdfViewerController _pdfController = PdfViewerController();
   Key _viewerKey = UniqueKey();
   final TextEditingController _remarksController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  List<ItemModel> _searchResults = [];
   bool _isLoading = false;
 
   @override
@@ -39,6 +42,11 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     super.initState();
     _currentIndex = widget.initialIndex;
     _loadPdf();
+    _searchFocusNode.addListener(() {
+      if (!_searchFocusNode.hasFocus) {
+        setState(() => _searchResults = []);
+      }
+    });
   }
 
   Future<void> _loadPdf() async {
@@ -82,6 +90,34 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   void _prev() {
     if (_currentIndex > 0) {
       setState(() => _currentIndex--);
+      _loadPdf();
+    }
+  }
+
+  // ❗ 검색 로직 추가
+  void _onSearchChanged(String query) {
+    if (query.isEmpty) {
+      setState(() => _searchResults = []);
+      return;
+    }
+    final q = query.toLowerCase();
+    setState(() {
+      _searchResults = widget.items
+          .where((item) => item.itemCode.toLowerCase().contains(q))
+          .take(15) // 최대 15개까지만 표시
+          .toList();
+    });
+  }
+
+  void _jumpToItem(ItemModel target) {
+    int index = widget.items.indexOf(target);
+    if (index != -1) {
+      setState(() {
+        _currentIndex = index;
+        _searchResults = [];
+        _searchController.clear();
+      });
+      _searchFocusNode.unfocus(); // 선택 후 포커스 해제
       _loadPdf();
     }
   }
@@ -165,7 +201,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   @override
-  void dispose() { _remarksController.dispose(); super.dispose(); }
+  void dispose() { 
+    _remarksController.dispose(); 
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose(); 
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -226,6 +267,36 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       ],
                     ),
                   ),
+
+                  // ❗ 검색 결과 리스트 (검색창 위에 표시)
+                  if (_searchResults.isNotEmpty)
+                    Positioned(
+                      left: 8,
+                      bottom: 0, // 하단 바 높이에 맞춰 조절 (SafeArea 위쪽)
+                      child: Container(
+                        width: MediaQuery.of(context).size.width * 0.45,
+                        constraints: const BoxConstraints(maxHeight: 250),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.grey[850] : Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, -2))],
+                        ),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: _searchResults.length,
+                          separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
+                          itemBuilder: (ctx, idx) {
+                            final res = _searchResults[idx];
+                            return ListTile(
+                              dense: true,
+                              title: Text(res.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)),
+                              trailing: res == item ? const Icon(Icons.check_circle, size: 16, color: Colors.blue) : null,
+                              onTap: () => _jumpToItem(res),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -237,18 +308,42 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: TextField(
-                        controller: _remarksController,
-                        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15),
-                        decoration: InputDecoration(
-                          hintText: "비고 입력...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
-                          filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100],
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          suffixIcon: _remarksController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.cancel, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) : null,
-                        ),
-                        onChanged: (val) { item.remarks = val; setState(() {}); },
-                        onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); },
+                      child: Row(
+                        children: [
+                          // ❗ 왼쪽: 검색창
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              focusNode: _searchFocusNode,
+                              style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
+                              decoration: InputDecoration(
+                                hintText: "코드 검색...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                                prefixIcon: const Icon(Icons.search, size: 18),
+                                filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              ),
+                              onChanged: _onSearchChanged,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // ❗ 오른쪽: 비고 입력창
+                          Expanded(
+                            child: TextField(
+                              controller: _remarksController,
+                              style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
+                              decoration: InputDecoration(
+                                hintText: "비고...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                                filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                suffixIcon: _remarksController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) : null,
+                              ),
+                              onChanged: (val) { item.remarks = val; setState(() {}); },
+                              onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); },
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Row(
