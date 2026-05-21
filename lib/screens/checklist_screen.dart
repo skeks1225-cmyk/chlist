@@ -60,7 +60,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _showUnfinishedOnly = false; 
   String? _selectedSectionHeader; 
   bool _isSubheadingViewMode = false; 
-  int _noFilterMode = 0; // 0:전체, 1:원본NO만, 2:하위없는원본+하위만
+  int _noFilterMode = 0; // 0:전체, 1:원본No만, 2:하위없는원본+하위만
   ItemModel? _temporaryVisibleItem; 
 
   bool _isEditMode = false;
@@ -760,6 +760,25 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _deleteSelectedRows() {
     if (_selectedIndices.isEmpty) return;
+
+    // ❗ [복구] 삭제 실행 전, 하위 항목을 포함한 최종 삭제 목록을 미리 계산 (안내 문구용)
+    final Set<int> finalDeleteIndices = Set.from(_selectedIndices);
+    for (int selIdx in _selectedIndices) {
+      try {
+        final target = _originalItems.firstWhere((i) => i.realIndex == selIdx);
+        if (target.isSubheading) {
+          bool foundTarget = false;
+          for (var item in _originalItems) {
+            if (item.isSubheading) {
+              if (item.realIndex == target.realIndex) foundTarget = true;
+              else if (foundTarget) break; 
+            } else if (foundTarget) {
+              finalDeleteIndices.add(item.realIndex);
+            }
+          }
+        }
+      } catch (_) {}
+    }
     
     bool isSmbMode = _pdfFolderPath.startsWith("smb://");
     bool shouldDeletePdf = false;
@@ -773,7 +792,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("선택한 ${_selectedIndices.length}개의 항목을 삭제하시겠습니까?"),
+              // ❗ [복구] 전체 삭제 수량을 명시적으로 안내
+              Text("선택한 섹션 및 하위 항목 포함 총 ${finalDeleteIndices.length}개를 삭제하시겠습니까?"),
               if (!isSmbMode) ...[
                 const SizedBox(height: 15),
                 Row(
@@ -789,26 +809,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")), 
             TextButton(
               onPressed: () async {
-                final Set<int> finalDeleteIndices = Set.from(_selectedIndices);
                 final List<String> pdfsToDelete = [];
-
-                // ❗ [복구] 섹션 일괄 삭제 로직 (명시적으로 재확인 및 보완)
-                for (int selIdx in _selectedIndices) {
-                  try {
-                    final target = _originalItems.firstWhere((i) => i.realIndex == selIdx);
-                    if (target.isSubheading) {
-                      bool foundTarget = false;
-                      for (var item in _originalItems) {
-                        if (item.isSubheading) {
-                          if (item.realIndex == target.realIndex) foundTarget = true;
-                          else if (foundTarget) break; 
-                        } else if (foundTarget) {
-                          finalDeleteIndices.add(item.realIndex);
-                        }
-                      }
-                    }
-                  } catch (_) {}
-                }
 
                 if (shouldDeletePdf) {
                   for (int delIdx in finalDeleteIndices) {
@@ -849,6 +850,38 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ),
       )
     );
+  }
+
+  // ❗ [복구] 섹션 선택 토글 (하위 항목 포함 시각적 동기화)
+  void _toggleSectionSelection(String headerTitle) {
+    String? currentHeader;
+    List<int> sectionRealIndices = [];
+    for (var item in _originalItems) {
+      if (item.isSubheading) {
+        currentHeader = item.itemCode;
+        if (currentHeader == headerTitle) sectionRealIndices.add(item.realIndex);
+      } else if (currentHeader == headerTitle) {
+        sectionRealIndices.add(item.realIndex);
+      }
+    }
+    setState(() {
+      bool allSelected = sectionRealIndices.every((idx) => _selectedIndices.contains(idx));
+      if (allSelected) {
+        for (var idx in sectionRealIndices) _selectedIndices.remove(idx);
+      } else {
+        _selectedIndices.addAll(sectionRealIndices);
+      }
+    });
+  }
+
+  // ❗ [복구] 섹션 선택 상태 확인
+  bool _isSectionSelected(String header) {
+    String? current; List<int> indices = [];
+    for (var i in _originalItems) {
+      if (i.isSubheading) current = i.itemCode;
+      else if (current == header) indices.add(i.realIndex);
+    }
+    return indices.isNotEmpty && indices.every((idx) => _selectedIndices.contains(idx));
   }
 
   Widget _buildSummaryWidget(bool isDark) {
@@ -906,13 +939,18 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(_currentFileName, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)]), backgroundColor: isDark ? Colors.black : Colors.blueGrey[900], foregroundColor: Colors.white, actions: _isEditMode ? [
-        TextButton.icon(onPressed: _deleteSelectedRows, icon: const Icon(Icons.delete_forever, color: Colors.redAccent), label: Text("삭제(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent))),
+        // ❗ 행 삭제 모드에서 보기 모드 전환 버튼 추가
+        TextButton(
+          onPressed: () { setState(() { _isSubheadingViewMode = !_isSubheadingViewMode; }); _applyFilterAndSort(); },
+          child: Text(_isSubheadingViewMode ? "전체보기" : "부분제목만", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
+        ),
+        TextButton.icon(onPressed: _deleteSelectedRows, icon: const Icon(Icons.delete_forever, color: Colors.redAccent), label: Text("확인(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
         TextButton(onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); }), child: const Text("취소", style: TextStyle(color: Colors.white))),
       ] : [
         if (_isSorted || _selectedSectionHeader != null || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _quantitySearchQuery.isNotEmpty || _isSubheadingViewMode || _noFilterMode != 0 || _columnFilters.values.any((s) => s.isNotEmpty)) 
           TextButton(onPressed: _resetSort, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
-        TextButton(onPressed: _handleRefresh, child: const Text("새로고침", style: TextStyle(color: Colors.cyanAccent))),
-        TextButton(onPressed: _handleClose, child: const Text("닫기", style: TextStyle(color: Colors.redAccent))),
+        TextButton(onPressed: _handleRefresh, child: const Text("새로고침", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
+        TextButton(onPressed: _handleClose, child: const Text("닫기", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
         IconButton(onPressed: () { setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red)),
       ]),
       body: SafeArea(child: Listener(onPointerDown: (_) { _clearHighlight(); if (_temporaryVisibleItem != null) { setState(() { _temporaryVisibleItem = null; }); _applyFilterAndSort(); } }, behavior: HitTestBehavior.translucent, child: Column(children: [
@@ -931,14 +969,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : ListView.builder(controller: _scrollController, itemCount: _displayItems.length, itemBuilder: (ctx, idx) {
           final item = _displayItems[idx];
           if (item.isSubheading) {
-            bool isSectionSelected = _selectedIndices.contains(item.realIndex);
             return GestureDetector(
               onTap: () {
                 if (_isEditMode) {
-                  setState(() {
-                    if (isSectionSelected) _selectedIndices.remove(item.realIndex);
-                    else _selectedIndices.add(item.realIndex);
-                  });
+                  _toggleSectionSelection(item.itemCode);
                 } else {
                   if (_isSubheadingViewMode) {
                     if (item.realIndex != -1) { setState(() { _selectedSectionHeader = item.itemCode; _isSubheadingViewMode = false; }); _applyFilterAndSort(); } 
@@ -955,8 +989,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 child: Row(children: [
                   Expanded(child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))), 
                   if (_selectedSectionHeader == item.itemCode) const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.check_circle, size: 16, color: Colors.blueAccent)),
-                  // ❗ 체크박스 위치를 다시 우측으로 복구
-                  if (_isEditMode) Icon(isSectionSelected ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
+                  // ❗ [복구] 체크박스 위치 우측 및 시각적 일괄 선택 상태 반영
+                  if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
                 ])
               )
             );
@@ -985,7 +1019,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     bool isSel = _selectedIndices.contains(item.realIndex);
     bool isHigh = item.realIndex == _highlightedRealIndex;
     return GestureDetector(onTap: () { if (_isEditMode) setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); }, child: Container(
-      decoration: BoxDecoration(color: item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null, border: isHigh ? Border.all(color: Colors.blue, width: 2) : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45,
+      decoration: BoxDecoration(color: isSel ? Colors.blue.withOpacity(0.1) : (item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null), border: isHigh ? Border.all(color: Colors.blue, width: 2) : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45,
       child: Row(children: [
         if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
         SizedBox(width: 35, child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12))),
