@@ -5,8 +5,9 @@ import '../services/smb_service.dart';
 import 'dart:io';
 
 class PdfViewerScreen extends StatefulWidget {
-  final List<ItemModel> items;
-  final int initialIndex;
+  final List<ItemModel> allItems; // ❗ 전체 품목 (검색용)
+  final List<ItemModel> filteredItems; // ❗ 필터링된 품목 (이전/다음 이동용)
+  final int initialIndex; // ❗ allItems에서의 인덱스
   final String pdfFolderPath;
   final SmbService smbService;
   final List<String> processList;
@@ -14,7 +15,8 @@ class PdfViewerScreen extends StatefulWidget {
 
   const PdfViewerScreen({
     super.key,
-    required this.items,
+    required this.allItems,
+    required this.filteredItems,
     required this.initialIndex,
     required this.pdfFolderPath,
     required this.smbService,
@@ -43,15 +45,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _currentIndex = widget.initialIndex;
     _loadPdf();
     _searchFocusNode.addListener(() {
-      if (!_searchFocusNode.hasFocus) {
+      if (mounted && !_searchFocusNode.hasFocus) {
         setState(() => _searchResults = []);
       }
     });
   }
 
   Future<void> _loadPdf() async {
-    final item = widget.items[_currentIndex];
+    final item = widget.allItems[_currentIndex];
     final String cleanCode = item.itemCode.trim();
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     String localPath = "";
@@ -65,36 +68,71 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
         localPath = "/storage/emulated/0/Download/CheckSheet/$cleanCode.pdf";
         await widget.smbService.downloadFile(share, remoteFilePath, localPath);
-      } catch (e) { debugPrint("Sync Error: $e"); }
+      } catch (e) { debugPrint("SMB Sync Error: $e"); }
     } else {
       localPath = "${widget.pdfFolderPath}/$cleanCode.pdf";
     }
 
     _remarksController.text = item.remarks;
-    setState(() {
-      _currentPdfPath = File(localPath).existsSync() ? localPath : "";
-      _viewerKey = UniqueKey();
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _currentPdfPath = File(localPath).existsSync() ? localPath : "";
+        _viewerKey = UniqueKey();
+        _isLoading = false;
+      });
+    }
   }
 
   void _resetFit() { _loadPdf(); }
 
-  void _next() {
-    if (_currentIndex < widget.items.length - 1) {
-      setState(() => _currentIndex++);
-      _loadPdf();
-    }
-  }
-
+  // ❗ 이전 항목으로 이동 (필터 리스트 기준)
   void _prev() {
-    if (_currentIndex > 0) {
-      setState(() => _currentIndex--);
-      _loadPdf();
+    final currentItem = widget.allItems[_currentIndex];
+    int prevTargetIdx = -1;
+
+    for (int i = widget.filteredItems.length - 1; i >= 0; i--) {
+      if (widget.filteredItems[i].realIndex < currentItem.realIndex) {
+        prevTargetIdx = i;
+        break;
+      }
+    }
+
+    if (prevTargetIdx != -1) {
+      final targetItem = widget.filteredItems[prevTargetIdx];
+      final newIdx = widget.allItems.indexOf(targetItem);
+      if (newIdx != -1) {
+        setState(() {
+          _currentIndex = newIdx;
+          _loadPdf();
+        });
+      }
     }
   }
 
-  // ❗ 검색 로직 추가
+  // ❗ 다음 항목으로 이동 (필터 리스트 기준)
+  void _next() {
+    final currentItem = widget.allItems[_currentIndex];
+    int nextTargetIdx = -1;
+
+    for (int i = 0; i < widget.filteredItems.length; i++) {
+      if (widget.filteredItems[i].realIndex > currentItem.realIndex) {
+        nextTargetIdx = i;
+        break;
+      }
+    }
+
+    if (nextTargetIdx != -1) {
+      final targetItem = widget.filteredItems[nextTargetIdx];
+      final newIdx = widget.allItems.indexOf(targetItem);
+      if (newIdx != -1) {
+        setState(() {
+          _currentIndex = newIdx;
+          _loadPdf();
+        });
+      }
+    }
+  }
+
   void _onSearchChanged(String query) {
     if (query.isEmpty) {
       setState(() => _searchResults = []);
@@ -102,22 +140,22 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
     final q = query.toLowerCase();
     setState(() {
-      _searchResults = widget.items
+      _searchResults = widget.allItems
           .where((item) => item.itemCode.toLowerCase().contains(q))
-          .take(15) // 최대 15개까지만 표시
+          .take(15)
           .toList();
     });
   }
 
   void _jumpToItem(ItemModel target) {
-    int index = widget.items.indexOf(target);
+    int index = widget.allItems.indexOf(target);
     if (index != -1) {
       setState(() {
         _currentIndex = index;
         _searchResults = [];
         _searchController.clear();
       });
-      _searchFocusNode.unfocus(); // 선택 후 포커스 해제
+      _searchFocusNode.unfocus();
       _loadPdf();
     }
   }
@@ -142,6 +180,11 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   void _showProcessDialog(ItemModel item) {
+    // ❗ '완료' 항목은 항상 마지막에 배치하고 주황색으로 표시
+    List<String> sortedDisplayList = List.from(widget.processList);
+    bool hasFinished = sortedDisplayList.remove("완료");
+    if (hasFinished) sortedDisplayList.add("완료");
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -156,11 +199,22 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
                   crossAxisCount: 2, childAspectRatio: 2.5,
                   mainAxisSpacing: 8, crossAxisSpacing: 8,
-                  children: widget.processList.map((p) => ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[700], foregroundColor: Colors.white, textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                    onPressed: () { setState(() { item.process = p; }); widget.onStatusUpdate(item, 'process'); Navigator.pop(ctx); },
-                    child: Text(p),
-                  )).toList(),
+                  children: sortedDisplayList.map((p) {
+                    bool isFinishedBtn = p == "완료";
+                    return ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isFinishedBtn ? Colors.orange : Colors.blueGrey[700], 
+                        foregroundColor: Colors.white,
+                        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)
+                      ),
+                      onPressed: () { 
+                        setState(() { item.process = p; }); 
+                        widget.onStatusUpdate(item, 'process'); 
+                        Navigator.pop(ctx); 
+                      },
+                      child: Text(p),
+                    );
+                  }).toList(),
                 ),
                 const Divider(),
                 _dialogBtn("지우기", Colors.grey, () { item.process = ""; }),
@@ -178,7 +232,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        onPressed: () { setState(onSelected); widget.onStatusUpdate(widget.items[_currentIndex], 'update'); Navigator.pop(context); },
+        onPressed: () { setState(onSelected); widget.onStatusUpdate(widget.allItems[_currentIndex], 'update'); Navigator.pop(context); },
         child: Text(label),
       ),
     );
@@ -210,9 +264,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.items[_currentIndex];
+    final item = widget.allItems[_currentIndex];
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color viewerBgColor = isDark ? Colors.black : Colors.grey[300]!;
+
+    // ❗ 이전/다음 항목이 있는지 확인 (필터 리스트 기준)
+    bool hasPrev = widget.filteredItems.any((i) => i.realIndex < item.realIndex);
+    bool hasNext = widget.filteredItems.any((i) => i.realIndex > item.realIndex);
 
     return PopScope(
       canPop: false,
@@ -258,26 +316,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                               ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor)))
                               : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
                       
-                      // ❗ 좌측 하단에 모아진 이전(<-)/다음(->) 버튼
                       Positioned(
                         left: 5, 
                         bottom: 80, 
                         child: Row(
                           children: [
-                            _navArrowBtn(Icons.arrow_back, _prev, isDark),
-                            _navArrowBtn(Icons.arrow_forward, _next, isDark),
+                            _navArrowBtn(Icons.arrow_back, hasPrev ? _prev : () {}, isDark),
+                            _navArrowBtn(Icons.arrow_forward, hasNext ? _next : () {}, isDark),
                           ],
                         ),
                       ),
 
-                      // ❗ 검색 결과 리스트 (검색창 위에 표시)
                       if (_searchResults.isNotEmpty)
                         Positioned(
                           left: 8,
-                          bottom: 2, // 하단 바 바로 위에 위치
+                          bottom: 2, 
                           child: Container(
                             width: MediaQuery.of(context).size.width * 0.45,
-                            // ❗ 가용 높이 전체를 사용하여 상단 바 바로 밑까지 동적으로 조절
                             constraints: BoxConstraints(maxHeight: constraints.maxHeight - 5),
                             decoration: BoxDecoration(
                               color: isDark ? Colors.grey[850] : Colors.white,
@@ -323,7 +378,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Row(
                         children: [
-                          // ❗ 왼쪽: 검색창
                           Expanded(
                             child: TextField(
                               controller: _searchController,
@@ -332,7 +386,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                               decoration: InputDecoration(
                                 hintText: "코드 검색...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
                                 prefixIcon: const Icon(Icons.search, size: 18),
-                                // ❗ 검색창 지우기(X) 버튼 추가
                                 suffixIcon: _searchController.text.isNotEmpty ? IconButton(
                                   icon: const Icon(Icons.cancel, size: 18, color: Colors.grey),
                                   onPressed: () {
@@ -350,7 +403,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          // ❗ 오른쪽: 비고 입력창
                           Expanded(
                             child: TextField(
                               controller: _remarksController,
@@ -381,9 +433,17 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        ElevatedButton.icon(onPressed: _prev, icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: isDark ? Colors.white : Colors.blueGrey[900])),
-                        Text("${_currentIndex + 1} / ${widget.items.length}", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
-                        ElevatedButton.icon(onPressed: _next, icon: const Icon(Icons.arrow_forward), label: const Text("다음", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: isDark ? Colors.white : Colors.blueGrey[900])),
+                        ElevatedButton.icon(
+                          onPressed: hasPrev ? _prev : null, 
+                          icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)), 
+                          style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: hasPrev ? (isDark ? Colors.white : Colors.blueGrey[900]) : Colors.grey)
+                        ),
+                        Text("${_currentIndex + 1} / ${widget.allItems.length}", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ElevatedButton.icon(
+                          onPressed: hasNext ? _next : null, 
+                          icon: const Icon(Icons.arrow_forward), label: const Text("다음", style: TextStyle(fontSize: 15)), 
+                          style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: hasNext ? (isDark ? Colors.white : Colors.blueGrey[900]) : Colors.grey)
+                        ),
                       ],
                     )
                   ],
@@ -397,7 +457,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   Widget _statusBtn(String label, Color color, bool active, VoidCallback onTap) {
-    final item = widget.items[_currentIndex];
+    final item = widget.allItems[_currentIndex];
     String subText = "";
     if (label == "보완") subText = item.complement;
     if (label == "공정") subText = item.process;
