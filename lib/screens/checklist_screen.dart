@@ -953,9 +953,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 height: _subheadingHeight, padding: const EdgeInsets.symmetric(horizontal: 12), alignment: Alignment.centerLeft, 
                 color: _selectedSectionHeader == item.itemCode ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300]), 
                 child: Row(children: [
-                  if (_isEditMode) Padding(padding: const EdgeInsets.only(right: 8), child: Icon(isSectionSelected ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
-                  Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)), 
-                  if (_selectedSectionHeader == item.itemCode) const Padding(padding: EdgeInsets.only(left: 8), child: Icon(Icons.check_circle, size: 16, color: Colors.blueAccent))
+                  Expanded(child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))), 
+                  if (_selectedSectionHeader == item.itemCode) const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.check_circle, size: 16, color: Colors.blueAccent)),
+                  // ❗ 체크박스 위치를 다시 우측으로 복구
+                  if (_isEditMode) Icon(isSectionSelected ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
                 ])
               )
             );
