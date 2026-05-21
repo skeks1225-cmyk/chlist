@@ -597,8 +597,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   ),
                   title: Text(_processList[i], style: const TextStyle(fontSize: 13)), 
                   trailing: const Icon(Icons.drag_handle, size: 20), 
-                  onLongPress: () {}, 
-                  onTap: () {},
                 ),
             ]
           )),
@@ -947,6 +945,10 @@ class _RemarksCellState extends State<_RemarksCell> {
     return Stack(alignment: Alignment.centerRight, children: [
       TextField(focusNode: _node, controller: _ctrl, style: const TextStyle(fontSize: 12), decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 4)), onSubmitted: (v) { widget.item.remarks = v; widget.onSave(); widget.onForgetFocus(); }),
       if (_ctrl.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 14), onPressed: () { setState(() => _ctrl.clear()); widget.item.remarks = ""; widget.onSave(); })
+    ]);
+  }
+}
+=> _ctrl.clear()); widget.item.remarks = ""; widget.onSave(); })
     ]);
   }
 }
