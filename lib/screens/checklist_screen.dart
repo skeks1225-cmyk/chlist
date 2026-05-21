@@ -159,7 +159,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         prefs.getString('smbUser') ?? "",
         prefs.getString('smbPass') ?? "",
       );
-      _processList = prefs.getStringList('processList') ?? ['레이저', 'CS', '탭', '버링탭', '헤밍', 'ZB', '절곡', '압입', '리베팅', '용접', '도장', '도금', '인쇄'];
+      _processList = prefs.getStringList('processList') ?? ['레이저', 'CS', '탭', '버링탭', '헤밍', 'ZB', '절곡', '압입', '리베팅', '용접', '도장', '도금', '인쇄', '버핑', '보류', '사급', '완료'];
     });
     if (_excelPath.isNotEmpty && File(_excelPath).existsSync()) _loadExcelData(_excelPath);
   }
