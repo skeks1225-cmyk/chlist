@@ -550,20 +550,50 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 ListTile(
                   key: ValueKey(_processList[i] + i.toString()), 
                   dense: true, 
-                  visualDensity: VisualDensity.compact, // ❗ 행 간격 축소
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                  leading: GestureDetector(
-                    onTap: () {
-                      // ❗ 색상 팔레트 팝업
-                      showDialog(context: context, builder: (pCtx) => AlertDialog(
-                        title: Text("${_processList[i]} 색상 선택"),
-                        content: Wrap(spacing: 8, runSpacing: 8, children: palette.map((c) => GestureDetector(
-                          onTap: () { setDialogState(() => _processColors[_processList[i]] = c.value); Navigator.pop(pCtx); },
-                          child: Container(width: 40, height: 40, decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2))),
-                        )).toList()),
-                      ));
-                    },
-                    child: Container(width: 24, height: 24, decoration: BoxDecoration(color: Color(_processColors[_processList[i]] ?? (_processList[i] == "완료" ? Colors.green.value : Colors.blueGrey.value)), shape: BoxShape.circle)),
+                  visualDensity: VisualDensity.compact,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  leading: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // ❗ 삭제 버튼 복구
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 20),
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (confirmCtx) => AlertDialog(
+                              title: const Text("공정 삭제"),
+                              content: Text("'${_processList[i]}' 공정을 삭제하시겠습니까?"),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(confirmCtx), child: const Text("취소")),
+                                TextButton(
+                                  onPressed: () {
+                                    setDialogState(() {
+                                      _processList.removeAt(i);
+                                    });
+                                    Navigator.pop(confirmCtx);
+                                  }, 
+                                  child: const Text("삭제", style: TextStyle(color: Colors.red))
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          // 색상 팔레트 팝업
+                          showDialog(context: context, builder: (pCtx) => AlertDialog(
+                            title: Text("${_processList[i]} 색상 선택"),
+                            content: Wrap(spacing: 8, runSpacing: 8, children: palette.map((c) => GestureDetector(
+                              onTap: () { setDialogState(() => _processColors[_processList[i]] = c.value); Navigator.pop(pCtx); },
+                              child: Container(width: 40, height: 40, decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2))),
+                            )).toList()),
+                          ));
+                        },
+                        child: Container(width: 20, height: 20, decoration: BoxDecoration(color: Color(_processColors[_processList[i]] ?? (_processList[i] == "완료" ? Colors.green.value : Colors.blueGrey.value)), shape: BoxShape.circle)),
+                      ),
+                    ],
                   ),
                   title: Text(_processList[i], style: const TextStyle(fontSize: 13)), 
                   trailing: const Icon(Icons.drag_handle, size: 20), 
