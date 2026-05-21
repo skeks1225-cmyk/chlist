@@ -7,6 +7,7 @@ import '../services/excel_service.dart';
 import '../services/smb_service.dart';
 import 'pdf_view_screen.dart';
 import 'dart:io';
+import 'dart:convert';
 import 'package:path/path.dart' as p;
 
 class ChecklistScreen extends StatefulWidget {
@@ -49,7 +50,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   final String _baseDownloadPath = "/storage/emulated/0/Download";
   final FocusNode _dummyFocusNode = FocusNode();
 
-  List<String> _processList = ['레이저', 'CS', '탭', '버링탭', '헤밍', 'ZB', '절곡', '압입', '리베팅', '용접', '도장', '도금', '인쇄'];
+  List<String> _processList = ['레이저', 'CS', '탭', '버링탭', '헤밍', 'ZB', '절곡', '압입', '리베팅', '용접', '도장', '도금', '인쇄', '버핑', '보류', '사급', '완료'];
+  Map<String, int> _processColors = {}; // ❗ 공정별 색상 관리 (ARGB)
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -59,14 +61,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _showUnfinishedOnly = false; 
   String? _selectedSectionHeader; 
   bool _isSubheadingViewMode = false; 
-  int _noFilterMode = 0; // ❗ 0:전체, 1:원본NO만, 2:하위없는원본+하위만
-  ItemModel? _temporaryVisibleItem; // ❗ 필터링되어있어도 검색으로 선택 시 임시로 보여줄 항목
+  int _noFilterMode = 0; // 0:전체, 1:원본NO만, 2:하위없는원본+하위만
+  ItemModel? _temporaryVisibleItem; 
 
-  // ❗ 행 삭제(편집) 모드 관련 변수
   bool _isEditMode = false;
   final Set<int> _selectedIndices = {}; 
 
-  // ❗ 스크롤 및 포커싱 관련
   final ScrollController _scrollController = ScrollController();
   int? _highlightedRealIndex;
   final double _subheadingHeight = 40.0;
@@ -160,6 +160,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         prefs.getString('smbPass') ?? "",
       );
       _processList = prefs.getStringList('processList') ?? ['레이저', 'CS', '탭', '버링탭', '헤밍', 'ZB', '절곡', '압입', '리베팅', '용접', '도장', '도금', '인쇄', '버핑', '보류', '사급', '완료'];
+      
+      String? colorsJson = prefs.getString('processColors');
+      if (colorsJson != null) {
+        try {
+          Map<String, dynamic> decoded = jsonDecode(colorsJson);
+          _processColors = decoded.map((key, value) => MapEntry(key, value as int));
+        } catch (_) { _processColors = {}; }
+      } else { _processColors = {}; }
     });
     if (_excelPath.isNotEmpty && File(_excelPath).existsSync()) _loadExcelData(_excelPath);
   }
@@ -170,6 +178,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setString('pdfFolderPath', _pdfFolderPath);
     await prefs.setBool('autoSave', _autoSave);
     await prefs.setStringList('processList', _processList);
+    await prefs.setString('processColors', jsonEncode(_processColors));
   }
 
   Future<void> _loadExcelData(String path) async {
@@ -303,7 +312,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         sectionItems = sectionItems.where((item) => !item.complete).toList();
       }
 
-      // ❗ 'No' 필터링 (3단계)
+      // 'No' 필터링 (3단계)
       if (_noFilterMode == 1) {
         sectionItems = sectionItems.where((item) => item.no.isNotEmpty).toList();
       } else if (_noFilterMode == 2) {
@@ -317,7 +326,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         }).toList();
       }
 
-      // ❗ 임시 노출 항목 처리
+      // 임시 노출 항목 처리
       if (_temporaryVisibleItem != null && !_temporaryVisibleItem!.isSubheading) {
         String targetHeader = "ROOT";
         String? tempCurrent;
@@ -432,14 +441,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       const Text("제외 필터", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
                       TextField(controller: excludeController),
                       Row(children: [const Text("로직: "), Radio<String>(value: "AND", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)), const Text("AND"), Radio<String>(value: "OR", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)), const Text("OR")]),
-                    ] else if (col == 'quantity') ...[
-                      const Text("수량 직접 입력", style: TextStyle(fontWeight: FontWeight.bold)),
-                      TextField(controller: quantityController, keyboardType: TextInputType.number),
-                      const SizedBox(height: 15),
+                    ] else ...[
+                      // ❗ 전체 선택 / 해제 버튼 추가
+                      Row(
+                        children: [
+                          Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.addAll(options)), child: const Text("전체 선택", style: TextStyle(fontSize: 12)))),
+                          const SizedBox(width: 8),
+                          Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.clear()), child: const Text("전체 해제", style: TextStyle(fontSize: 12)))),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      if (col == 'quantity') ...[
+                        const Text("수량 직접 입력", style: TextStyle(fontWeight: FontWeight.bold)),
+                        TextField(controller: quantityController, keyboardType: TextInputType.number),
+                        const SizedBox(height: 15),
+                      ],
                       const Text("항목 선택", style: TextStyle(fontWeight: FontWeight.bold)),
-                      _buildFilterGrid(options, localFilters, col, setModalState),
-                    ] else if (options.isNotEmpty) ...[
-                      const Text("필터", style: TextStyle(fontWeight: FontWeight.bold)),
                       _buildFilterGrid(options, localFilters, col, setModalState),
                     ],
                   ],
@@ -503,6 +520,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final passController = TextEditingController(text: prefs.getString('smbPass'));
     final newProcessController = TextEditingController();
     bool obscurePass = true; 
+
+    // ❗ 색상 팔레트 (15가지 표준색)
+    final List<Color> palette = [
+      Colors.blueGrey, Colors.blue, Colors.indigo, Colors.teal, Colors.green, 
+      Colors.lightGreen, Colors.lime, Colors.yellow, Colors.amber, Colors.orange, 
+      Colors.deepOrange, Colors.red, Colors.pink, Colors.purple, Colors.deepPurple,
+    ];
+
     showDialog(context: context, builder: (ctx) => DefaultTabController(length: 2, child: StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
       title: const TabBar(labelColor: Colors.blue, unselectedLabelColor: Colors.grey, tabs: [Tab(icon: Icon(Icons.dns), text: "연결 설정"), Tab(icon: Icon(Icons.settings_suggest), text: "공정 관리")]),
       content: SizedBox(width: double.maxFinite, height: 450, child: TabBarView(children: [
@@ -517,17 +542,50 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           }, icon: const Icon(Icons.check_circle_outline), label: const Text("접속 테스트")),
         ])),
         Column(children: [
-          Expanded(child: ReorderableListView(onReorder: (o, n) { setDialogState(() { if (n > o) n -= 1; final String item = _processList.removeAt(o); _processList.insert(n, item); }); }, children: [
-            for (int i = 0; i < _processList.length; i++) ListTile(key: ValueKey(_processList[i] + i.toString()), title: Text(_processList[i]), trailing: const Icon(Icons.drag_handle), leading: IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.red), onPressed: () => setDialogState(() => _processList.removeAt(i)))),
-          ])),
+          Expanded(child: ReorderableListView(
+            // ❗ 행 간격 축소 및 UI 개선
+            onReorder: (o, n) { setDialogState(() { if (n > o) n -= 1; final String item = _processList.removeAt(o); _processList.insert(n, item); }); }, 
+            children: [
+              for (int i = 0; i < _processList.length; i++) 
+                ListTile(
+                  key: ValueKey(_processList[i] + i.toString()), 
+                  dense: true, 
+                  visualDensity: VisualDensity.compact, // ❗ 행 간격 축소
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  leading: GestureDetector(
+                    onTap: () {
+                      // ❗ 색상 팔레트 팝업
+                      showDialog(context: context, builder: (pCtx) => AlertDialog(
+                        title: Text("${_processList[i]} 색상 선택"),
+                        content: Wrap(spacing: 8, runSpacing: 8, children: palette.map((c) => GestureDetector(
+                          onTap: () { setDialogState(() => _processColors[_processList[i]] = c.value); Navigator.pop(pCtx); },
+                          child: Container(width: 40, height: 40, decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2))),
+                        )).toList()),
+                      ));
+                    },
+                    child: Container(width: 24, height: 24, decoration: BoxDecoration(color: Color(_processColors[_processList[i]] ?? (_processList[i] == "완료" ? Colors.green.value : Colors.blueGrey.value)), shape: BoxShape.circle)),
+                  ),
+                  title: Text(_processList[i], style: const TextStyle(fontSize: 13)), 
+                  trailing: const Icon(Icons.drag_handle, size: 20), 
+                  onLongPress: () {}, 
+                  onTap: () {},
+                ),
+            ]
+          )),
           const Divider(),
-          Row(children: [Expanded(child: TextField(controller: newProcessController, decoration: const InputDecoration(hintText: "공정명 추가"))), IconButton(icon: const Icon(Icons.add_box, color: Colors.green, size: 35), onPressed: () { if (newProcessController.text.isNotEmpty) setDialogState(() { _processList.add(newProcessController.text); newProcessController.clear(); }); })]),
+          Row(children: [
+            Expanded(child: TextField(controller: newProcessController, decoration: const InputDecoration(hintText: "공정명 추가", isDense: true))), 
+            IconButton(icon: const Icon(Icons.add_box, color: Colors.green, size: 30), onPressed: () { if (newProcessController.text.isNotEmpty) setDialogState(() { _processList.add(newProcessController.text); newProcessController.clear(); }); }),
+            // ❗ 색상 리셋 버튼 추가
+            IconButton(icon: const Icon(Icons.color_lens_outlined, color: Colors.orange, size: 30), onPressed: () { setDialogState(() => _processColors.clear()); }),
+          ]),
         ]),
       ])),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
         TextButton(onPressed: () async {
           await prefs.setString('smbIp', ipController.text); await prefs.setString('smbUser', userController.text); await prefs.setString('smbPass', passController.text); await prefs.setStringList('processList', _processList);
+          await prefs.setString('processColors', jsonEncode(_processColors));
           _smbService.setConfig(ipController.text, userController.text, passController.text); setState(() {}); Navigator.pop(ctx);
         }, child: const Text("저장", style: TextStyle(fontWeight: FontWeight.bold))),
       ],
@@ -558,7 +616,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       if (path != "") ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showSmbFiles(share, p.dirname(path) == "." ? "" : p.dirname(path), mode); }),
       Expanded(child: ListView.builder(itemCount: filteredFiles.length, itemBuilder: (c, i) {
         final f = filteredFiles[i]; bool isDir = f['isDirectory'] as bool; String name = f['name'] as String;
-        return ListTile(leading: Icon(isDir ? Icons.folder : Icons.description), title: Text(name), onTap: () { if (isDir) { Navigator.pop(ctx); _showSmbFiles(share, "${path == "" ? "" : "$path/"}$name", mode); } else if (mode == 'file') { Navigator.pop(ctx); _downloadAndLoad(share, "${path == "" ? "" : "$path/"}$name"); } });
+        return ListTile(leading: Icon(isDir ? Icons.folder : Icons.description), title: Text(name), onTap: () { if (isDir) { Navigator.pop(ctx); _showFileBrowser(mode, "${path == "" ? "" : "$path/"}$name"); } else if (mode == 'file') { Navigator.pop(ctx); _downloadAndLoad(share, "${path == "" ? "" : "$path/"}$name"); } });
       })),
     ])), actions: [if (mode == 'dir') TextButton(onPressed: () { setState(() => _pdfFolderPath = "smb://$share/$path"); _saveSettings(); Navigator.pop(ctx); }, child: const Text("현재 폴더 선택")), TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))]));
   }
@@ -635,8 +693,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _showProcessDialog(ItemModel item) {
     _forgetFocus();
-    
-    // ❗ '완료' 항목은 항상 마지막에 배치하기 위한 정렬
     List<String> sortedDisplayList = List.from(_processList);
     bool hasFinished = sortedDisplayList.remove("완료");
     if (hasFinished) sortedDisplayList.add("완료");
@@ -659,10 +715,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   mainAxisSpacing: 8,
                   crossAxisSpacing: 8,
                   children: sortedDisplayList.map((p) {
-                    bool isFinishedBtn = p == "완료";
+                    // ❗ 지정된 색상 또는 기본색 적용
+                    int? colorVal = _processColors[p];
+                    Color btnColor = colorVal != null ? Color(colorVal) : (p == "완료" ? Colors.green : Colors.blueGrey[700]!);
+                    
                     return ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isFinishedBtn ? Colors.orange : Colors.blueGrey[700], 
+                        backgroundColor: btnColor, 
                         foregroundColor: Colors.white
                       ),
                       onPressed: () {
@@ -720,12 +779,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         await _smbService.downloadFile(share, remoteFilePath, "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf");
       } catch (_) {} finally { setState(() => _isLoading = false); }
     }
-    // ❗ 뷰어로부터 마지막으로 보고 있던 품목코드를 받아옴
+    if (!mounted) return;
     final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(
-      allItems: _originalItems.where((i) => !i.isSubheading).toList(), // ❗ 전체 데이터 (검색용)
-      filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), // ❗ 필터된 데이터 (이동용)
+      allItems: _originalItems.where((i) => !i.isSubheading).toList(), 
+      filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), 
       initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item),
       pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList,
+      processColors: _processColors, // ❗ 색상 정보 전달
       onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) it.complement = ""; }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); },
     )));
 
@@ -803,7 +863,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12))),
         _cellCheck(item.complete, isDark, () { setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); if (_autoSave) _manualSave(silent: true); }),
         _cellText(item.complement, Colors.orange, isDark, () => _showComplementDialog(item)),
-        _cellText(item.process, Colors.blueGrey, isDark, () => _showProcessDialog(item)),
+        // ❗ 공정 칸 배경색 적용 (Accent Bar 방식)
+        _cellProcess(item.process, isDark, () => _showProcessDialog(item)),
         Expanded(flex: 3, child: _RemarksCell(item: item, onSave: () { if (_autoSave) _manualSave(silent: true); }, onForgetFocus: _forgetFocus)),
       ]),
     ));
@@ -811,6 +872,27 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Widget _cellCheck(bool val, bool isDark, VoidCallback onTap) { return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: val ? Colors.green.withOpacity(0.3) : null, child: val ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
   Widget _cellText(String txt, Color col, bool isDark, VoidCallback onTap) { return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: txt.isNotEmpty ? col.withOpacity(0.2) : null, child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: txt.isNotEmpty ? (isDark?Colors.white:col) : null))))); }
+  
+  // ❗ 공정 칸 전용 위젯 (왼쪽 엑센트 바 + 연한 배경)
+  Widget _cellProcess(String txt, bool isDark, VoidCallback onTap) {
+    if (txt.isEmpty) return InkWell(onTap: onTap, child: const SizedBox(width: 50));
+    
+    int? colorVal = _processColors[txt];
+    Color baseColor = colorVal != null ? Color(colorVal) : (txt == "완료" ? Colors.green : Colors.blueGrey);
+    
+    return InkWell(
+      onTap: onTap, 
+      child: Container(
+        width: 50, 
+        decoration: BoxDecoration(
+          color: baseColor.withOpacity(0.15), // 연한 배경
+          border: Border(left: BorderSide(color: baseColor, width: 4)) // 왼쪽 엑센트 바
+        ),
+        alignment: Alignment.center, 
+        child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)))
+      )
+    );
+  }
 
   void _showError(String t, String m) { showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(t), content: Text(m), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))])); }
   void _showSnackBar(String m) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Center(child: Text(m)), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating)); }
