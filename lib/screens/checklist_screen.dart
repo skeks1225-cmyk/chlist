@@ -1037,27 +1037,42 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     bool isHigh = item.realIndex == _highlightedRealIndex;
     return GestureDetector(onTap: () { if (_isEditMode) setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); }, child: Container(
       decoration: BoxDecoration(color: isSel ? Colors.blue.withOpacity(0.1) : (item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null), border: isHigh ? Border.all(color: Colors.blue, width: 2) : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45,
-      child: Row(children: [
-        if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
-        SizedBox(width: 35, child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12))),
-        Expanded(flex: 5, child: InkWell(onTap: () => _handleItemClick(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))),
-        SizedBox(width: 40, child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12))),
-        _cellCheck(item.complete, isDark, () { setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); if (_autoSave) _manualSave(silent: true); }),
-        _cellText(item.complement, Colors.orange, isDark, () => _showComplementDialog(item)),
-        _cellProcess(item.process, isDark, () => _showProcessDialog(item)),
-        Expanded(flex: 3, child: _RemarksCell(item: item, onSave: () { if (_autoSave) _manualSave(silent: true); }, onForgetFocus: _forgetFocus)),
-      ]),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch, // ❗ 자식들이 높이를 꽉 채우도록 설정 (클릭 영역 확보)
+        children: [
+          if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
+          SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+          Expanded(flex: 5, child: InkWell(onTap: () => _handleItemClick(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), alignment: Alignment.centerLeft, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))),
+          SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+          _cellCheck(item.complete, isDark, () { setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); if (_autoSave) _manualSave(silent: true); }),
+          _cellText(item.complement, Colors.orange, isDark, () => _showComplementDialog(item)),
+          _cellProcess(item.process, isDark, () => _showProcessDialog(item)),
+          Expanded(flex: 3, child: _RemarksCell(item: item, onSave: () { if (_autoSave) _manualSave(silent: true); }, onForgetFocus: _forgetFocus)),
+        ]
+      ),
     ));
   }
 
   Widget _cellCheck(bool val, bool isDark, VoidCallback onTap) { return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: val ? Colors.green.withOpacity(0.3) : null, child: val ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
-  Widget _cellText(String txt, Color col, bool isDark, VoidCallback onTap) { return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: txt.isNotEmpty ? col.withOpacity(0.2) : null, child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: txt.isNotEmpty ? (isDark?Colors.white:col) : null))))); }
+  Widget _cellText(String txt, Color col, bool isDark, VoidCallback onTap) { return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: txt.isNotEmpty ? col.withOpacity(0.2) : null, child: Center(child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: txt.isNotEmpty ? (isDark?Colors.white:col) : null)))))); }
   
   Widget _cellProcess(String txt, bool isDark, VoidCallback onTap) {
-    if (txt.isEmpty) return InkWell(onTap: onTap, child: const SizedBox(width: 50));
-    int? colorVal = _processColors[txt];
+    // ❗ 텍스트가 비어있을 때도 클릭이 가능하도록 Container 구조 개선
+    int? colorVal = txt.isNotEmpty ? _processColors[txt] : null;
     Color baseColor = colorVal != null ? Color(colorVal) : (txt == "완료" ? Colors.green : Colors.blueGrey);
-    return InkWell(onTap: onTap, child: Container(width: 50, decoration: BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)))));
+    
+    return InkWell(
+      onTap: onTap, 
+      child: Container(
+        width: 50, 
+        decoration: txt.isEmpty ? const BoxDecoration(color: Colors.transparent) : BoxDecoration(
+          color: baseColor.withOpacity(0.15), 
+          border: Border(left: BorderSide(color: baseColor, width: 4))
+        ),
+        alignment: Alignment.center, 
+        child: txt.isNotEmpty ? FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))) : null
+      )
+    );
   }
 
   void _showError(String t, String m) { showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(t), content: Text(m), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))])); }
