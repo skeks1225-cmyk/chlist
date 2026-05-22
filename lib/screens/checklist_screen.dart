@@ -793,7 +793,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("선한 섹션 및 하위 항목 포함 총 ${finalDeleteIndices.length}개를 삭제하시겠습니까?"),
+              Text("선택한 섹션 및 하위 항목 포함 총 ${finalDeleteIndices.length}개를 삭제하시겠습니까?"),
               if (!isSmbMode) ...[
                 const SizedBox(height: 15),
                 Row(
