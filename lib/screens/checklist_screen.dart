@@ -945,7 +945,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         TextButton(onPressed: _handleClose, child: const Text("닫기", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
         IconButton(onPressed: () { setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red)),
       ]),
-      body: SafeArea(child: Listener(onPointerDown: (_) { _clearHighlight(); if (_temporaryVisibleItem != null) { setState(() { _temporaryVisibleItem = null; }); _applyFilterAndSort(); } }, behavior: HitTestBehavior.translucent, child: Column(children: [
+      body: SafeArea(child: Listener(onPointerDown: (_) { _clearHighlight(); _forgetFocus(); if (_temporaryVisibleItem != null) { setState(() { _temporaryVisibleItem = null; }); _applyFilterAndSort(); } }, behavior: HitTestBehavior.translucent, child: Column(children: [
         if (!_isEditMode) Padding(padding: const EdgeInsets.all(8.0), child: Row(children: [
           _topBtn("설정", _openSettings), const SizedBox(width: 4), _topBtn("엑셀선택", () => _pickSource('file')), const SizedBox(width: 4), _topBtn("PDF폴더", () => _pickSource('dir')), const SizedBox(width: 4),
           _topBtn("부분제목", () { setState(() { _isSubheadingViewMode = !_isSubheadingViewMode; }); _applyFilterAndSort(); }, bgColor: _isSubheadingViewMode ? Colors.blue : Colors.indigo[800]), const SizedBox(width: 4),
@@ -954,7 +954,34 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           _topBtn("리셋", _showResetConfirm, bgColor: Colors.red[700]), const SizedBox(width: 4), _topBtn("저장", () { _forgetFocus(); _manualSave(); }, bgColor: Colors.green[700]),
         ])),
         Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: Row(children: [
-          Expanded(flex: 4, child: TextField(controller: _searchController, focusNode: _searchFocusNode, decoration: InputDecoration(hintText: "품목코드 검색", border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: EdgeInsets.zero, prefixIcon: const Icon(Icons.search)), onChanged: (v) { if (_searchQuery.isEmpty && v.isNotEmpty) _preSearchScrollOffset = _scrollController.offset; setState(() => _searchQuery = v); _applyFilterAndSort(); if (v.isEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); })),
+          Expanded(flex: 4, child: TextField(
+            controller: _searchController, 
+            focusNode: _searchFocusNode, 
+            decoration: InputDecoration(
+              hintText: "품목코드 검색", 
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), 
+              contentPadding: EdgeInsets.zero, 
+              prefixIcon: const Icon(Icons.search),
+              // ❗ 검색어 지우기 버튼 추가
+              suffixIcon: _searchController.text.isNotEmpty ? IconButton(
+                icon: const Icon(Icons.cancel, size: 18, color: Colors.grey),
+                onPressed: () {
+                  setState(() {
+                    _searchController.clear();
+                    _searchQuery = "";
+                    _applyFilterAndSort();
+                    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset));
+                  });
+                },
+              ) : null,
+            ), 
+            onChanged: (v) { 
+              if (_searchQuery.isEmpty && v.isNotEmpty) _preSearchScrollOffset = _scrollController.offset; 
+              setState(() => _searchQuery = v); 
+              _applyFilterAndSort(); 
+              if (v.isEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); 
+            }
+          )),
           Expanded(flex: 6, child: _buildSummaryWidget(isDark)),
         ])),
         _buildHeader(isDark),
