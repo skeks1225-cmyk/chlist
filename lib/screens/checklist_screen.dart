@@ -375,6 +375,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _remarksIncludeLogic = "AND"; _remarksExcludeLogic = "OR"; _noFilterMode = 0; _temporaryVisibleItem = null;
       _columnFilters.forEach((key, value) => value.clear());
       _showUnfinishedOnly = false; _selectedSectionHeader = null; _isSubheadingViewMode = false;
+      _searchQuery = "";
+      _searchController.clear();
     });
     _applyFilterAndSort();
   }
@@ -761,7 +763,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   void _deleteSelectedRows() {
     if (_selectedIndices.isEmpty) return;
 
-    // ❗ [복구] 삭제 실행 전, 하위 항목을 포함한 최종 삭제 목록을 미리 계산 (안내 문구용)
     final Set<int> finalDeleteIndices = Set.from(_selectedIndices);
     for (int selIdx in _selectedIndices) {
       try {
@@ -792,8 +793,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ❗ [복구] 전체 삭제 수량을 명시적으로 안내
-              Text("선택한 섹션 및 하위 항목 포함 총 ${finalDeleteIndices.length}개를 삭제하시겠습니까?"),
+              Text("선한 섹션 및 하위 항목 포함 총 ${finalDeleteIndices.length}개를 삭제하시겠습니까?"),
               if (!isSmbMode) ...[
                 const SizedBox(height: 15),
                 Row(
@@ -810,7 +810,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             TextButton(
               onPressed: () async {
                 final List<String> pdfsToDelete = [];
-
                 if (shouldDeletePdf) {
                   for (int delIdx in finalDeleteIndices) {
                     try {
@@ -819,7 +818,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     } catch (_) {}
                   }
                 }
-
                 int deletedFileCount = 0;
                 if (shouldDeletePdf && pdfsToDelete.isNotEmpty) {
                   for (String code in pdfsToDelete) {
@@ -829,7 +827,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     }
                   }
                 }
-
                 setState(() { 
                   _originalItems.removeWhere((item) => finalDeleteIndices.contains(item.realIndex)); 
                   _isEditMode = false; 
@@ -837,11 +834,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 }); 
                 _applyFilterAndSort(); 
                 Navigator.pop(ctx); 
-                
                 String msg = "${finalDeleteIndices.length}개 항목 삭제됨";
                 if (deletedFileCount > 0) msg += " (PDF $deletedFileCount개 삭제)";
                 _showSnackBar(msg);
-                
                 if (_autoSave) _manualSave(silent: true); 
               }, 
               child: const Text("삭제", style: TextStyle(color: Colors.red))
@@ -852,7 +847,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  // ❗ [복구] 섹션 선택 토글 (하위 항목 포함 시각적 동기화)
   void _toggleSectionSelection(String headerTitle) {
     String? currentHeader;
     List<int> sectionRealIndices = [];
@@ -874,7 +868,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     });
   }
 
-  // ❗ [복구] 섹션 선택 상태 확인
   bool _isSectionSelected(String header) {
     String? current; List<int> indices = [];
     for (var i in _originalItems) {
@@ -939,7 +932,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(_currentFileName, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)]), backgroundColor: isDark ? Colors.black : Colors.blueGrey[900], foregroundColor: Colors.white, actions: _isEditMode ? [
-        // ❗ 행 삭제 모드에서 보기 모드 전환 버튼 추가
         TextButton(
           onPressed: () { setState(() { _isSubheadingViewMode = !_isSubheadingViewMode; }); _applyFilterAndSort(); },
           child: Text(_isSubheadingViewMode ? "전체보기" : "부분제목만", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
@@ -971,9 +963,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           if (item.isSubheading) {
             return GestureDetector(
               onTap: () {
-                if (_isEditMode) {
-                  _toggleSectionSelection(item.itemCode);
-                } else {
+                if (_isEditMode) { _toggleSectionSelection(item.itemCode); } 
+                else {
                   if (_isSubheadingViewMode) {
                     if (item.realIndex != -1) { setState(() { _selectedSectionHeader = item.itemCode; _isSubheadingViewMode = false; }); _applyFilterAndSort(); } 
                     else setState(() => _isSubheadingViewMode = false);
@@ -989,7 +980,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 child: Row(children: [
                   Expanded(child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))), 
                   if (_selectedSectionHeader == item.itemCode) const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.check_circle, size: 16, color: Colors.blueAccent)),
-                  // ❗ [복구] 체크박스 위치 우측 및 시각적 일괄 선택 상태 반영
                   if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
                 ])
               )
@@ -1066,10 +1056,6 @@ class _RemarksCellState extends State<_RemarksCell> {
     return Stack(alignment: Alignment.centerRight, children: [
       TextField(focusNode: _node, controller: _ctrl, style: const TextStyle(fontSize: 12), decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 4)), onSubmitted: (v) { widget.item.remarks = v; widget.onSave(); widget.onForgetFocus(); }),
       if (_ctrl.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 14), onPressed: () { setState(() => _ctrl.clear()); widget.item.remarks = ""; widget.onSave(); })
-    ]);
-  }
-}
-t.onSave(); })
     ]);
   }
 }
