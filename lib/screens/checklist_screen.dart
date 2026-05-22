@@ -1055,7 +1055,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             Expanded(flex: 5, child: InkWell(onTap: () => _handleItemClick(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), alignment: Alignment.centerLeft, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))),
             SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
             _cellCheck(item.complete, isDark, () { setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); if (_autoSave) _manualSave(silent: true); }),
-            _cellText(item.complement, Colors.orange, isDark, () => _showComplementDialog(item)),
+            _cellComplement(item.complement, isDark, () => _showComplementDialog(item)),
             _cellProcess(item.process, isDark, () => _showProcessDialog(item)),
             Expanded(flex: 3, child: _RemarksCell(item: item, onSave: () { if (_autoSave) _manualSave(silent: true); }, onForgetFocus: _forgetFocus)),
           ]
@@ -1066,6 +1066,25 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Widget _cellCheck(bool val, bool isDark, VoidCallback onTap) { return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: val ? Colors.green.withOpacity(0.3) : null, child: val ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
   Widget _cellText(String txt, Color col, bool isDark, VoidCallback onTap) { return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: txt.isNotEmpty ? col.withOpacity(0.2) : null, child: Center(child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: txt.isNotEmpty ? (isDark?Colors.white:col) : null)))))); }
+  
+  // ❗ 보완 칸 전용 위젯 (Accent Bar 방식)
+  Widget _cellComplement(String txt, bool isDark, VoidCallback onTap) {
+    if (txt.isEmpty) return InkWell(onTap: onTap, child: const SizedBox(width: 50));
+    Color baseColor = (txt == "부족") ? Colors.orange : Colors.red;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 50, 
+        decoration: BoxDecoration(
+          color: baseColor.withOpacity(0.15), 
+          border: Border(left: BorderSide(color: baseColor, width: 4))
+        ),
+        alignment: Alignment.center, 
+        child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)))
+      )
+    );
+  }
   
   Widget _cellProcess(String txt, bool isDark, VoidCallback onTap) {
     int? colorVal = txt.isNotEmpty ? _processColors[txt] : null;
