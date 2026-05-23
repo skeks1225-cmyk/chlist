@@ -384,7 +384,20 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   void _sortBy(String col) {
     _forgetFocus();
     if (col == 'itemCode') {
-      setState(() { if (_currentSortCol == col) _isAscending = !_isAscending; else { _currentSortCol = col; _isAscending = true; } _isSorted = true; });
+      setState(() {
+        if (_currentSortCol == col) {
+          if (_isAscending) {
+            _isAscending = false; // 오름 -> 내림
+          } else {
+            _isSorted = false; // 내림 -> 정렬 해제
+            _currentSortCol = "";
+          }
+        } else {
+          _currentSortCol = col; // 없음 -> 오름
+          _isAscending = true;
+          _isSorted = true;
+        }
+      });
       _applyFilterAndSort();
       return;
     }
@@ -396,13 +409,122 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     _showFilterDialog(col);
   }
 
+  // 특정 컬럼을 제외한 현재 필터 조건에서 유효한 옵션들을 추출하는 헬퍼 함수
+  Set<String> _getValidOptionsForColumn(String col) {
+    Set<String> validSet = {};
+    
+    for (var item in _originalItems) {
+      if (item.isSubheading) continue;
+
+      // 1. 섹션 필터
+      if (_selectedSectionHeader != null) {
+        String? itemHeader;
+        for (var i in _originalItems) {
+          if (i.isSubheading) itemHeader = i.itemCode;
+          if (i == item) break;
+          if (i.isSubheading) itemHeader = i.itemCode;
+        }
+        // 실제로는 루프를 다시 돌기보다 효율적인 방법이 있으나, 정확성을 위해 섹션 확인
+        String? targetHeader;
+        for(var i in _originalItems) {
+          if(i.isSubheading) targetHeader = i.itemCode;
+          if(i == item) break;
+        }
+        if (targetHeader != _selectedSectionHeader) continue;
+      }
+
+      // 2. 검색어 필터
+      if (_searchQuery.isNotEmpty) {
+        final queryParts = _searchQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty);
+        final targetStr = item.itemCode.toLowerCase();
+        if (!queryParts.every((part) => targetStr.contains(part))) continue;
+      }
+
+      // 3. 미완료만 보기
+      if (_showUnfinishedOnly && item.complete) continue;
+
+      // 4. No 필터 모드
+      if (_noFilterMode == 1 && item.no.isEmpty) continue;
+      if (_noFilterMode == 2) {
+        if (!item.displayNo.contains('-')) {
+          if (item.no.isNotEmpty) {
+            bool hasSub = _originalItems.any((other) => !other.isSubheading && other.displayNo.startsWith("${item.no}-"));
+            if (hasSub) continue;
+          } else continue;
+        }
+      }
+
+      // 5. 비고 필터 (포함/제외)
+      if (_remarksFilterQuery.isNotEmpty && col != 'remarks') {
+        final queryParts = _remarksFilterQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty);
+        final targetStr = item.remarks.toLowerCase();
+        bool match = _remarksIncludeLogic == "AND" ? queryParts.every((part) => targetStr.contains(part)) : queryParts.any((part) => targetStr.contains(part));
+        if (!match) continue;
+      }
+      if (_remarksExcludeQuery.isNotEmpty && col != 'remarks') {
+        final excludeParts = _remarksExcludeQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty);
+        final targetStr = item.remarks.toLowerCase();
+        bool shouldExclude = _remarksExcludeLogic == "AND" ? excludeParts.every((part) => targetStr.contains(part)) : excludeParts.any((part) => targetStr.contains(part));
+        if (shouldExclude) continue;
+      }
+
+      // 6. 다른 컬럼 필터들
+      bool passOtherFilters = true;
+      _columnFilters.forEach((c, selectedValues) {
+        if (c == col) return; 
+        if (selectedValues.isNotEmpty || (c == 'quantity' && _quantitySearchQuery.isNotEmpty)) {
+          String val = "";
+          if (c == 'complete') val = item.complete ? "완료" : "미완료";
+          else if (c == 'complement') val = item.complement.isEmpty ? "(빈칸)" : item.complement;
+          else if (c == 'process') val = item.process.isEmpty ? "(빈칸)" : item.process;
+          else if (c == 'quantity') val = item.quantity;
+          
+          bool isSelected = selectedValues.contains(val);
+          if (c == 'quantity' && _quantitySearchQuery.isNotEmpty) {
+            final qParts = _quantitySearchQuery.split(' ').where((p) => p.isNotEmpty);
+            bool qMatch = qParts.any((p) => val == p);
+            isSelected = isSelected || qMatch;
+          }
+          if (!isSelected) passOtherFilters = false;
+        }
+      });
+      if (!passOtherFilters) continue;
+
+      // 모든 필터를 통과했다면 해당 항목의 값을 결과 셋에 추가
+      String val = "";
+      if (col == 'complete') val = item.complete ? "완료" : "미완료";
+      else if (col == 'complement') val = item.complement.isEmpty ? "(빈칸)" : item.complement;
+      else if (col == 'process') val = item.process.isEmpty ? "(빈칸)" : item.process;
+      else if (col == 'quantity') val = item.quantity;
+      validSet.add(val);
+    }
+    return validSet;
+  }
+
   void _showFilterDialog(String col) {
     List<String> options = [];
     String titleText = "";
-    if (col == 'complete') { options = ["완료", "미완료"]; titleText = "완료 설정"; }
-    else if (col == 'complement') { options = ["부족", "재작업", "(빈칸)"]; titleText = "보완 설정"; }
-    else if (col == 'process') { options = _originalItems.where((i) => !i.isSubheading && i.process.isNotEmpty).map((i) => i.process).toSet().toList(); options.sort(); options.add("(빈칸)"); titleText = "공정 설정"; }
-    else if (col == 'quantity') { options = _originalItems.where((i) => !i.isSubheading && i.quantity.isNotEmpty).map((i) => i.quantity).toSet().toList(); options.sort((a, b) => (int.tryParse(a) ?? 0).compareTo(int.tryParse(b) ?? 0)); titleText = "수량 설정"; }
+    
+    Set<String> validOptions = _getValidOptionsForColumn(col);
+
+    if (col == 'complete') { 
+      options = ["완료", "미완료"]; 
+      titleText = "완료 설정"; 
+    }
+    else if (col == 'complement') { 
+      options = ["부족", "재작업", "(빈칸)"]; 
+      titleText = "보완 설정"; 
+    }
+    else if (col == 'process') { 
+      options = validOptions.toList();
+      options.sort();
+      titleText = "공정 설정"; 
+    }
+    else if (col == 'quantity') { 
+      options = validOptions.toList();
+      options.sort((a, b) => (int.tryParse(a) ?? 0).compareTo(int.tryParse(b) ?? 0)); 
+      titleText = "수량 설정"; 
+    }
     else if (col == 'remarks') { titleText = "비고 설정"; }
 
     bool localIsSorted = _isSorted && _currentSortCol == col;
@@ -443,7 +565,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     ] else ...[
                       Row(
                         children: [
-                          Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.addAll(options)), child: const Text("전체 선택", style: TextStyle(fontSize: 12)))),
+                          Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.addAll(options.where((o) => col == 'process' || col == 'quantity' || validOptions.contains(o)))), child: const Text("전체 선택", style: TextStyle(fontSize: 12)))),
                           const SizedBox(width: 8),
                           Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.clear()), child: const Text("전체 해제", style: TextStyle(fontSize: 12)))),
                         ],
@@ -455,7 +577,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         const SizedBox(height: 15),
                       ],
                       const Text("항목 선택", style: TextStyle(fontWeight: FontWeight.bold)),
-                      _buildFilterGrid(options, localFilters, col, setModalState),
+                      _buildFilterGrid(options, localFilters, col, setModalState, validOptions: (col == 'complete' || col == 'complement') ? validOptions : null),
                     ],
                   ],
                 ],
@@ -479,23 +601,32 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  Widget _buildFilterGrid(List<String> options, Set<String> localFilters, String col, StateSetter setModalState) {
+  Widget _buildFilterGrid(List<String> options, Set<String> localFilters, String col, StateSetter setModalState, {Set<String>? validOptions}) {
     return LayoutBuilder(builder: (context, constraints) {
       double itemWidth = col == 'complete' ? constraints.maxWidth / 2 : constraints.maxWidth / 3;
       return Wrap(children: options.map((opt) {
+        bool isValid = validOptions == null || validOptions.contains(opt);
         bool isSel = localFilters.contains(opt);
         return SizedBox(width: itemWidth, child: InkWell(
-          onTap: () => setModalState(() {
+          onTap: !isValid ? null : () => setModalState(() {
             if (col == 'complete') { if (isSel) localFilters.clear(); else { localFilters.clear(); localFilters.add(opt); } }
             else { if (isSel) localFilters.remove(opt); else localFilters.add(opt); }
           }),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Checkbox(value: isSel, onChanged: (v) => setModalState(() {
-              if (col == 'complete') { if (isSel && !v!) localFilters.clear(); else { localFilters.clear(); if (v!) localFilters.add(opt); } }
-              else { if (v!) localFilters.add(opt); else localFilters.remove(opt); }
-            }), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact),
-            Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(opt, style: const TextStyle(fontSize: 12)))),
-          ]),
+          child: Opacity(
+            opacity: isValid ? 1.0 : 0.3,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Checkbox(
+                value: isSel, 
+                onChanged: !isValid ? null : (v) => setModalState(() {
+                  if (col == 'complete') { if (isSel && !v!) localFilters.clear(); else { localFilters.clear(); if (v!) localFilters.add(opt); } }
+                  else { if (v!) localFilters.add(opt); else localFilters.remove(opt); }
+                }), 
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, 
+                visualDensity: VisualDensity.compact
+              ),
+              Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(opt, style: const TextStyle(fontSize: 12)))),
+            ]),
+          ),
         ));
       }).toList());
     });
