@@ -241,9 +241,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       if (active) {
         int? colorVal = widget.processColors[subText];
         if (colorVal != null) color = Color(colorVal);
-        else if (subText == "완료") color = Colors.green;
+        else if (subText == "완료") color = Colors.purple;
       }
     }
     return Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(backgroundColor: active ? color : Colors.grey[400]?.withOpacity(0.5), foregroundColor: active ? Colors.white : Colors.black54, minimumSize: const Size(0, 55), padding: EdgeInsets.zero, elevation: active ? 2 : 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(label, style: TextStyle(fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal, fontSize: subText.isEmpty ? 15 : 12)), if (subText.isNotEmpty) Text(subText, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)]))));
+  }
+}
+ter, children: [Text(label, style: TextStyle(fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal, fontSize: subText.isEmpty ? 15 : 12)), if (subText.isNotEmpty) Text(subText, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)]))));
   }
 }

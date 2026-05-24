@@ -863,7 +863,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   crossAxisSpacing: 8,
                   children: sortedDisplayList.map((p) {
                     int? colorVal = _processColors[p];
-                    Color btnColor = colorVal != null ? Color(colorVal) : (p == "완료" ? Colors.green : Colors.blueGrey[700]!);
+                    Color btnColor;
+                    if (colorVal != null) {
+                      btnColor = Color(colorVal);
+                    } else {
+                      if (p == "완료") btnColor = Colors.purple;
+                      else if (p == "보류") btnColor = Colors.red;
+                      else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnColor = Colors.orange;
+                      else btnColor = Colors.blueGrey[700]!;
+                    }
                     return ElevatedButton(
                       style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white),
                       onPressed: () {
@@ -1354,6 +1362,10 @@ class _RemarksCellState extends State<_RemarksCell> {
     return Stack(alignment: Alignment.centerRight, children: [
       TextField(focusNode: _node, controller: _ctrl, style: const TextStyle(fontSize: 12), decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 4)), onSubmitted: (v) { widget.item.remarks = v; widget.onSave(); widget.onForgetFocus(); }),
       if (_ctrl.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 14), onPressed: () { setState(() => _ctrl.clear()); widget.item.remarks = ""; widget.onSave(); })
+    ]);
+  }
+}
+pty) IconButton(icon: const Icon(Icons.cancel, size: 14), onPressed: () { setState(() => _ctrl.clear()); widget.item.remarks = ""; widget.onSave(); })
     ]);
   }
 }
