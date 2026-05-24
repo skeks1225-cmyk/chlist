@@ -61,6 +61,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Set<String> _selectedSections = {}; // ❗ 다중 선택된 섹션들
   bool _isSubheadingViewMode = false; 
   bool _isReorderMode = false; // ❗ 순서 변경 모드 여부
+  List<ItemModel> _preReorderItems = []; // ❗ 순서 변경 취소용 백업
   int _noFilterMode = 0; // 0:전체, 1:원본No만, 2:하위없는원본+하위만
   ItemModel? _temporaryVisibleItem; 
 
@@ -620,7 +621,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, 
                 visualDensity: VisualDensity.compact
               ),
-              Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(opt, style: const TextStyle(fontSize: 12)))),
+              Expanded(child: FittedBox(child: Text(opt, style: const TextStyle(fontSize: 12)))),
             ]),
           ),
         ));
@@ -1060,11 +1061,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     if (oldIndex == newIndex) return;
 
     List<ItemModel> subheads = _originalItems.where((i) => i.isSubheading).toList();
-    if (oldIndex < 0 || oldIndex >= subheads.length || newIndex < 0 || newIndex >= subheads.length) return;
+    if (oldIndex < 0 || oldIndex >= subheads.length) return;
 
     final targetSub = subheads[oldIndex];
-    final destinationSub = subheads[newIndex];
-
+    
     // 1. 이동할 섹션의 범위 찾기 (하위 항목 포함)
     int startIdx = _originalItems.indexOf(targetSub);
     int endIdx = startIdx + 1;
@@ -1077,10 +1077,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       // 2. 원본 리스트에서 제거
       _originalItems.removeRange(startIdx, endIdx);
 
-      // 3. 삽입 위치 다시 계산 (원본 리스트가 변했으므로)
-      int insertIdx = _originalItems.indexOf(destinationSub);
-      // 만약 아래로 이동하는 경우라면 목적지 섹션의 뒤에 붙일지 앞에 붙일지 결정해야 함
-      // ReorderableListView의 특성상 목적지 인덱스의 앞에 삽입함
+      // 3. 삽입 위치 재계산
+      List<ItemModel> remainingSubheads = _originalItems.where((i) => i.isSubheading).toList();
+      int insertIdx;
+      if (newIndex >= remainingSubheads.length) {
+        insertIdx = _originalItems.length;
+      } else {
+        insertIdx = _originalItems.indexOf(remainingSubheads[newIndex]);
+      }
+      
       _originalItems.insertAll(insertIdx, itemsToMove);
     });
 
@@ -1102,6 +1107,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         backgroundColor: isDark ? Colors.black : Colors.blueGrey[900], 
         foregroundColor: Colors.white, 
         actions: _isReorderMode ? [
+          TextButton(onPressed: () {
+            setState(() {
+              _originalItems = List.from(_preReorderItems);
+              _isReorderMode = false;
+            });
+            _applyFilterAndSort();
+          }, child: const Text("취소", style: TextStyle(color: Colors.white))),
           TextButton(onPressed: () => setState(() => _isReorderMode = false), child: const Text("완료", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
         ] : _isEditMode ? [
           TextButton(
@@ -1135,7 +1147,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), 
               contentPadding: EdgeInsets.zero, 
               prefixIcon: const Icon(Icons.search),
-              // ❗ 검색어 지우기 버튼 추가
               suffixIcon: _searchController.text.isNotEmpty ? IconButton(
                 icon: const Icon(Icons.cancel, size: 18, color: Colors.grey),
                 onPressed: () {
@@ -1176,14 +1187,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               onTap: () {
                 if (_isEditMode) { _toggleSectionSelection(item.itemCode); } 
                 else if (_isSubheadingViewMode) {
-                  // 이름 클릭 시 단일 필터링 (기존 유지)
                   if (item.realIndex != -1) { 
                     setState(() { _selectedSections = {item.itemCode}; _isSubheadingViewMode = false; }); 
                     _applyFilterAndSort(); 
                   } 
                   else setState(() => _isSubheadingViewMode = false);
                 } else {
-                  // 일반 모드에서 헤더 클릭 시 토글 필터
                   setState(() { if (_selectedSections.contains(item.itemCode)) _selectedSections.remove(item.itemCode); else _selectedSections.add(item.itemCode); }); 
                   _applyFilterAndSort();
                 }
@@ -1192,11 +1201,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 height: _subheadingHeight, padding: const EdgeInsets.symmetric(horizontal: 4), alignment: Alignment.centerLeft, 
                 color: _selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300]), 
                 child: Row(children: [
-                  if (_isSubheadingViewMode) Checkbox(
+                  if (_isSubheadingViewMode && !_isEditMode) Checkbox(
                     value: isSectionSel, 
                     onChanged: (v) {
                       setState(() { if (v!) _selectedSections.add(item.itemCode); else _selectedSections.remove(item.itemCode); });
-                      // 체크박스 클릭 시에는 필터링하지 않고 상태만 유지 (하단 바에서 확인 누를 때 필터링)
                     },
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
@@ -1204,9 +1212,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   Expanded(child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))), 
                   if (_selectedSections.contains(item.itemCode) && !_isSubheadingViewMode) const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.check_circle, size: 16, color: Colors.blueAccent)),
                   if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
-                  if (_isSubheadingViewMode) IconButton(
+                  if (_isSubheadingViewMode && !_isEditMode) IconButton(
                     icon: const Icon(Icons.reorder, size: 20, color: Colors.blue),
-                    onPressed: () => setState(() => _isReorderMode = true),
+                    onPressed: () => setState(() {
+                      _preReorderItems = List.from(_originalItems);
+                      _isReorderMode = true;
+                    }),
                     tooltip: "순서 변경",
                   ),
                 ])
@@ -1215,7 +1226,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           }
           return _buildDataRow(item, isDark);
         })),
-        // ❗ 다중 선택 확인 바 (부분제목 보기 모드에서 항목 선택 시 나타남)
         if (_isSubheadingViewMode && _selectedSections.isNotEmpty) Container(
           color: isDark ? Colors.blueGrey[900] : Colors.blueGrey[100],
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1256,7 +1266,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     bool isSel = _selectedIndices.contains(item.realIndex);
     bool isHigh = item.realIndex == _highlightedRealIndex;
     return GestureDetector(
-      // ❗ 편집 모드가 아닐 때는 onTap을 null로 두어 하위 셀(공정, 완료 등)의 터치를 방해하지 않음
       onTap: _isEditMode ? () { 
         setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); 
       } : null, 
@@ -1285,9 +1294,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Widget _cellCheck(bool val, bool isDark, VoidCallback onTap) { return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: val ? Colors.green.withOpacity(0.3) : null, child: val ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
-  Widget _cellText(String txt, Color col, bool isDark, VoidCallback onTap) { return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: txt.isNotEmpty ? col.withOpacity(0.2) : null, child: Center(child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: txt.isNotEmpty ? (isDark?Colors.white:col) : null)))))); }
   
-  // ❗ 보완 칸 전용 위젯 (Accent Bar 방식)
   Widget _cellComplement(String txt, bool isDark, VoidCallback onTap) {
     if (txt.isEmpty) return InkWell(onTap: onTap, child: const SizedBox(width: 50));
     Color baseColor = (txt == "부족") ? Colors.orange : Colors.red;
@@ -1309,8 +1316,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Widget _cellProcess(String txt, bool isDark, VoidCallback onTap) {
     int? colorVal = txt.isNotEmpty ? _processColors[txt] : null;
     Color baseColor = colorVal != null ? Color(colorVal) : (txt == "완료" ? Colors.green : Colors.blueGrey);
-    
-    // ❗ InkWell 대신 GestureDetector(opaque)를 사용하여 터치 신뢰도 향상
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
