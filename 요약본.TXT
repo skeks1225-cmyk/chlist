@@ -8,6 +8,7 @@
    - 핵심 라이브러리 (버전 준수 필수):
      * excel: ^4.0.6 (엑셀 읽기/쓰기)
      * pdfrx: 1.3.5 (PDF 렌더링 - ❗excel과의 호환성을 위해 반드시 이 버전 고정)
+     * flutter_launcher_icons: ^0.13.1 (앱 아이콘 자동 생성 및 관리)
      * jcifs-ng: (안드로이드 네이티브 SMB 통신용 - Kotlin에서 구현)
      * shared_preferences, permission_handler, path, file_picker
 
@@ -73,4 +74,6 @@
 
 9. 파일 시스템 경로
    - 기본 작업 경로: `/storage/emulated/0/Download/CheckSheet/`
+   - 로컬 저장, SMB 다운로드 및 삭제 작업의 기준 폴더.
+/emulated/0/Download/CheckSheet/`
    - 로컬 저장, SMB 다운로드 및 삭제 작업의 기준 폴더.
