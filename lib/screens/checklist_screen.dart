@@ -701,18 +701,30 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                           );
                         },
                       ),
-                      GestureDetector(
-                        onTap: () {
-                          showDialog(context: context, builder: (pCtx) => AlertDialog(
-                            title: Text("${_processList[i]} 색상 선택"),
-                            content: Wrap(spacing: 8, runSpacing: 8, children: palette.map((c) => GestureDetector(
-                              onTap: () { setDialogState(() => _processColors[_processList[i]] = c.value); Navigator.pop(pCtx); },
-                              child: Container(width: 40, height: 40, decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2))),
-                            )).toList()),
-                          ));
-                        },
-                        child: Container(width: 20, height: 20, decoration: BoxDecoration(color: Color(_processColors[_processList[i]] ?? (_processList[i] == "완료" ? Colors.green.value : Colors.blueGrey.value)), shape: BoxShape.circle)),
-                      ),
+                      (() {
+                        Color dotColor;
+                        if (_processColors[_processList[i]] != null) {
+                          dotColor = Color(_processColors[_processList[i]]!);
+                        } else {
+                          String p = _processList[i];
+                          if (p == "완료") dotColor = Colors.purple;
+                          else if (p == "보류") dotColor = Colors.red;
+                          else if (["용접", "도장", "도금", "인쇄"].contains(p)) dotColor = Colors.orange;
+                          else dotColor = Colors.blueGrey;
+                        }
+                        return GestureDetector(
+                          onTap: () {
+                            showDialog(context: context, builder: (pCtx) => AlertDialog(
+                              title: Text("${_processList[i]} 색상 선택"),
+                              content: Wrap(spacing: 8, runSpacing: 8, children: palette.map((c) => GestureDetector(
+                                onTap: () { setDialogState(() => _processColors[_processList[i]] = c.value); Navigator.pop(pCtx); },
+                                child: Container(width: 40, height: 40, decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2))),
+                              )).toList()),
+                            ));
+                          },
+                          child: Container(width: 20, height: 20, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
+                        );
+                      })(),
                     ],
                   ),
                   title: Text(_processList[i], style: const TextStyle(fontSize: 13)), 
@@ -1063,40 +1075,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _showResetConfirm() { _forgetFocus(); if (_originalItems.isEmpty) return; showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("데이터 리셋"), content: const Text("모든 체크와 비고를 지우시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")), TextButton(onPressed: () { setState(() { for (var i in _originalItems) { i.complete = false; i.complement = ""; i.process = ""; i.remarks = ""; } }); if (_autoSave) _manualSave(silent: true); Navigator.pop(ctx); }, child: const Text("예", style: TextStyle(color: Colors.red)))])); }
 
-  // ❗ 부분제목 및 하위 항목 일괄 이동 로직
   void _reorderSubheading(int oldIndex, int newIndex) {
     if (newIndex > oldIndex) newIndex -= 1;
     if (oldIndex == newIndex) return;
-
     List<ItemModel> subheads = _originalItems.where((i) => i.isSubheading).toList();
     if (oldIndex < 0 || oldIndex >= subheads.length) return;
-
     final targetSub = subheads[oldIndex];
-    
-    // 1. 이동할 섹션의 범위 찾기 (하위 항목 포함)
     int startIdx = _originalItems.indexOf(targetSub);
     int endIdx = startIdx + 1;
-    while (endIdx < _originalItems.length && !_originalItems[endIdx].isSubheading) {
-      endIdx++;
-    }
+    while (endIdx < _originalItems.length && !_originalItems[endIdx].isSubheading) { endIdx++; }
     List<ItemModel> itemsToMove = _originalItems.sublist(startIdx, endIdx);
-
     setState(() {
-      // 2. 원본 리스트에서 제거
       _originalItems.removeRange(startIdx, endIdx);
-
-      // 3. 삽입 위치 재계산
       List<ItemModel> remainingSubheads = _originalItems.where((i) => i.isSubheading).toList();
       int insertIdx;
-      if (newIndex >= remainingSubheads.length) {
-        insertIdx = _originalItems.length;
-      } else {
-        insertIdx = _originalItems.indexOf(remainingSubheads[newIndex]);
-      }
-      
+      if (newIndex >= remainingSubheads.length) { insertIdx = _originalItems.length; }
+      else { insertIdx = _originalItems.indexOf(remainingSubheads[newIndex]); }
       _originalItems.insertAll(insertIdx, itemsToMove);
     });
-
     if (_autoSave) _manualSave(silent: true);
     _applyFilterAndSort();
   }
@@ -1115,19 +1111,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         backgroundColor: isDark ? Colors.black : Colors.blueGrey[900], 
         foregroundColor: Colors.white, 
         actions: _isReorderMode ? [
-          TextButton(onPressed: () {
-            setState(() {
-              _originalItems = List.from(_preReorderItems);
-              _isReorderMode = false;
-            });
-            _applyFilterAndSort();
-          }, child: const Text("취소", style: TextStyle(color: Colors.white))),
+          TextButton(onPressed: () { setState(() { _originalItems = List.from(_preReorderItems); _isReorderMode = false; }); _applyFilterAndSort(); }, child: const Text("취소", style: TextStyle(color: Colors.white))),
           TextButton(onPressed: () => setState(() => _isReorderMode = false), child: const Text("완료", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
         ] : _isEditMode ? [
-          TextButton(
-            onPressed: () { setState(() { _isSubheadingViewMode = !_isSubheadingViewMode; }); _applyFilterAndSort(); },
-            child: Text(_isSubheadingViewMode ? "전체보기" : "부분제목만", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
-          ),
+          TextButton(onPressed: () { setState(() { _isSubheadingViewMode = !_isSubheadingViewMode; }); _applyFilterAndSort(); }, child: Text(_isSubheadingViewMode ? "전체보기" : "부분제목만", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
           TextButton.icon(onPressed: _deleteSelectedRows, icon: const Icon(Icons.delete_forever, color: Colors.redAccent), label: Text("확인(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
           TextButton(onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); }), child: const Text("취소", style: TextStyle(color: Colors.white))),
         ] : [
@@ -1155,24 +1142,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), 
               contentPadding: EdgeInsets.zero, 
               prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchController.text.isNotEmpty ? IconButton(
-                icon: const Icon(Icons.cancel, size: 18, color: Colors.grey),
-                onPressed: () {
-                  setState(() {
-                    _searchController.clear();
-                    _searchQuery = "";
-                    _applyFilterAndSort();
-                    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset));
-                  });
-                },
-              ) : null,
+              suffixIcon: _searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchQuery = ""; _applyFilterAndSort(); WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); }); }) : null,
             ), 
-            onChanged: (v) { 
-              if (_searchQuery.isEmpty && v.isNotEmpty) _preSearchScrollOffset = _scrollController.offset; 
-              setState(() => _searchQuery = v); 
-              _applyFilterAndSort(); 
-              if (v.isEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); 
-            }
+            onChanged: (v) { if (_searchQuery.isEmpty && v.isNotEmpty) _preSearchScrollOffset = _scrollController.offset; setState(() => _searchQuery = v); _applyFilterAndSort(); if (v.isEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); }
           )),
           Expanded(flex: 6, child: _buildSummaryWidget(isDark)),
         ])),
@@ -1180,12 +1152,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
           onReorder: _reorderSubheading,
           children: _originalItems.where((i) => i.isSubheading).map((item) {
-            return ListTile(
-              key: ValueKey("reorder-${item.itemCode}"),
-              title: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold)),
-              trailing: const Icon(Icons.drag_handle),
-              tileColor: isDark ? Colors.white10 : Colors.grey[200],
-            );
+            return ListTile(key: ValueKey("reorder-${item.itemCode}"), title: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold)), trailing: const Icon(Icons.drag_handle), tileColor: isDark ? Colors.white10 : Colors.grey[200]);
           }).toList(),
         ) : ListView.builder(controller: _scrollController, itemCount: _displayItems.length, itemBuilder: (ctx, idx) {
           final item = _displayItems[idx];
@@ -1195,39 +1162,21 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               onTap: () {
                 if (_isEditMode) { _toggleSectionSelection(item.itemCode); } 
                 else if (_isSubheadingViewMode) {
-                  if (item.realIndex != -1) { 
-                    setState(() { _selectedSections = {item.itemCode}; _isSubheadingViewMode = false; }); 
-                    _applyFilterAndSort(); 
-                  } 
+                  if (item.realIndex != -1) { setState(() { _selectedSections = {item.itemCode}; _isSubheadingViewMode = false; }); _applyFilterAndSort(); } 
                   else setState(() => _isSubheadingViewMode = false);
                 } else {
-                  setState(() { if (_selectedSections.contains(item.itemCode)) _selectedSections.remove(item.itemCode); else _selectedSections.add(item.itemCode); }); 
-                  _applyFilterAndSort();
+                  setState(() { if (_selectedSections.contains(item.itemCode)) _selectedSections.remove(item.itemCode); else _selectedSections.add(item.itemCode); }); _applyFilterAndSort();
                 }
               }, 
               child: Container(
                 height: _subheadingHeight, padding: const EdgeInsets.symmetric(horizontal: 4), alignment: Alignment.centerLeft, 
                 color: _selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300]), 
                 child: Row(children: [
-                  if (_isSubheadingViewMode && !_isEditMode) Checkbox(
-                    value: isSectionSel, 
-                    onChanged: (v) {
-                      setState(() { if (v!) _selectedSections.add(item.itemCode); else _selectedSections.remove(item.itemCode); });
-                    },
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
+                  if (_isSubheadingViewMode && !_isEditMode) Checkbox(value: isSectionSel, onChanged: (v) { setState(() { if (v!) _selectedSections.add(item.itemCode); else _selectedSections.remove(item.itemCode); }); }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact),
                   Expanded(child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))), 
                   if (_selectedSections.contains(item.itemCode) && !_isSubheadingViewMode) const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.check_circle, size: 16, color: Colors.blueAccent)),
                   if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
-                  if (_isSubheadingViewMode && !_isEditMode) IconButton(
-                    icon: const Icon(Icons.reorder, size: 20, color: Colors.blue),
-                    onPressed: () => setState(() {
-                      _preReorderItems = List.from(_originalItems);
-                      _isReorderMode = true;
-                    }),
-                    tooltip: "순서 변경",
-                  ),
+                  if (_isSubheadingViewMode && !_isEditMode) IconButton(icon: const Icon(Icons.reorder, size: 20, color: Colors.blue), onPressed: () => setState(() { _preReorderItems = List.from(_originalItems); _isReorderMode = true; }), tooltip: "순서 변경"),
                 ])
               )
             );
@@ -1235,22 +1184,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           return _buildDataRow(item, isDark);
         })),
         if (_isSubheadingViewMode && _selectedSections.isNotEmpty) Container(
-          color: isDark ? Colors.blueGrey[900] : Colors.blueGrey[100],
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Text("선택됨: ${_selectedSections.length}개", style: const TextStyle(fontWeight: FontWeight.bold)),
-              const Spacer(),
-              TextButton(onPressed: () => setState(() => _selectedSections.clear()), child: const Text("모두 해제")),
-              TextButton(onPressed: () => setState(() => _selectedSections.clear()), child: const Text("취소", style: TextStyle(color: Colors.red))),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () { setState(() => _isSubheadingViewMode = false); _applyFilterAndSort(); },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-                child: const Text("선택 항목 보기"),
-              ),
-            ],
-          ),
+          color: isDark ? Colors.blueGrey[900] : Colors.blueGrey[100], padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(children: [
+            Text("선택됨: ${_selectedSections.length}개", style: const TextStyle(fontWeight: FontWeight.bold)), const Spacer(),
+            TextButton(onPressed: () => setState(() => _selectedSections.clear()), child: const Text("모두 해제")),
+            TextButton(onPressed: () => setState(() => _selectedSections.clear()), child: const Text("취소", style: TextStyle(color: Colors.red))), const SizedBox(width: 8),
+            ElevatedButton(onPressed: () { setState(() => _isSubheadingViewMode = false); _applyFilterAndSort(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white), child: const Text("선택 항목 보기")),
+          ]),
         ),
         if (_isSyncing) const LinearProgressIndicator(minHeight: 2, color: Colors.orange),
         Offstage(child: TextField(focusNode: _dummyFocusNode, readOnly: true)),
@@ -1274,71 +1214,43 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     bool isSel = _selectedIndices.contains(item.realIndex);
     bool isHigh = item.realIndex == _highlightedRealIndex;
     return GestureDetector(
-      onTap: _isEditMode ? () { 
-        setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); 
-      } : null, 
+      onTap: _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : null, 
       behavior: HitTestBehavior.opaque,
       child: Container(
-        decoration: BoxDecoration(
-          color: isSel ? Colors.blue.withOpacity(0.1) : (item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null), 
-          border: isHigh ? Border.all(color: Colors.blue, width: 2) : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))
-        ), 
+        decoration: BoxDecoration(color: isSel ? Colors.blue.withOpacity(0.1) : (item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null), border: isHigh ? Border.all(color: Colors.blue, width: 2) : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), 
         height: 45,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
-            SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
-            Expanded(flex: 5, child: InkWell(onTap: () => _handleItemClick(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), alignment: Alignment.centerLeft, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))),
-            SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
-            _cellCheck(item.complete, isDark, () { setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); if (_autoSave) _manualSave(silent: true); }),
-            _cellComplement(item.complement, isDark, () => _showComplementDialog(item)),
-            _cellProcess(item.process, isDark, () => _showProcessDialog(item)),
-            Expanded(flex: 3, child: _RemarksCell(item: item, onSave: () { if (_autoSave) _manualSave(silent: true); }, onForgetFocus: _forgetFocus)),
-          ]
-        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
+          SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+          Expanded(flex: 5, child: InkWell(onTap: () => _handleItemClick(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), alignment: Alignment.centerLeft, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))),
+          SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+          _cellCheck(item.complete, isDark, () { setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); if (_autoSave) _manualSave(silent: true); }),
+          _cellComplement(item.complement, isDark, () => _showComplementDialog(item)),
+          _cellProcess(item.process, isDark, () => _showProcessDialog(item)),
+          Expanded(flex: 3, child: _RemarksCell(item: item, onSave: () { if (_autoSave) _manualSave(silent: true); }, onForgetFocus: _forgetFocus)),
+        ]),
       ),
     );
   }
 
   Widget _cellCheck(bool val, bool isDark, VoidCallback onTap) { return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: val ? Colors.green.withOpacity(0.3) : null, child: val ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
-  
   Widget _cellComplement(String txt, bool isDark, VoidCallback onTap) {
     if (txt.isEmpty) return InkWell(onTap: onTap, child: const SizedBox(width: 50));
     Color baseColor = (txt == "부족") ? Colors.orange : Colors.red;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: 50, 
-        decoration: BoxDecoration(
-          color: baseColor.withOpacity(0.15), 
-          border: Border(left: BorderSide(color: baseColor, width: 4))
-        ),
-        alignment: Alignment.center, 
-        child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)))
-      )
-    );
+    return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 50, decoration: BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)))));
   }
-  
   Widget _cellProcess(String txt, bool isDark, VoidCallback onTap) {
     int? colorVal = txt.isNotEmpty ? _processColors[txt] : null;
-    Color baseColor = colorVal != null ? Color(colorVal) : (txt == "완료" ? Colors.green : Colors.blueGrey);
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: 50, 
-        decoration: txt.isEmpty ? const BoxDecoration(color: Colors.transparent) : BoxDecoration(
-          color: baseColor.withOpacity(0.15), 
-          border: Border(left: BorderSide(color: baseColor, width: 4))
-        ),
-        alignment: Alignment.center, 
-        child: txt.isNotEmpty ? FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))) : null
-      )
-    );
+    Color baseColor;
+    if (colorVal != null) { baseColor = Color(colorVal); }
+    else {
+      if (txt == "완료") baseColor = Colors.purple;
+      else if (txt == "보류") baseColor = Colors.red;
+      else if (["용접", "도장", "도금", "인쇄"].contains(txt)) baseColor = Colors.orange;
+      else baseColor = Colors.blueGrey;
+    }
+    return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 50, decoration: txt.isEmpty ? const BoxDecoration(color: Colors.transparent) : BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: txt.isNotEmpty ? FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))) : null));
   }
-
   void _showError(String t, String m) { showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(t), content: Text(m), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))])); }
   void _showSnackBar(String m) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Center(child: Text(m)), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating)); }
   Future<void> _manualSave({bool silent = false}) async { if (_excelPath.isNotEmpty) { bool ok = await _excelService.saveExcel(_excelPath, _originalItems); if (ok && !silent) _showSnackBar("저장 완료"); } }
@@ -1362,10 +1274,6 @@ class _RemarksCellState extends State<_RemarksCell> {
     return Stack(alignment: Alignment.centerRight, children: [
       TextField(focusNode: _node, controller: _ctrl, style: const TextStyle(fontSize: 12), decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 4)), onSubmitted: (v) { widget.item.remarks = v; widget.onSave(); widget.onForgetFocus(); }),
       if (_ctrl.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 14), onPressed: () { setState(() => _ctrl.clear()); widget.item.remarks = ""; widget.onSave(); })
-    ]);
-  }
-}
-pty) IconButton(icon: const Icon(Icons.cancel, size: 14), onPressed: () { setState(() => _ctrl.clear()); widget.item.remarks = ""; widget.onSave(); })
     ]);
   }
 }

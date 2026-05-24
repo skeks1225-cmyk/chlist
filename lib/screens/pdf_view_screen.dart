@@ -160,7 +160,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           children: sortedDisplayList.map((p) {
             // ❗ 지정된 색상 또는 기본색 적용
             int? colorVal = widget.processColors[p];
-            Color btnColor = colorVal != null ? Color(colorVal) : (p == "완료" ? Colors.green : Colors.blueGrey[700]!);
+            Color btnColor;
+            if (colorVal != null) {
+              btnColor = Color(colorVal);
+            } else {
+              if (p == "완료") btnColor = Colors.purple;
+              else if (p == "보류") btnColor = Colors.red;
+              else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnColor = Colors.orange;
+              else btnColor = Colors.blueGrey[700]!;
+            }
             return ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white, textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
               onPressed: () { setState(() { item.process = p; }); widget.onStatusUpdate(item, 'process'); Navigator.pop(ctx); },
@@ -218,7 +226,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
               const SizedBox(width: 8),
               Expanded(child: TextField(controller: _remarksController, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14), decoration: InputDecoration(hintText: "비고...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]), filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100], border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10), suffixIcon: _remarksController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) : null), onChanged: (val) { item.remarks = val; setState(() {}); }, onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); })),
             ])),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [_statusBtn("완료", Colors.green, item.complete, () { widget.onStatusUpdate(item, 'complete'); setState(() {}); }), _statusBtn("보완", Colors.orange, item.complement.isNotEmpty, () => _showComplementDialog(item)), _statusBtn("공정", Colors.blueGrey, item.process.isNotEmpty, () => _showProcessDialog(item))]),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [_statusBtn("완료", Colors.purple, item.complete, () { widget.onStatusUpdate(item, 'complete'); setState(() {}); }), _statusBtn("보완", Colors.orange, item.complement.isNotEmpty, () => _showComplementDialog(item)), _statusBtn("공정", Colors.blueGrey, item.process.isNotEmpty, () => _showProcessDialog(item))]),
             const SizedBox(height: 12),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               ElevatedButton.icon(onPressed: hasPrev ? _prev : null, icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)), style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: hasPrev ? (isDark ? Colors.white : Colors.blueGrey[900]) : Colors.grey)),
@@ -242,11 +250,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         int? colorVal = widget.processColors[subText];
         if (colorVal != null) color = Color(colorVal);
         else if (subText == "완료") color = Colors.purple;
+        else if (subText == "보류") color = Colors.red;
+        else if (["용접", "도장", "도금", "인쇄"].contains(subText)) color = Colors.orange;
       }
     }
     return Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(backgroundColor: active ? color : Colors.grey[400]?.withOpacity(0.5), foregroundColor: active ? Colors.white : Colors.black54, minimumSize: const Size(0, 55), padding: EdgeInsets.zero, elevation: active ? 2 : 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(label, style: TextStyle(fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal, fontSize: subText.isEmpty ? 15 : 12)), if (subText.isNotEmpty) Text(subText, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)]))));
-  }
-}
-ter, children: [Text(label, style: TextStyle(fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal, fontSize: subText.isEmpty ? 15 : 12)), if (subText.isNotEmpty) Text(subText, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)]))));
   }
 }
