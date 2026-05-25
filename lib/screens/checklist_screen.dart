@@ -487,9 +487,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     Set<String> validOptions = _getValidOptionsForColumn(col);
     if (col == 'complete') { options = ["완료", "미완료"]; titleText = "완료 설정"; }
     else if (col == 'complement') { options = ["부족", "재작업", "(빈칸)"]; titleText = "보완 설정"; }
-    else if (col == 'process') { options = validOptions.toList(); options.sort(); titleText = "공정 설정"; }
+    else if (col == 'process') { 
+      // ❗ 공정 필터 순서: (빈칸) -> 설정 > 공정관리 순서 -> 완료(항상 마지막)
+      List<String> baseOrder = List.from(_processList);
+      baseOrder.remove("완료");
+      
+      List<String> finalOrder = [];
+      if (validOptions.contains("(빈칸)")) finalOrder.add("(빈칸)");
+      
+      for (var p in baseOrder) {
+        if (validOptions.contains(p)) finalOrder.add(p);
+      }
+      
+      if (validOptions.contains("완료")) finalOrder.add("완료");
+      
+      options = finalOrder;
+      titleText = "공정 설정"; 
+    }
     else if (col == 'quantity') { options = validOptions.toList(); options.sort((a, b) => (int.tryParse(a) ?? 0).compareTo(int.tryParse(b) ?? 0)); titleText = "수량 설정"; }
     else if (col == 'remarks') { titleText = "비고 설정"; }
+    
     bool localIsSorted = _isSorted && _currentSortCol == col;
     bool localIsAscending = _isAscending;
     Set<String> localFilters = Set.from(_columnFilters[col] ?? {});
@@ -574,19 +591,57 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       content: SizedBox(width: double.maxFinite, height: 450, child: TabBarView(children: [
         SingleChildScrollView(child: Column(children: [const SizedBox(height: 20), TextField(controller: ipController, decoration: const InputDecoration(labelText: "IP 주소", border: OutlineInputBorder())), const SizedBox(height: 10), TextField(controller: userController, decoration: const InputDecoration(labelText: "ID", border: OutlineInputBorder())), const SizedBox(height: 10), TextField(controller: passController, obscureText: obscurePass, decoration: InputDecoration(labelText: "PW", border: const OutlineInputBorder(), suffixIcon: IconButton(icon: Icon(obscurePass ? Icons.visibility : Icons.visibility_off), onPressed: () => setDialogState(() => obscurePass = !obscurePass)))), const SizedBox(height: 20), ElevatedButton.icon(onPressed: () async { String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text); if (err == null) { List<String> shares = await _smbService.listShares(); _showError("성공", "✅ 접속 성공!\n\n[공유 목록]\n${shares.join('\n')}"); } else _showError("오류", "접속 실패: $err"); }, icon: const Icon(Icons.check_circle_outline), label: const Text("접속 테스트"))])),
         Column(children: [
-          Expanded(child: ReorderableListView(onReorder: (o, n) { setDialogState(() { if (n > o) n -= 1; final String item = _processList.removeAt(o); _processList.insert(n, item); }); }, children: [
+          Expanded(child: ReorderableListView(
+            onReorder: (o, n) { 
+              setDialogState(() { 
+                if (n > o) n -= 1; 
+                // ❗ '완료'는 위치 고정 (이동 및 완료 위로 삽입 제한)
+                if (_processList[o] == "완료" || n >= _processList.length) return;
+                final String item = _processList.removeAt(o); 
+                _processList.insert(n, item); 
+              }); 
+            }, 
+            buildDefaultDragHandles: false, // ❗ 드래그 핸들 커스텀 제어
+            children: [
               for (int i = 0; i < _processList.length; i++) 
-                ListTile(key: ValueKey(_processList[i] + i.toString()), dense: true, visualDensity: VisualDensity.compact, contentPadding: const EdgeInsets.symmetric(horizontal: 4), leading: Row(mainAxisSize: MainAxisSize.min, children: [
-                      IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 20), onPressed: () { showDialog(context: context, builder: (confirmCtx) => AlertDialog(title: const Text("공정 삭제"), content: Text("'${_processList[i]}' 공정을 삭제하시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(confirmCtx), child: const Text("취소")), TextButton(onPressed: () { setDialogState(() { _processList.removeAt(i); }); Navigator.pop(confirmCtx); }, child: const Text("삭제", style: TextStyle(color: Colors.red)))])); }),
+                ListTile(
+                  key: ValueKey(_processList[i] + i.toString()), 
+                  dense: true, visualDensity: VisualDensity.compact, 
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4), 
+                  leading: Row(mainAxisSize: MainAxisSize.min, children: [
+                      IconButton(
+                        icon: Icon(Icons.remove_circle_outline, color: _processList[i] == "완료" ? Colors.grey : Colors.red, size: 20), 
+                        onPressed: _processList[i] == "완료" ? null : () { 
+                          showDialog(context: context, builder: (confirmCtx) => AlertDialog(title: const Text("공정 삭제"), content: Text("'${_processList[i]}' 공정을 삭제하시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(confirmCtx), child: const Text("취소")), TextButton(onPressed: () { setDialogState(() { _processList.removeAt(i); }); Navigator.pop(confirmCtx); }, child: const Text("삭제", style: TextStyle(color: Colors.red)))])); 
+                        }
+                      ),
                       (() {
                         Color dotColor;
                         if (_processColors[_processList[i]] != null) dotColor = Color(_processColors[_processList[i]]!);
                         else { String p = _processList[i]; if (p == "완료") dotColor = Colors.purple; else if (p == "보류") dotColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(p)) dotColor = Colors.orange; else dotColor = Colors.blueGrey; }
                         return GestureDetector(onTap: () { showDialog(context: context, builder: (pCtx) => AlertDialog(title: Text("${_processList[i]} 색상 선택"), content: Wrap(spacing: 8, runSpacing: 8, children: palette.map((c) => GestureDetector(onTap: () { setDialogState(() => _processColors[_processList[i]] = c.value); Navigator.pop(pCtx); }, child: Container(width: 40, height: 40, decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2))))).toList()))); }, child: Container(width: 20, height: 20, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)));
                       })(),
-                    ]), title: Text(_processList[i], style: const TextStyle(fontSize: 13)), trailing: const Icon(Icons.drag_handle, size: 20))
+                    ]), 
+                  title: Text(_processList[i], style: TextStyle(fontSize: 13, color: _processList[i] == "완료" ? Colors.purple : null, fontWeight: _processList[i] == "완료" ? FontWeight.bold : null)), 
+                  trailing: _processList[i] == "완료" ? const SizedBox(width: 24) : ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_handle, size: 20)),
+                )
             ])),
-          const Divider(), Row(children: [Expanded(child: TextField(controller: newProcessController, decoration: const InputDecoration(hintText: "공정명 추가", isDense: true))), IconButton(icon: const Icon(Icons.add_box, color: Colors.green, size: 30), onPressed: () { if (newProcessController.text.isNotEmpty) setDialogState(() { _processList.add(newProcessController.text); newProcessController.clear(); }); }), IconButton(icon: const Icon(Icons.color_lens_outlined, color: Colors.orange, size: 30), onPressed: () { setDialogState(() => _processColors.clear()); })]),
+          const Divider(), 
+          Row(children: [
+            Expanded(child: TextField(controller: newProcessController, decoration: const InputDecoration(hintText: "공정명 추가", isDense: true))), 
+            IconButton(icon: const Icon(Icons.add_box, color: Colors.green, size: 30), onPressed: () { 
+              if (newProcessController.text.isNotEmpty) {
+                setDialogState(() { 
+                  // ❗ 신규 공정은 항상 '완료' 바로 위에 추가
+                  int insertIdx = _processList.indexOf("완료");
+                  if (insertIdx != -1) _processList.insert(insertIdx, newProcessController.text);
+                  else _processList.add(newProcessController.text);
+                  newProcessController.clear(); 
+                });
+              }
+            }), 
+            IconButton(icon: const Icon(Icons.color_lens_outlined, color: Colors.orange, size: 30), onPressed: () { setDialogState(() => _processColors.clear()); })
+          ]),
         ]),
       ])),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")), TextButton(onPressed: () async { await prefs.setString('smbIp', ipController.text); await prefs.setString('smbUser', userController.text); await prefs.setString('smbPass', passController.text); await prefs.setStringList('processList', _processList); await prefs.setString('processColors', jsonEncode(_processColors)); _smbService.setConfig(ipController.text, userController.text, passController.text); setState(() {}); Navigator.pop(ctx); }, child: const Text("저장", style: TextStyle(fontWeight: FontWeight.bold)))],
@@ -710,11 +765,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 height: _subheadingHeight, padding: const EdgeInsets.symmetric(horizontal: 4), alignment: Alignment.centerLeft, 
                 color: _selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300]), 
                 child: Row(children: [
-                  // ❗ 핵심: 오직 '부분제목 모드'이면서 '편집모드가 아닐 때'만 체크박스 노출
                   if (_isSubheadingViewMode && !_isEditMode) Checkbox(value: isSectionSel, onChanged: (v) { setState(() { if (v!) _selectedSections.add(item.itemCode); else _selectedSections.remove(item.itemCode); }); }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact),
                   Expanded(child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))), 
                   if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
-                  // ❗ 핵심: 오직 '부분제목 모드'이면서 '편집모드가 아닐 때'만 순서변경 아이콘 노출
                   if (_isSubheadingViewMode && !_isEditMode) IconButton(icon: const Icon(Icons.reorder, size: 20, color: Colors.blue), onPressed: () => setState(() { _preReorderItems = List.from(_originalItems); _isReorderMode = true; }), tooltip: "순서 변경"),
                 ])
               )
