@@ -488,16 +488,23 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     if (col == 'complete') { options = ["완료", "미완료"]; titleText = "완료 설정"; }
     else if (col == 'complement') { options = ["부족", "재작업", "(빈칸)"]; titleText = "보완 설정"; }
     else if (col == 'process') { 
-      // ❗ 공정 필터 순서: (빈칸) -> 설정 > 공정관리 순서 -> 완료(항상 마지막)
-      List<String> baseOrder = List.from(_processList);
-      baseOrder.remove("완료");
-      
+      // ❗ 공정 필터 순서: (빈칸) -> 설정 > 공정관리 순서 -> 미등록 공정(알파벳순) -> 완료(항상 마지막)
       List<String> finalOrder = [];
       if (validOptions.contains("(빈칸)")) finalOrder.add("(빈칸)");
+      
+      List<String> baseOrder = List.from(_processList);
+      baseOrder.remove("완료");
       
       for (var p in baseOrder) {
         if (validOptions.contains(p)) finalOrder.add(p);
       }
+      
+      // 설정에는 없지만 데이터에 존재하는 공정들 추가 (누락 방지)
+      List<String> extraOptions = validOptions.where((opt) => 
+        opt != "(빈칸)" && opt != "완료" && !_processList.contains(opt)
+      ).toList();
+      extraOptions.sort();
+      finalOrder.addAll(extraOptions);
       
       if (validOptions.contains("완료")) finalOrder.add("완료");
       
