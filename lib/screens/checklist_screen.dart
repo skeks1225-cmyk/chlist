@@ -70,7 +70,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   final ScrollController _scrollController = ScrollController();
   int? _highlightedRealIndex;
-  final double _subheadingHeight = 40.0;
+  final double _subheadingHeight = 60.0; // ❗ 40.0 -> 60.0 상향 (2단 레이아웃 대응)
   final double _itemHeight = 45.0;
   double _preSearchScrollOffset = 0.0; 
 
@@ -1008,6 +1008,23 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           final item = _displayItems[idx];
           if (item.isSubheading) {
             bool isSectionSel = _selectedSections.contains(item.itemCode);
+            
+            // 해당 섹션의 요약 정보 계산 (리셋 팝업과 동일 로직)
+            int totalItems = 0;
+            int completedItems = 0;
+            int startIdx = _originalItems.indexOf(item);
+            int sectionSeq = _originalItems.where((i) => i.isSubheading).toList().indexOf(item) + 1;
+            
+            if (startIdx != -1) {
+              for (int j = startIdx + 1; j < _originalItems.length; j++) {
+                if (_originalItems[j].isSubheading) break;
+                totalItems++;
+                if (_originalItems[j].complete) completedItems++;
+              }
+            }
+            double percent = totalItems > 0 ? (completedItems / totalItems * 100) : 0;
+            bool isAllDone = totalItems > 0 && totalItems == completedItems;
+
             return GestureDetector(
               onTap: () {
                 if (_isEditMode) { _toggleSectionSelection(item.itemCode); } 
@@ -1015,11 +1032,67 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 else { setState(() { if (_selectedSections.contains(item.itemCode)) _selectedSections.remove(item.itemCode); else _selectedSections.add(item.itemCode); }); _applyFilterAndSort(); }
               }, 
               child: Container(
-                height: _subheadingHeight, padding: const EdgeInsets.symmetric(horizontal: 4), alignment: Alignment.centerLeft, 
-                color: _selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300]), 
+                height: _subheadingHeight, 
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), 
+                alignment: Alignment.centerLeft, 
+                decoration: BoxDecoration(
+                  color: isAllDone ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green[100]) : (_selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300])),
+                  border: Border(bottom: BorderSide(color: isDark ? Colors.white24 : Colors.grey[400]!, width: 0.5)),
+                ),
                 child: Row(children: [
                   if (_isSubheadingViewMode && !_isEditMode) Checkbox(value: isSectionSel, onChanged: (v) { setState(() { if (v!) _selectedSections.add(item.itemCode); else _selectedSections.remove(item.itemCode); }); }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact),
-                  Expanded(child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))), 
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              "[${sectionSeq.toString().padLeft(2, '0')}]",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                item.itemCode,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            const SizedBox(width: 36),
+                            Icon(Icons.list_alt, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                            const SizedBox(width: 3),
+                            Text("$totalItems개", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                            const SizedBox(width: 10),
+                            Icon(Icons.check_circle_outline, size: 12, color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[700])),
+                            const SizedBox(width: 3),
+                            Text(
+                              "완료 $completedItems개 (${percent.toStringAsFixed(1)}%)",
+                              style: TextStyle(
+                                fontSize: 11, 
+                                color: isAllDone ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                fontWeight: isAllDone ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                            if (isAllDone) ...[
+                              const SizedBox(width: 6),
+                              const Text("🏆", style: TextStyle(fontSize: 11)),
+                            ]
+                          ],
+                        ),
+                      ],
+                    ),
+                  ), 
                   if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
                   if (_isSubheadingViewMode && !_isEditMode) IconButton(icon: const Icon(Icons.reorder, size: 20, color: Colors.blue), onPressed: () => setState(() { _preReorderItems = List.from(_originalItems); _isReorderMode = true; }), tooltip: "순서 변경"),
                 ])
