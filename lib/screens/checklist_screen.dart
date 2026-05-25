@@ -716,42 +716,129 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     if (lastItemCode != null) { bool isDisplayed = _displayItems.any((i) => !i.isSubheading && i.itemCode == lastItemCode); if (!isDisplayed) { final targetItem = _originalItems.firstWhere((i) => !i.isSubheading && i.itemCode == lastItemCode); setState(() { _temporaryVisibleItem = targetItem; }); _applyFilterAndSort(); } WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(lastItemCode)); }
   }
 
-  void _showResetConfirm() { _forgetFocus(); if (_originalItems.isEmpty) return; showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("데이터 리셋"), content: const Text("모든 체크와 비고를 지우시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")), TextButton(onPressed: () { setState(() { for (var i in _originalItems) { i.complete = false; i.complement = ""; i.process = ""; i.remarks = ""; } }); if (_autoSave) _manualSave(silent: true); Navigator.pop(ctx); }, child: const Text("예", style: TextStyle(color: Colors.red)))])); }
-
-  void _showSectionResetConfirm(ItemModel subheadingItem) {
-    String sectionTitle = subheadingItem.itemCode;
+  void _showResetConfirm() {
     _forgetFocus();
+    if (_originalItems.isEmpty) return;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("'$sectionTitle' 리셋"),
-        content: const Text("이 섹션의 모든 체크와 비고를 지우시겠습니까?"),
+        title: const Text("데이터 리셋 범위 선택"),
+        content: const Text("리셋할 범위를 선택해주세요."),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                int startIdx = _originalItems.indexOf(subheadingItem);
-                if (startIdx != -1) {
-                  for (int i = startIdx + 1; i < _originalItems.length; i++) {
-                    if (_originalItems[i].isSubheading) break;
-                    _originalItems[i].complete = false;
-                    _originalItems[i].complement = "";
-                    _originalItems[i].process = "";
-                    _originalItems[i].remarks = "";
-                  }
-                }
-              });
-              _applyFilterAndSort();
-              if (_autoSave) _manualSave(silent: true);
-              Navigator.pop(ctx);
-              _showSnackBar("'$sectionTitle' 섹션이 리셋되었습니다.");
-            },
-            child: const Text("예", style: TextStyle(color: Colors.red)),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _dialogBtn("전체 리셋", Colors.red[700]!, () {
+                Navigator.pop(ctx);
+                _showResetOptions(isAll: true);
+              }),
+              _dialogBtn("부분제목별 리셋", Colors.indigo[800]!, () {
+                Navigator.pop(ctx);
+                _showSectionSelector();
+              }),
+              const Divider(),
+              _dialogBtn("취소", Colors.grey, () => Navigator.pop(ctx)),
+            ],
           )
         ],
       ),
     );
+  }
+
+  void _showSectionSelector() {
+    final subheads = _originalItems.where((i) => i.isSubheading).toList();
+    if (subheads.isEmpty) {
+      _showSnackBar("리셋할 부분제목이 없습니다.");
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("리셋할 부분제목 선택"),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: subheads.length,
+            itemBuilder: (c, i) => ListTile(
+              title: Text(subheads[i].itemCode, style: const TextStyle(fontWeight: FontWeight.bold)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showResetOptions(isAll: false, subheadingItem: subheads[i]);
+              },
+            ),
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))],
+      ),
+    );
+  }
+
+  void _showResetOptions({required bool isAll, ItemModel? subheadingItem}) {
+    bool resetStatus = true;
+    bool resetRemarks = false;
+    String targetName = isAll ? "전체" : "'${subheadingItem?.itemCode}' 섹션";
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          title: Text("$targetName 리셋 설정"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CheckboxListTile(
+                title: const Text("체크상태 초기화"),
+                subtitle: const Text("(완료, 보완, 공정 상태 삭제)"),
+                value: resetStatus,
+                onChanged: (v) => setModalState(() => resetStatus = v!),
+              ),
+              CheckboxListTile(
+                title: const Text("비고란 초기화"),
+                subtitle: const Text("(입력된 메모 일괄 삭제)"),
+                value: resetRemarks,
+                onChanged: (v) => setModalState(() => resetRemarks = v!),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
+            TextButton(
+              onPressed: (!resetStatus && !resetRemarks) ? null : () {
+                _executeReset(isAll: isAll, subheadingItem: subheadingItem, status: resetStatus, remarks: resetRemarks);
+                Navigator.pop(ctx);
+              },
+              child: const Text("리셋 실행", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _executeReset({required bool isAll, ItemModel? subheadingItem, required bool status, required bool remarks}) {
+    setState(() {
+      if (isAll) {
+        for (var i in _originalItems) {
+          if (i.isSubheading) continue;
+          if (status) { i.complete = false; i.complement = ""; i.process = ""; }
+          if (remarks) i.remarks = "";
+        }
+      } else if (subheadingItem != null) {
+        int startIdx = _originalItems.indexOf(subheadingItem);
+        if (startIdx != -1) {
+          for (int i = startIdx + 1; i < _originalItems.length; i++) {
+            if (_originalItems[i].isSubheading) break;
+            if (status) { _originalItems[i].complete = false; _originalItems[i].complement = ""; _originalItems[i].process = ""; }
+            if (remarks) _originalItems[i].remarks = "";
+          }
+        }
+      }
+    });
+    _applyFilterAndSort();
+    if (_autoSave) _manualSave(silent: true);
+    _showSnackBar("리셋이 완료되었습니다.");
   }
 
   void _reorderSubheading(int oldIndex, int newIndex) {
@@ -811,12 +898,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 child: Row(children: [
                   if (_isSubheadingViewMode && !_isEditMode) Checkbox(value: isSectionSel, onChanged: (v) { setState(() { if (v!) _selectedSections.add(item.itemCode); else _selectedSections.remove(item.itemCode); }); }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact),
                   Expanded(child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))), 
-                  if (!_isEditMode && !_isReorderMode)
-                    IconButton(
-                      icon: const Icon(Icons.restart_alt, size: 20, color: Colors.redAccent),
-                      onPressed: () => _showSectionResetConfirm(item),
-                      tooltip: "섹션 리셋",
-                    ),
                   if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
                   if (_isSubheadingViewMode && !_isEditMode) IconButton(icon: const Icon(Icons.reorder, size: 20, color: Colors.blue), onPressed: () => setState(() { _preReorderItems = List.from(_originalItems); _isReorderMode = true; }), tooltip: "순서 변경"),
                 ])
