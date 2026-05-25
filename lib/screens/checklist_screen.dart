@@ -524,6 +524,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Widget _buildFilterGrid(List<String> options, Set<String> localFilters, String col, StateSetter setModalState, {Set<String>? validOptions}) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return LayoutBuilder(builder: (context, constraints) {
       double itemWidth = col == 'complete' ? constraints.maxWidth / 2 : constraints.maxWidth / 3;
       return Wrap(children: options.map((opt) {
