@@ -534,17 +534,27 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           onTap: !isValid ? null : () => setModalState(() { if (col == 'complete') { if (isSel) localFilters.clear(); else { localFilters.clear(); localFilters.add(opt); } } else { if (isSel) localFilters.remove(opt); else localFilters.add(opt); } }),
           child: Opacity(opacity: isValid ? 1.0 : 0.3, child: Row(mainAxisSize: MainAxisSize.min, children: [
             Checkbox(value: isSel, onChanged: !isValid ? null : (v) => setModalState(() { if (col == 'complete') { if (isSel && !v!) localFilters.clear(); else { localFilters.clear(); if (v!) localFilters.add(opt); } } else { if (v!) localFilters.add(opt); else localFilters.remove(opt); } }), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact), 
+            if (col == 'process' && opt != "(빈칸)") 
+              Container(
+                width: 4, 
+                height: 16, 
+                margin: const EdgeInsets.only(right: 4), 
+                decoration: BoxDecoration(
+                  color: (() {
+                    int? colorVal = _processColors[opt];
+                    if (colorVal != null) return Color(colorVal);
+                    if (opt == "완료") return Colors.purple;
+                    if (opt == "보류") return Colors.red;
+                    if (["용접", "도장", "도금", "인쇄"].contains(opt)) return Colors.orange;
+                    return Colors.blueGrey;
+                  })(),
+                  borderRadius: BorderRadius.circular(2)
+                )
+              ),
             Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(opt, style: TextStyle(
               fontSize: 12, 
               fontWeight: col == 'process' ? FontWeight.bold : FontWeight.normal,
-              color: (col == 'process' && opt != "(빈칸)") ? (() {
-                int? colorVal = _processColors[opt];
-                if (colorVal != null) return Color(colorVal);
-                if (opt == "완료") return Colors.purple;
-                if (opt == "보류") return Colors.red;
-                if (["용접", "도장", "도금", "인쇄"].contains(opt)) return Colors.orange;
-                return isDark ? Colors.white70 : Colors.black87;
-              })() : (isDark ? Colors.white : Colors.black87),
+              color: isDark ? Colors.white : Colors.black87,
             )))),
           ])),
         ));
