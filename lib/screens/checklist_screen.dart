@@ -531,7 +531,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         bool isSel = localFilters.contains(opt);
         return SizedBox(width: itemWidth, child: InkWell(
           onTap: !isValid ? null : () => setModalState(() { if (col == 'complete') { if (isSel) localFilters.clear(); else { localFilters.clear(); localFilters.add(opt); } } else { if (isSel) localFilters.remove(opt); else localFilters.add(opt); } }),
-          child: Opacity(opacity: isValid ? 1.0 : 0.3, child: Row(mainAxisSize: MainAxisSize.min, children: [Checkbox(value: isSel, onChanged: !isValid ? null : (v) => setModalState(() { if (col == 'complete') { if (isSel && !v!) localFilters.clear(); else { localFilters.clear(); if (v!) localFilters.add(opt); } } else { if (v!) localFilters.add(opt); else localFilters.remove(opt); } }), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact), Expanded(child: FittedBox(child: Text(opt, style: const TextStyle(fontSize: 12))))])),
+          child: Opacity(opacity: isValid ? 1.0 : 0.3, child: Row(mainAxisSize: MainAxisSize.min, children: [Checkbox(value: isSel, onChanged: !isValid ? null : (v) => setModalState(() { if (col == 'complete') { if (isSel && !v!) localFilters.clear(); else { localFilters.clear(); if (v!) localFilters.add(opt); } } else { if (v!) localFilters.add(opt); else localFilters.remove(opt); } }), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact), Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(opt, style: const TextStyle(fontSize: 12))))])),
         ));
       }).toList());
     });
