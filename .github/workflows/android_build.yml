@@ -29,6 +29,7 @@ jobs:
           flutter clean
           flutter pub get
           flutter build apk --release
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/체크시트.apk
         
       - name: Create Tag
         id: create_tag
@@ -43,7 +44,7 @@ jobs:
         with:
           tag_name: ${{ steps.create_tag.outputs.tag }}
           name: Release ${{ steps.create_tag.outputs.tag }}
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: build/app/outputs/flutter-apk/체크시트.apk
           draft: false
           prerelease: false
         env:
@@ -52,5 +53,5 @@ jobs:
       - name: Upload Main APK (Artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: CheckSheet-Main-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: 체크시트-APK
+          path: build/app/outputs/flutter-apk/체크시트.apk
