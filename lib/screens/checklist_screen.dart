@@ -725,20 +725,35 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         title: const Text("데이터 리셋 범위 선택"),
         content: const Text("리셋할 범위를 선택해주세요."),
         actions: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _dialogBtn("전체 리셋", Colors.red[700]!, () {
-                Navigator.pop(ctx);
-                _showResetOptions(isAll: true);
-              }),
-              _dialogBtn("부분제목별 리셋", Colors.indigo[800]!, () {
-                Navigator.pop(ctx);
-                _showSectionSelector();
-              }),
-              const Divider(),
-              _dialogBtn("취소", Colors.grey, () => Navigator.pop(ctx)),
-            ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50)),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _showResetOptions(isAll: true);
+                  },
+                  child: const Text("전체 리셋"),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo[800], foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50)),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _showSectionSelector();
+                  },
+                  child: const Text("부분제목별 리셋"),
+                ),
+                const Divider(height: 24),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text("취소", style: TextStyle(color: Colors.grey, fontSize: 16)),
+                ),
+              ],
+            ),
           )
         ],
       ),
