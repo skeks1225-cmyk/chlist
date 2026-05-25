@@ -70,7 +70,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   final ScrollController _scrollController = ScrollController();
   int? _highlightedRealIndex;
-  final double _subheadingHeight = 60.0; // ❗ 40.0 -> 60.0 상향 (2단 레이아웃 대응)
+  final double _subheadingHeight = 80.0; // ❗ 60.0 -> 80.0 상향 (3단 고정 레이아웃 대응)
   final double _itemHeight = 45.0;
   double _preSearchScrollOffset = 0.0; 
 
@@ -824,11 +824,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         _showResetOptions(isAll: false, subheadingItem: item);
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        height: 80, // 메인 UI와 동일하게 80px 고정
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         color: isAllDone ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
+                            // 1행: [순번] + 상위 정보 (Fit 적용)
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -842,37 +845,65 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  child: Text(
-                                    item.itemCode,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                    softWrap: true,
+                                  child: SizedBox(
+                                    height: 20,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        line1,
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                const SizedBox(width: 38), // 순번 너비만큼 띄움
-                                Icon(Icons.list_alt, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                                const SizedBox(width: 4),
-                                Text("항목: $totalItems개", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[700])),
-                                const SizedBox(width: 12),
-                                Icon(Icons.check_circle_outline, size: 14, color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[600])),
-                                const SizedBox(width: 4),
-                                Text(
-                                  "완료: $completedItems개 (${percent.toStringAsFixed(1)}%)",
-                                  style: TextStyle(
-                                    fontSize: 12, 
-                                    color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                                    fontWeight: isAllDone ? FontWeight.bold : FontWeight.normal,
+                            // 2행: 하위 상세 정보 (Fit 적용 및 들여쓰기)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 38),
+                              child: SizedBox(
+                                height: 20,
+                                width: double.infinity,
+                                child: line2.isNotEmpty ? FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    line2,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600, 
+                                      fontSize: 13,
+                                      color: isDark ? Colors.white70 : Colors.black87,
+                                    ),
                                   ),
-                                ),
-                                if (isAllDone) ...[
-                                  const SizedBox(width: 8),
-                                  const Text("🏆", style: TextStyle(fontSize: 12)),
-                                ]
-                              ],
+                                ) : const SizedBox.shrink(),
+                              ),
+                            ),
+                            // 3행: 통계 정보 (들여쓰기)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 38),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.list_alt, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                  const SizedBox(width: 4),
+                                  Text("항목: $totalItems개", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                                  const SizedBox(width: 12),
+                                  Icon(Icons.check_circle_outline, size: 14, color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[600])),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    "완료: $completedItems개 (${percent.toStringAsFixed(1)}%)",
+                                    style: TextStyle(
+                                      fontSize: 12, 
+                                      color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                      fontWeight: isAllDone ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                  ),
+                                  if (isAllDone) ...[
+                                    const SizedBox(width: 8),
+                                    const Text("🏆", style: TextStyle(fontSize: 12)),
+                                  ]
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -1009,7 +1040,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           if (item.isSubheading) {
             bool isSectionSel = _selectedSections.contains(item.itemCode);
             
-            // 해당 섹션의 요약 정보 계산 (리셋 팝업과 동일 로직)
+            // 해당 섹션의 요약 정보 계산
             int totalItems = 0;
             int completedItems = 0;
             int startIdx = _originalItems.indexOf(item);
@@ -1025,6 +1056,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             double percent = totalItems > 0 ? (completedItems / totalItems * 100) : 0;
             bool isAllDone = totalItems > 0 && totalItems == completedItems;
 
+            // ❗ 제목 3단 분리 로직 (3번째 언더바 기준)
+            String rawTitle = item.itemCode;
+            List<String> parts = rawTitle.split('_');
+            String line1 = "";
+            String line2 = "";
+            if (parts.length > 3) {
+              line1 = parts.sublist(0, 3).join('_');
+              line2 = parts.sublist(3).join('_');
+            } else {
+              line1 = rawTitle;
+              line2 = "";
+            }
+
             return GestureDetector(
               onTap: () {
                 if (_isEditMode) { _toggleSectionSelection(item.itemCode); } 
@@ -1033,7 +1077,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               }, 
               child: Container(
                 height: _subheadingHeight, 
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), 
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), 
                 alignment: Alignment.centerLeft, 
                 decoration: BoxDecoration(
                   color: isAllDone ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green[100]) : (_selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300])),
@@ -1044,8 +1088,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        // 1행: [순번] + 상위 정보 (Fit 적용)
                         Row(
                           children: [
                             Text(
@@ -1058,37 +1103,65 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                             ),
                             const SizedBox(width: 6),
                             Expanded(
-                              child: Text(
-                                item.itemCode,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                overflow: TextOverflow.ellipsis,
+                              child: SizedBox(
+                                height: 20,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    line1,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                  ),
+                                ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            const SizedBox(width: 36),
-                            Icon(Icons.list_alt, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[700]),
-                            const SizedBox(width: 3),
-                            Text("$totalItems개", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[700])),
-                            const SizedBox(width: 10),
-                            Icon(Icons.check_circle_outline, size: 12, color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[700])),
-                            const SizedBox(width: 3),
-                            Text(
-                              "완료 $completedItems개 (${percent.toStringAsFixed(1)}%)",
-                              style: TextStyle(
-                                fontSize: 11, 
-                                color: isAllDone ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                                fontWeight: isAllDone ? FontWeight.bold : FontWeight.normal,
+                        // 2행: 하위 상세 정보 (모델명 등 - Fit 적용 및 들여쓰기)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 36),
+                          child: SizedBox(
+                            height: 20,
+                            width: double.infinity,
+                            child: line2.isNotEmpty ? FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                line2,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600, 
+                                  fontSize: 13,
+                                  color: isDark ? Colors.white70 : Colors.black87,
+                                ),
                               ),
-                            ),
-                            if (isAllDone) ...[
-                              const SizedBox(width: 6),
-                              const Text("🏆", style: TextStyle(fontSize: 11)),
-                            ]
-                          ],
+                            ) : const SizedBox.shrink(),
+                          ),
+                        ),
+                        // 3행: 통계 정보 (들여쓰기)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 36),
+                          child: Row(
+                            children: [
+                              Icon(Icons.list_alt, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                              const SizedBox(width: 3),
+                              Text("$totalItems개", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                              const SizedBox(width: 10),
+                              Icon(Icons.check_circle_outline, size: 12, color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[600])),
+                              const SizedBox(width: 3),
+                              Text(
+                                "완료 $completedItems개 (${percent.toStringAsFixed(1)}%)",
+                                style: TextStyle(
+                                  fontSize: 11, 
+                                  color: isAllDone ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                  fontWeight: isAllDone ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                              if (isAllDone) ...[
+                                const SizedBox(width: 6),
+                                const Text("🏆", style: TextStyle(fontSize: 11)),
+                              ]
+                            ],
+                          ),
                         ),
                       ],
                     ),
