@@ -818,6 +818,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     double percent = totalItems > 0 ? (completedItems / totalItems * 100) : 0;
                     bool isAllDone = totalItems > 0 && totalItems == completedItems;
 
+                    // ❗ 제목 3단 분리 로직 (3번째 언더바 기준) - 빌드 오류 수정분
+                    String rawTitle = item.itemCode;
+                    List<String> parts = rawTitle.split('_');
+                    String line1 = "";
+                    String line2 = "";
+                    if (parts.length > 3) {
+                      line1 = parts.sublist(0, 3).join('_');
+                      line2 = parts.sublist(3).join('_');
+                    } else {
+                      line1 = rawTitle;
+                      line2 = "";
+                    }
+
                     return InkWell(
                       onTap: () {
                         Navigator.pop(ctx);
