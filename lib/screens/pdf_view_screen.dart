@@ -155,7 +155,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         GridView.count(
           shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2, childAspectRatio: 2.5,
+          crossAxisCount: 3, childAspectRatio: 1.8,
           mainAxisSpacing: 8, crossAxisSpacing: 8,
           children: sortedDisplayList.map((p) {
             // ❗ 지정된 색상 또는 기본색 적용
