@@ -718,6 +718,42 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _showResetConfirm() { _forgetFocus(); if (_originalItems.isEmpty) return; showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("데이터 리셋"), content: const Text("모든 체크와 비고를 지우시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")), TextButton(onPressed: () { setState(() { for (var i in _originalItems) { i.complete = false; i.complement = ""; i.process = ""; i.remarks = ""; } }); if (_autoSave) _manualSave(silent: true); Navigator.pop(ctx); }, child: const Text("예", style: TextStyle(color: Colors.red)))])); }
 
+  void _showSectionResetConfirm(ItemModel subheadingItem) {
+    String sectionTitle = subheadingItem.itemCode;
+    _forgetFocus();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("'$sectionTitle' 리셋"),
+        content: const Text("이 섹션의 모든 체크와 비고를 지우시겠습니까?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                int startIdx = _originalItems.indexOf(subheadingItem);
+                if (startIdx != -1) {
+                  for (int i = startIdx + 1; i < _originalItems.length; i++) {
+                    if (_originalItems[i].isSubheading) break;
+                    _originalItems[i].complete = false;
+                    _originalItems[i].complement = "";
+                    _originalItems[i].process = "";
+                    _originalItems[i].remarks = "";
+                  }
+                }
+              });
+              _applyFilterAndSort();
+              if (_autoSave) _manualSave(silent: true);
+              Navigator.pop(ctx);
+              _showSnackBar("'$sectionTitle' 섹션이 리셋되었습니다.");
+            },
+            child: const Text("예", style: TextStyle(color: Colors.red)),
+          )
+        ],
+      ),
+    );
+  }
+
   void _reorderSubheading(int oldIndex, int newIndex) {
     if (newIndex > oldIndex) newIndex -= 1; if (oldIndex == newIndex) return; List<ItemModel> subheads = _originalItems.where((i) => i.isSubheading).toList(); if (oldIndex < 0 || oldIndex >= subheads.length) return; final targetSub = subheads[oldIndex]; int startIdx = _originalItems.indexOf(targetSub); int endIdx = startIdx + 1; while (endIdx < _originalItems.length && !_originalItems[endIdx].isSubheading) { endIdx++; } List<ItemModel> itemsToMove = _originalItems.sublist(startIdx, endIdx);
     setState(() { _originalItems.removeRange(startIdx, endIdx); List<ItemModel> remainingSubheads = _originalItems.where((i) => i.isSubheading).toList(); int insertIdx; if (newIndex >= remainingSubheads.length) { insertIdx = _originalItems.length; } else { insertIdx = _originalItems.indexOf(remainingSubheads[newIndex]); } _originalItems.insertAll(insertIdx, itemsToMove); });
@@ -775,6 +811,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 child: Row(children: [
                   if (_isSubheadingViewMode && !_isEditMode) Checkbox(value: isSectionSel, onChanged: (v) { setState(() { if (v!) _selectedSections.add(item.itemCode); else _selectedSections.remove(item.itemCode); }); }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact),
                   Expanded(child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))), 
+                  if (!_isEditMode && !_isReorderMode)
+                    IconButton(
+                      icon: const Icon(Icons.restart_alt, size: 20, color: Colors.redAccent),
+                      onPressed: () => _showSectionResetConfirm(item),
+                      tooltip: "섹션 리셋",
+                    ),
                   if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
                   if (_isSubheadingViewMode && !_isEditMode) IconButton(icon: const Icon(Icons.reorder, size: 20, color: Colors.blue), onPressed: () => setState(() { _preReorderItems = List.from(_originalItems); _isReorderMode = true; }), tooltip: "순서 변경"),
                 ])
