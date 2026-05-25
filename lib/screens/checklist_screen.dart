@@ -766,27 +766,109 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _showSnackBar("리셋할 부분제목이 없습니다.");
       return;
     }
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("리셋할 부분제목 선택"),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 300,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: subheads.length,
-            itemBuilder: (c, i) => ListTile(
-              title: Text(subheads[i].itemCode, style: const TextStyle(fontWeight: FontWeight.bold)),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showResetOptions(isAll: false, subheadingItem: subheads[i]);
+      builder: (ctx) {
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
+        return AlertDialog(
+          title: const Text("리셋할 부분제목 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 450, // 정보를 더 많이 담기 위해 높이 상향
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: subheads.length,
+              separatorBuilder: (c, i) => const Divider(height: 1),
+              itemBuilder: (c, i) {
+                final item = subheads[i];
+                
+                // 해당 섹션의 하위 아이템 정보 계산
+                int totalItems = 0;
+                int completedItems = 0;
+                int startIdx = _originalItems.indexOf(item);
+                if (startIdx != -1) {
+                  for (int j = startIdx + 1; j < _originalItems.length; j++) {
+                    if (_originalItems[j].isSubheading) break;
+                    totalItems++;
+                    if (_originalItems[j].complete) completedItems++;
+                  }
+                }
+                
+                double percent = totalItems > 0 ? (completedItems / totalItems * 100) : 0;
+                bool isAllDone = totalItems > 0 && totalItems == completedItems;
+
+                return InkWell(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showResetOptions(isAll: false, subheadingItem: item);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    color: isAllDone ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "[${(i + 1).toString().padLeft(2, '0')}]",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                item.itemCode,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                softWrap: true,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const SizedBox(width: 38), // 순번 너비만큼 띄움
+                            Icon(Icons.list_alt, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                            const SizedBox(width: 4),
+                            Text("항목: $totalItems개", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                            const SizedBox(width: 12),
+                            Icon(Icons.check_circle_outline, size: 14, color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[600])),
+                            const SizedBox(width: 4),
+                            Text(
+                              "완료: $completedItems개 (${percent.toStringAsFixed(1)}%)",
+                              style: TextStyle(
+                                fontSize: 12, 
+                                color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                fontWeight: isAllDone ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                            if (isAllDone) ...[
+                              const SizedBox(width: 8),
+                              const Text("🏆", style: TextStyle(fontSize: 12)),
+                            ]
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
               },
             ),
           ),
-        ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx), 
+              child: const Text("취소", style: TextStyle(fontSize: 16))
+            )
+          ],
+        );
+      },
     );
   }
 
