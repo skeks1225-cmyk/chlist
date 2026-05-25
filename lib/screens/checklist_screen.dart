@@ -883,10 +883,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                                   alignment: Alignment.centerLeft,
                                   child: Text(
                                     line2,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600, 
-                                      fontSize: 13,
-                                      color: isDark ? Colors.white70 : Colors.black87,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold, 
+                                      fontSize: 14,
                                     ),
                                   ),
                                 ) : const SizedBox.shrink(),
@@ -1141,10 +1140,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 line2,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600, 
-                                  fontSize: 13,
-                                  color: isDark ? Colors.white70 : Colors.black87,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold, 
+                                  fontSize: 14,
                                 ),
                               ),
                             ) : const SizedBox.shrink(),
