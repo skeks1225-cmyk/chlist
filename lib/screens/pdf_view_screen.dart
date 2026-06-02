@@ -229,7 +229,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   _searchFocusNode.unfocus();
                   final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog());
                   if (result != null && result.isNotEmpty) {
-                    final target = widget.allItems.cast<ItemModel?>().firstWhere((it) => it?.itemCode == result, orElse: () => null);
+                    // ❗ 데이터 정제 로직 (<NULL> 제거 및 -S 접미사 처리)
+                    String cleaned = result.replaceAll('<NULL>', '').trim();
+                    if (cleaned.endsWith('-S')) cleaned = cleaned.substring(0, cleaned.length - 2);
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("스캔: $result → 정제: $cleaned"), duration: const Duration(seconds: 2)));
+                    }
+
+                    final target = widget.allItems.cast<ItemModel?>().firstWhere((it) => it?.itemCode == cleaned, orElse: () => null);
                     if (target != null) {
                       _jumpToItem(target);
                     } else {

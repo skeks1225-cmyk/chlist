@@ -1044,24 +1044,32 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           _topBtn("리셋", _showResetConfirm, bgColor: Colors.red[700]), const SizedBox(width: 4), _topBtn("저장", () { _forgetFocus(); _manualSave(); }, bgColor: Colors.green[700]),
         ])),
         if (!_isReorderMode) Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: Row(children: [
-          Expanded(flex: 4, child: TextField(controller: _searchController, focusNode: _searchFocusNode, decoration: InputDecoration(hintText: "품목코드 검색", border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: EdgeInsets.zero, prefixIcon: const Icon(Icons.search), suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+          Expanded(flex: 2, child: TextField(controller: _searchController, focusNode: _searchFocusNode, decoration: InputDecoration(hintText: "품목코드 검색", border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 10), prefixIcon: (_searchFocusNode.hasFocus || _searchController.text.isNotEmpty) ? null : const Icon(Icons.search), suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
             if (_searchController.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchQuery = ""; _applyFilterAndSort(); WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); }); }),
             IconButton(icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue), onPressed: () async {
               _forgetFocus();
               final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog());
               if (result != null && result.isNotEmpty) {
+                // ❗ 데이터 정제 로직 (<NULL> 제거 및 -S 접미사 처리)
+                String cleaned = result.replaceAll('<NULL>', '').trim();
+                if (cleaned.endsWith('-S')) cleaned = cleaned.substring(0, cleaned.length - 2);
+                
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("스캔: $result → 정제: $cleaned"), duration: const Duration(seconds: 2)));
+                }
+
                 if (_searchQuery.isEmpty) _preSearchScrollOffset = _scrollController.offset;
                 setState(() {
-                  _searchController.text = result;
-                  _searchQuery = result;
+                  _searchController.text = cleaned;
+                  _searchQuery = cleaned;
                 });
                 _applyFilterAndSort();
-                // ❗ 스캔 후 해당 항목으로 즉시 이동 및 하이라이트
-                WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(result));
+                // ❗ 정제된 항목으로 즉시 이동 및 하이라이트
+                WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(cleaned));
               }
             }),
           ])), onChanged: (v) { if (_searchQuery.isEmpty && v.isNotEmpty) _preSearchScrollOffset = _scrollController.offset; setState(() => _searchQuery = v); _applyFilterAndSort(); if (v.isEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); })),
-          Expanded(flex: 6, child: _buildSummaryWidget(isDark)),
+          Expanded(flex: 1, child: _buildSummaryWidget(isDark)),
         ])),
         if (!_isReorderMode) _buildHeader(isDark),
         Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(onReorder: _reorderSubheading, children: _originalItems.where((i) => i.isSubheading).map((item) => ListTile(key: ValueKey("reorder-${item.itemCode}"), title: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold)), trailing: const Icon(Icons.drag_handle), tileColor: isDark ? Colors.white10 : Colors.grey[200])).toList()) : ListView.builder(controller: _scrollController, itemCount: _displayItems.length, itemBuilder: (ctx, idx) {
