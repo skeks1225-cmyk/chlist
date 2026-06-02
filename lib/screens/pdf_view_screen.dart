@@ -222,7 +222,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           })),
           SafeArea(child: Container(padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8), color: isDark ? Colors.grey[900] : Colors.white, child: Column(children: [
             Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [
-              Expanded(child: TextField(controller: _searchController, focusNode: _searchFocusNode, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14), decoration: InputDecoration(hintText: "코드 검색...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]), prefixIcon: const Icon(Icons.search, size: 18), suffixIcon: _searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchResults = []; }); }) : null, filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100], border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10)), onChanged: _onSearchChanged)),
+              Expanded(child: TextField(controller: _searchController, focusNode: _searchFocusNode, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14), decoration: InputDecoration(hintText: "코드 검색...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]), prefixIcon: const Icon(Icons.search, size: 18), suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (_searchController.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchResults = []; }); }),
+                IconButton(icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue), onPressed: () async {
+                  _searchFocusNode.unfocus();
+                  final String? result = await showDialog<String>(context: context, builder: (_) => const QrScannerDialog());
+                  if (result != null && result.isNotEmpty) {
+                    final target = widget.allItems.cast<ItemModel?>().firstWhere((it) => it?.itemCode == result, orElse: () => null);
+                    if (target != null) {
+                      _jumpToItem(target);
+                    } else {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("해당 품목을 찾을 수 없습니다."), duration: Duration(seconds: 1)));
+                      }
+                    }
+                  }
+                }),
+              ]), filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100], border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10)), onChanged: _onSearchChanged)),
               const SizedBox(width: 8),
               Expanded(child: TextField(controller: _remarksController, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14), decoration: InputDecoration(hintText: "비고...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]), filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100], border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10), suffixIcon: _remarksController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) : null), onChanged: (val) { item.remarks = val; setState(() {}); }, onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); })),
             ])),
