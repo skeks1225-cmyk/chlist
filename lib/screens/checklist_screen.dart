@@ -6,6 +6,7 @@ import '../models/item_model.dart';
 import '../services/excel_service.dart';
 import '../services/smb_service.dart';
 import 'pdf_view_screen.dart';
+import '../widgets/qr_scanner_dialog.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:path/path.dart' as p;

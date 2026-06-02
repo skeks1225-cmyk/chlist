@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart'; 
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
+import '../widgets/qr_scanner_dialog.dart';
 import 'dart:io';
 
 class PdfViewerScreen extends StatefulWidget {
