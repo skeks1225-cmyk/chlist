@@ -226,7 +226,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 if (_searchController.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchResults = []; }); }),
                 IconButton(icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue), onPressed: () async {
                   _searchFocusNode.unfocus();
-                  final String? result = await showDialog<String>(context: context, builder: (_) => const QrScannerDialog());
+                  final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog());
                   if (result != null && result.isNotEmpty) {
                     final target = widget.allItems.cast<ItemModel?>().firstWhere((it) => it?.itemCode == result, orElse: () => null);
                     if (target != null) {

@@ -1047,7 +1047,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             if (_searchController.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchQuery = ""; _applyFilterAndSort(); WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); }); }),
             IconButton(icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue), onPressed: () async {
               _forgetFocus();
-              final String? result = await showDialog<String>(context: context, builder: (_) => const QrScannerDialog());
+              final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog());
               if (result != null && result.isNotEmpty) {
                 if (_searchQuery.isEmpty) _preSearchScrollOffset = _scrollController.offset;
                 setState(() {
