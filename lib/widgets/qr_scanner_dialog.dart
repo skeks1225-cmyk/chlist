@@ -49,13 +49,16 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
         ),
         IconButton(
           icon: ValueListenableBuilder(
-            valueListenable: _controller.torchState,
+            valueListenable: _controller,
             builder: (context, state, child) {
-              switch (state) {
+              switch (state.torchState) {
                 case TorchState.off:
                   return const Icon(Icons.flash_off, color: Colors.grey);
                 case TorchState.on:
                   return const Icon(Icons.flash_on, color: Colors.yellow);
+                case TorchState.unavailable:
+                default:
+                  return const Icon(Icons.flash_off, color: Colors.red);
               }
             },
           ),
