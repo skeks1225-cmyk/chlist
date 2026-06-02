@@ -229,9 +229,14 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   _searchFocusNode.unfocus();
                   final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog());
                   if (result != null && result.isNotEmpty) {
-                    // ❗ 데이터 정제 로직 (<NULL> 제거 및 -S 접미사 처리)
-                    String cleaned = result.replaceAll('<NULL>', '').trim();
-                    if (cleaned.endsWith('-S')) cleaned = cleaned.substring(0, cleaned.length - 2);
+                    // ❗ 데이터 정제 로직 강화 (<NUL>, <NULL> 제거 및 대소문자 무관 -S 처리)
+                    String cleaned = result.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
+                    // 제어 문자 제거
+                    cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');
+
+                    if (cleaned.toUpperCase().endsWith('-S')) {
+                      cleaned = cleaned.substring(0, cleaned.length - 2);
+                    }
 
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("스캔: $result → 정제: $cleaned"), duration: const Duration(seconds: 2)));
