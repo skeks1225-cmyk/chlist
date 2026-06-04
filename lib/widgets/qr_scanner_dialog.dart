@@ -55,7 +55,7 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                   children: [
                     MobileScanner(
                       controller: _controller,
-                      onScannerStarted: (arguments) {
+                      onStart: (arguments) {
                         // ❗ 카메라가 실제로 시작된 직후 줌 적용 및 가림막 해제
                         if (mounted) {
                           _controller.setZoomScale(_currentZoom);
