@@ -56,14 +56,14 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    // ❗ 배율(x) 대신 원천 수치(0.0~1.0)를 직접 표시
-    String zoomText = _currentZoom.toStringAsFixed(1);
+    // ❗ 소수점 두 자리까지 표시하여 정밀도 향상
+    String zoomText = _currentZoom.toStringAsFixed(2);
 
     return AlertDialog(
       title: const Text("바코드/QR 스캔", style: TextStyle(fontWeight: FontWeight.bold)),
       content: SizedBox(
         width: 300,
-        height: 380,
+        height: 400, // ❗ 버튼 2줄 배치를 고려해 높이 약간 상향
         child: Column(
           children: [
             Expanded(
@@ -78,13 +78,11 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                         if (barcodes.isNotEmpty) {
                           final String? code = barcodes.first.rawValue;
                           if (code != null && mounted) {
-                            // ❗ 인식 성공 시에도 현재 줌 값을 포함하여 반환 (동기화 강화)
                             Navigator.pop(context, "CODE:$code|ZOOM:$_currentZoom");
                           }
                         }
                       },
                     ),
-                    // ... (가림막 로직 동일)
                     if (!_isCameraStarted)
                       Container(
                         color: Colors.black,
@@ -92,7 +90,6 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                           child: CircularProgressIndicator(color: Colors.white),
                         ),
                       ),
-                    // 카메라 위 오버레이 UI
                     if (_isCameraStarted)
                       Positioned(
                         top: 10,
@@ -104,7 +101,7 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            "Zoom: $zoomText",
+                            "Zoom: $zoomText", // ❗ 0.xx 형태로 표시
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                         ),
@@ -114,9 +111,8 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
               ),
             ),
             const SizedBox(height: 10),
-            // 줌 컨트롤러 영역
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
               decoration: BoxDecoration(
                 color: isDark ? Colors.white10 : Colors.grey[100],
                 borderRadius: BorderRadius.circular(12),
@@ -136,19 +132,24 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                       onChanged: (val) => _updateZoom(val),
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _zoomQuickBtn("0.0", 0.0),
-                        _zoomQuickBtn("0.2", 0.2),
-                        _zoomQuickBtn("0.4", 0.4),
-                        _zoomQuickBtn("0.6", 0.6),
-                        _zoomQuickBtn("0.8", 0.8),
-                        _zoomQuickBtn("1.0", 1.0),
-                      ],
-                    ),
+                  // ❗ 0.1 단위로 세분화된 버튼들 (Wrap 사용하여 자동 줄바꿈)
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 6,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      _zoomQuickBtn("0.0", 0.0),
+                      _zoomQuickBtn("0.1", 0.1),
+                      _zoomQuickBtn("0.2", 0.2),
+                      _zoomQuickBtn("0.3", 0.3),
+                      _zoomQuickBtn("0.4", 0.4),
+                      _zoomQuickBtn("0.5", 0.5),
+                      _zoomQuickBtn("0.6", 0.6),
+                      _zoomQuickBtn("0.7", 0.7),
+                      _zoomQuickBtn("0.8", 0.8),
+                      _zoomQuickBtn("0.9", 0.9),
+                      _zoomQuickBtn("1.0", 1.0),
+                    ],
                   ),
                 ],
               ),
