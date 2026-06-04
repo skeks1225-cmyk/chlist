@@ -132,23 +132,32 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                       onChanged: (val) => _updateZoom(val),
                     ),
                   ),
-                  // ❗ 0.1 단위로 세분화된 버튼들 (Wrap 사용하여 자동 줄바꿈)
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 6,
-                    alignment: WrapAlignment.center,
+                  // ❗ 0.1 단위로 세분화된 버튼들 (1행: 0.0~0.5 / 2행: 0.6~1.0)
+                  Column(
                     children: [
-                      _zoomQuickBtn("0.0", 0.0),
-                      _zoomQuickBtn("0.1", 0.1),
-                      _zoomQuickBtn("0.2", 0.2),
-                      _zoomQuickBtn("0.3", 0.3),
-                      _zoomQuickBtn("0.4", 0.4),
-                      _zoomQuickBtn("0.5", 0.5),
-                      _zoomQuickBtn("0.6", 0.6),
-                      _zoomQuickBtn("0.7", 0.7),
-                      _zoomQuickBtn("0.8", 0.8),
-                      _zoomQuickBtn("0.9", 0.9),
-                      _zoomQuickBtn("1.0", 1.0),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _zoomQuickBtn("0.0", 0.0),
+                          _zoomQuickBtn("0.1", 0.1),
+                          _zoomQuickBtn("0.2", 0.2),
+                          _zoomQuickBtn("0.3", 0.3),
+                          _zoomQuickBtn("0.4", 0.4),
+                          _zoomQuickBtn("0.5", 0.5),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _zoomQuickBtn("0.6", 0.6),
+                          _zoomQuickBtn("0.7", 0.7),
+                          _zoomQuickBtn("0.8", 0.8),
+                          _zoomQuickBtn("0.9", 0.9),
+                          _zoomQuickBtn("1.0", 1.0),
+                          const SizedBox(width: 40), // ❗ 1행과 균형을 맞추기 위한 빈 공간
+                        ],
+                      ),
                     ],
                   ),
                 ],
