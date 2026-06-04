@@ -26,7 +26,7 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
     });
     // 초기 줌 설정 적용 (약간의 지연 필요할 수 있음)
     Future.delayed(const Duration(milliseconds: 300), () {
-      if (mounted) _controller.setZoom(_currentZoom);
+      if (mounted) _controller.setZoomScale(_currentZoom);
     });
   }
 
@@ -34,7 +34,7 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
     setState(() {
       _currentZoom = value;
     });
-    _controller.setZoom(value);
+    _controller.setZoomScale(value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('scannerZoom', value);
   }
