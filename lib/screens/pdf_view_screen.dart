@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart'; 
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
 import '../widgets/qr_scanner_dialog.dart';
