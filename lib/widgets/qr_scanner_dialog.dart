@@ -11,14 +11,15 @@ class QrScannerDialog extends StatefulWidget {
 }
 
 class _QrScannerDialogState extends State<QrScannerDialog> {
-  late final MobileScannerController _controller;
+  final MobileScannerController _controller = MobileScannerController();
   late double _currentZoom; // 0.0 (1x) ~ 1.0 (3x)
 
   @override
   void initState() {
     super.initState();
     _currentZoom = widget.initialZoom;
-    _controller = MobileScannerController(zoomScale: _currentZoom);
+    // 카메라 시작 시 줌 설정 적용
+    _controller.setZoomScale(_currentZoom);
   }
 
   Future<void> _updateZoom(double value) async {
@@ -26,6 +27,9 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
       _currentZoom = value;
     });
     _controller.setZoomScale(value);
+    // ❗ 설정 저장은 이 다이얼로그가 pop될 때 result와 함께 넘기거나, 
+    // 혹은 여기서 즉시 저장하되 ChecklistScreen의 변수와 동기화가 필요함.
+    // 일단 즉시 저장 유지 (ChecklistScreen의 _scannerZoom은 나중에 로드됨)
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('scannerZoom', value);
   }

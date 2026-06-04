@@ -227,7 +227,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 if (_searchController.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchResults = []; }); }),
                 IconButton(icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue), onPressed: () async {
                   _searchFocusNode.unfocus();
-                  final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog());
+                  final prefs = await SharedPreferences.getInstance();
+                  final double savedZoom = prefs.getDouble('scannerZoom') ?? 0.0;
+                  if (!context.mounted) return;
+                  final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog(initialZoom: savedZoom));
                   if (result != null && result.isNotEmpty) {
                     // ❗ 데이터 정제 로직 강화 (<NUL>, <NULL> 제거 및 대소문자 무관 -S 처리)
                     String cleaned = result.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
