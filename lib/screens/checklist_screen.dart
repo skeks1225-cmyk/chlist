@@ -32,6 +32,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _isLoading = false;
   bool _isSorted = false;
   bool _isSyncing = false;
+  double _scannerZoom = 0.0; // ❗ 스캐너 기본 줌 (0.0=1x, 1.0=3x)
 
   String _currentSortCol = ""; 
   bool _isAscending = true;   
@@ -156,6 +157,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _excelPath = prefs.getString('excelPath') ?? "";
       _pdfFolderPath = prefs.getString('pdfFolderPath') ?? "";
       _autoSave = prefs.getBool('autoSave') ?? true;
+      _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0; // ❗ 줌 설정 로드
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -179,6 +181,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setString('excelPath', _excelPath);
     await prefs.setString('pdfFolderPath', _pdfFolderPath);
     await prefs.setBool('autoSave', _autoSave);
+    await prefs.setDouble('scannerZoom', _scannerZoom); // ❗ 줌 설정 저장
     await prefs.setStringList('processList', _processList);
     await prefs.setString('processColors', jsonEncode(_processColors));
   }
@@ -597,7 +600,42 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     showDialog(context: context, builder: (ctx) => DefaultTabController(length: 2, child: StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
       title: const TabBar(labelColor: Colors.blue, unselectedLabelColor: Colors.grey, tabs: [Tab(icon: Icon(Icons.dns), text: "연결 설정"), Tab(icon: Icon(Icons.settings_suggest), text: "공정 관리")]),
       content: SizedBox(width: double.maxFinite, height: 450, child: TabBarView(children: [
-        SingleChildScrollView(child: Column(children: [const SizedBox(height: 20), TextField(controller: ipController, decoration: const InputDecoration(labelText: "IP 주소", border: OutlineInputBorder())), const SizedBox(height: 10), TextField(controller: userController, decoration: const InputDecoration(labelText: "ID", border: OutlineInputBorder())), const SizedBox(height: 10), TextField(controller: passController, obscureText: obscurePass, decoration: InputDecoration(labelText: "PW", border: const OutlineInputBorder(), suffixIcon: IconButton(icon: Icon(obscurePass ? Icons.visibility : Icons.visibility_off), onPressed: () => setDialogState(() => obscurePass = !obscurePass)))), const SizedBox(height: 20), ElevatedButton.icon(onPressed: () async { String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text); if (err == null) { List<String> shares = await _smbService.listShares(); _showError("성공", "✅ 접속 성공!\n\n[공유 목록]\n${shares.join('\n')}"); } else _showError("오류", "접속 실패: $err"); }, icon: const Icon(Icons.check_circle_outline), label: const Text("접속 테스트"))])),
+        SingleChildScrollView(child: Column(children: [
+          const SizedBox(height: 20), 
+          TextField(controller: ipController, decoration: const InputDecoration(labelText: "IP 주소", border: OutlineInputBorder())), 
+          const SizedBox(height: 10), 
+          TextField(controller: userController, decoration: const InputDecoration(labelText: "ID", border: OutlineInputBorder())), 
+          const SizedBox(height: 10), 
+          TextField(controller: passController, obscureText: obscurePass, decoration: InputDecoration(labelText: "PW", border: const OutlineInputBorder(), suffixIcon: IconButton(icon: Icon(obscurePass ? Icons.visibility : Icons.visibility_off), onPressed: () => setDialogState(() => obscurePass = !obscurePass)))), 
+          const SizedBox(height: 20), 
+          // ❗ 스캐너 줌 설정 UI 추가
+          const Align(alignment: Alignment.centerLeft, child: Text("스캐너 기본 배율 (줌)", style: TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(height: 5),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blueGrey.withOpacity(0.2))),
+            child: Column(children: [
+              Row(children: [
+                const Icon(Icons.zoom_in, size: 20, color: Colors.blue),
+                const SizedBox(width: 10),
+                Expanded(child: Slider(
+                  value: _scannerZoom, min: 0.0, max: 1.0, 
+                  onChanged: (v) => setDialogState(() => _scannerZoom = v),
+                )),
+                Text("${(_scannerZoom * 2.0 + 1.0).toStringAsFixed(1)}x", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+              ]),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                _zoomQuickBtnDialog("1.0", 0.0, setDialogState),
+                _zoomQuickBtnDialog("1.5", 0.25, setDialogState),
+                _zoomQuickBtnDialog("2.0", 0.5, setDialogState),
+                _zoomQuickBtnDialog("2.5", 0.75, setDialogState),
+                _zoomQuickBtnDialog("3.0", 1.0, setDialogState),
+              ]),
+            ]),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton.icon(onPressed: () async { String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text); if (err == null) { List<String> shares = await _smbService.listShares(); _showError("성공", "✅ 접속 성공!\n\n[공유 목록]\n${shares.join('\n')}"); } else _showError("오류", "접속 실패: $err"); }, icon: const Icon(Icons.check_circle_outline), label: const Text("접속 테스트"))
+        ])),
         Column(children: [
           Expanded(child: ReorderableListView(
             onReorder: (o, n) { 
@@ -1238,6 +1276,30 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   void _showSnackBar(String m) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Center(child: Text(m)), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating)); }
   Future<void> _manualSave({bool silent = false}) async { if (_excelPath.isNotEmpty) { bool ok = await _excelService.saveExcel(_excelPath, _originalItems); if (ok && !silent) _showSnackBar("저장 완료"); } }
   int _compareDisplayNo(String a, String b) { List<String> pa = a.split('-'); List<String> pb = b.split('-'); int ma = int.tryParse(pa[0]) ?? 0; int mb = int.tryParse(pb[0]) ?? 0; if (ma != mb) return ma.compareTo(mb); int sa = (pa.length > 1) ? (int.tryParse(pa[1]) ?? 0) : 0; int sb = (pb.length > 1) ? (int.tryParse(pb[1]) ?? 0) : 0; return sa.compareTo(sb); }
+
+  // ❗ 설정 다이얼로그용 줌 퀵 버튼 헬퍼
+  Widget _zoomQuickBtnDialog(String label, double value, StateSetter setDialogState) {
+    bool isSelected = (_scannerZoom - value).abs() < 0.05;
+    return GestureDetector(
+      onTap: () => setDialogState(() => _scannerZoom = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isSelected ? Colors.blue : Colors.grey.withOpacity(0.3)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: isSelected ? Colors.white : Colors.black87,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _RemarksCell extends StatefulWidget {
