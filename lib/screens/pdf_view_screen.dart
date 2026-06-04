@@ -233,7 +233,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   final double currentZoom = prefs.getDouble('scannerZoom') ?? 0.0;
                   
                   if (!context.mounted) return;
-                  final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog(initialZoom: currentZoom));
+                  // ❗ Navigator.push를 사용하여 전체 화면으로 전환
+                  final String? result = await Navigator.push<String>(
+                    context, 
+                    MaterialPageRoute(builder: (_) => QrScannerDialog(initialZoom: currentZoom))
+                  );
+                  
                   if (result != null && result.isNotEmpty) {
                     String? code;
                     
