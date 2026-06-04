@@ -56,7 +56,8 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    String zoomText = (_currentZoom * 2.0 + 1.0).toStringAsFixed(1);
+    // ❗ 배율(x) 대신 원천 수치(0.0~1.0)를 직접 표시
+    String zoomText = _currentZoom.toStringAsFixed(1);
 
     return AlertDialog(
       title: const Text("바코드/QR 스캔", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -77,12 +78,13 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                         if (barcodes.isNotEmpty) {
                           final String? code = barcodes.first.rawValue;
                           if (code != null && mounted) {
-                            Navigator.pop(context, code);
+                            // ❗ 인식 성공 시에도 현재 줌 값을 포함하여 반환 (동기화 강화)
+                            Navigator.pop(context, "CODE:$code|ZOOM:$_currentZoom");
                           }
                         }
                       },
                     ),
-                    // ❗ 카메라 준비 중일 때 표시할 가림막
+                    // ... (가림막 로직 동일)
                     if (!_isCameraStarted)
                       Container(
                         color: Colors.black,
@@ -102,7 +104,7 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            "${zoomText}x",
+                            "Zoom: $zoomText",
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                         ),
@@ -139,11 +141,12 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _zoomQuickBtn("1.0", 0.0),
-                        _zoomQuickBtn("1.5", 0.25),
-                        _zoomQuickBtn("2.0", 0.5),
-                        _zoomQuickBtn("2.5", 0.75),
-                        _zoomQuickBtn("3.0", 1.0),
+                        _zoomQuickBtn("0.0", 0.0),
+                        _zoomQuickBtn("0.2", 0.2),
+                        _zoomQuickBtn("0.4", 0.4),
+                        _zoomQuickBtn("0.6", 0.6),
+                        _zoomQuickBtn("0.8", 0.8),
+                        _zoomQuickBtn("1.0", 1.0),
                       ],
                     ),
                   ),
@@ -155,7 +158,7 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context, "ZOOM:$_currentZoom"), // ❗ 취소 시에도 현재 줌 값 전달 (선택사항)
+          onPressed: () => Navigator.pop(context, "ZOOM:$_currentZoom"),
           child: const Text("취소"),
         ),
         // ... (나머지 IconButton들은 유지)

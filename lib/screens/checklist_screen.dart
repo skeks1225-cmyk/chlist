@@ -1086,20 +1086,40 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             if (_searchController.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchQuery = ""; _applyFilterAndSort(); WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); }); }),
             IconButton(icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue), onPressed: () async {
               _forgetFocus();
+              // ❗ 실행 전 항상 저장소에서 최신 줌 값 로드 (동기화 근본 해결)
+              final prefs = await SharedPreferences.getInstance();
+              _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0;
+              
+              if (!mounted) return;
               final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog(initialZoom: _scannerZoom));
               if (result != null && result.isNotEmpty) {
-                // ❗ 줌 값 업데이트 확인 (취소 시 전달되는 "ZOOM:0.x" 형태 대응)
-                if (result.startsWith("ZOOM:")) {
+                String? code;
+                
+                // ❗ 새로운 반환 형식 대응 (CODE:xxx|ZOOM:0.x 또는 ZOOM:0.x)
+                if (result.startsWith("CODE:")) {
+                  final parts = result.split('|');
+                  code = parts[0].replaceFirst("CODE:", "");
+                  if (parts.length > 1 && parts[1].startsWith("ZOOM:")) {
+                    final double? newZoom = double.tryParse(parts[1].replaceFirst("ZOOM:", ""));
+                    if (newZoom != null) {
+                      setState(() => _scannerZoom = newZoom);
+                    }
+                  }
+                } else if (result.startsWith("ZOOM:")) {
                   final double? newZoom = double.tryParse(result.replaceFirst("ZOOM:", ""));
                   if (newZoom != null) {
                     setState(() => _scannerZoom = newZoom);
-                    _saveSettings(); // 설정 저장
+                    _saveSettings(); 
                   }
                   return;
+                } else {
+                  code = result;
                 }
 
+                if (code == null || code.isEmpty) return;
+
                 // 데이터 정제 로직 강화 (<NUL>, <NULL> 제거 및 대소문자 무관 -S 처리)
-                String cleaned = result.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
+                String cleaned = code.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
                 // 제어 문자 및 보이지 않는 문자 제거 (ASCII 0-31)
                 cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');
                 
