@@ -3,31 +3,22 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class QrScannerDialog extends StatefulWidget {
-  const QrScannerDialog({super.key});
+  final double initialZoom;
+  const QrScannerDialog({super.key, required this.initialZoom});
 
   @override
   State<QrScannerDialog> createState() => _QrScannerDialogState();
 }
 
 class _QrScannerDialogState extends State<QrScannerDialog> {
-  final MobileScannerController _controller = MobileScannerController();
-  double _currentZoom = 0.0; // 0.0 (1x) ~ 1.0 (3x)
+  late final MobileScannerController _controller;
+  late double _currentZoom; // 0.0 (1x) ~ 1.0 (3x)
 
   @override
   void initState() {
     super.initState();
-    _loadZoomSettings();
-  }
-
-  Future<void> _loadZoomSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _currentZoom = prefs.getDouble('scannerZoom') ?? 0.0;
-    });
-    // 초기 줌 설정 적용 (약간의 지연 필요할 수 있음)
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (mounted) _controller.setZoomScale(_currentZoom);
-    });
+    _currentZoom = widget.initialZoom;
+    _controller = MobileScannerController(zoomScale: _currentZoom);
   }
 
   Future<void> _updateZoom(double value) async {

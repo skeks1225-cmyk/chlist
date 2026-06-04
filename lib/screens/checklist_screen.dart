@@ -1086,7 +1086,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             if (_searchController.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchQuery = ""; _applyFilterAndSort(); WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); }); }),
             IconButton(icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue), onPressed: () async {
               _forgetFocus();
-              final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog());
+              final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog(initialZoom: _scannerZoom));
               if (result != null && result.isNotEmpty) {
                 // ❗ 데이터 정제 로직 강화 (<NUL>, <NULL> 제거 및 대소문자 무관 -S 처리)
                 String cleaned = result.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
