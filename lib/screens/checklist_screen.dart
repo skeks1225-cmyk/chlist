@@ -1088,7 +1088,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               _forgetFocus();
               final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog(initialZoom: _scannerZoom));
               if (result != null && result.isNotEmpty) {
-                // ❗ 데이터 정제 로직 강화 (<NUL>, <NULL> 제거 및 대소문자 무관 -S 처리)
+                // ❗ 줌 값 업데이트 확인 (취소 시 전달되는 "ZOOM:0.x" 형태 대응)
+                if (result.startsWith("ZOOM:")) {
+                  final double? newZoom = double.tryParse(result.replaceFirst("ZOOM:", ""));
+                  if (newZoom != null) {
+                    setState(() => _scannerZoom = newZoom);
+                    _saveSettings(); // 설정 저장
+                  }
+                  return;
+                }
+
+                // 데이터 정제 로직 강화 (<NUL>, <NULL> 제거 및 대소문자 무관 -S 처리)
                 String cleaned = result.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
                 // 제어 문자 및 보이지 않는 문자 제거 (ASCII 0-31)
                 cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');

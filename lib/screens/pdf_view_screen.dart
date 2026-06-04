@@ -233,7 +233,17 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   if (!context.mounted) return;
                   final String? result = await showDialog<String>(context: context, builder: (_) => QrScannerDialog(initialZoom: savedZoom));
                   if (result != null && result.isNotEmpty) {
-                    // ❗ 데이터 정제 로직 강화 (<NUL>, <NULL> 제거 및 대소문자 무관 -S 처리)
+                    // ❗ 줌 값 업데이트 확인
+                    if (result.startsWith("ZOOM:")) {
+                      final double? newZoom = double.tryParse(result.replaceFirst("ZOOM:", ""));
+                      if (newZoom != null) {
+                        final prefsSave = await SharedPreferences.getInstance();
+                        await prefsSave.setDouble('scannerZoom', newZoom);
+                      }
+                      return;
+                    }
+
+                    // 데이터 정제 로직 강화 (<NUL>, <NULL> 제거 및 대소문자 무관 -S 처리)
                     String cleaned = result.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
                     // 제어 문자 제거
                     cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');

@@ -12,14 +12,13 @@ class QrScannerDialog extends StatefulWidget {
 
 class _QrScannerDialogState extends State<QrScannerDialog> {
   final MobileScannerController _controller = MobileScannerController();
-  late double _currentZoom; // 0.0 (1x) ~ 1.0 (3x)
+  late double _currentZoom;
+  bool _isCameraStarted = false; // ❗ 카메라 시작 여부 플래그
 
   @override
   void initState() {
     super.initState();
     _currentZoom = widget.initialZoom;
-    // 카메라 시작 시 줌 설정 적용
-    _controller.setZoomScale(_currentZoom);
   }
 
   Future<void> _updateZoom(double value) async {
@@ -27,9 +26,6 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
       _currentZoom = value;
     });
     _controller.setZoomScale(value);
-    // ❗ 설정 저장은 이 다이얼로그가 pop될 때 result와 함께 넘기거나, 
-    // 혹은 여기서 즉시 저장하되 ChecklistScreen의 변수와 동기화가 필요함.
-    // 일단 즉시 저장 유지 (ChecklistScreen의 _scannerZoom은 나중에 로드됨)
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('scannerZoom', value);
   }
@@ -43,14 +39,13 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    // 줌 배율 텍스트 계산 (0.0~1.0 -> 1.0x~3.0x)
     String zoomText = (_currentZoom * 2.0 + 1.0).toStringAsFixed(1);
 
     return AlertDialog(
-      title: const Text("QR 코드 스캔", style: TextStyle(fontWeight: FontWeight.bold)),
+      title: const Text("바코드/QR 스캔", style: TextStyle(fontWeight: FontWeight.bold)), // ❗ 문구 범용으로 수정
       content: SizedBox(
         width: 300,
-        height: 380, // 줌 컨트롤러 공간 확보를 위해 높이 상향
+        height: 380,
         child: Column(
           children: [
             Expanded(
@@ -60,6 +55,15 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                   children: [
                     MobileScanner(
                       controller: _controller,
+                      onScannerStarted: (arguments) {
+                        // ❗ 카메라가 실제로 시작된 직후 줌 적용 및 가림막 해제
+                        if (mounted) {
+                          _controller.setZoomScale(_currentZoom);
+                          setState(() {
+                            _isCameraStarted = true;
+                          });
+                        }
+                      },
                       onDetect: (capture) {
                         final List<Barcode> barcodes = capture.barcodes;
                         if (barcodes.isNotEmpty) {
@@ -70,28 +74,37 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                         }
                       },
                     ),
-                    // 카메라 위 오버레이 UI (줌 배율 표시)
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          "${zoomText}x",
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                    // ❗ 카메라 준비 중일 때 표시할 가림막 (버벅임 방지 트릭)
+                    if (!_isCameraStarted)
+                      Container(
+                        color: Colors.black,
+                        child: const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
                         ),
                       ),
-                    ),
+                    // 카메라 위 오버레이 UI
+                    if (_isCameraStarted)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            "${zoomText}x",
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 10),
-            // 갤럭시 스타일 줌 컨트롤러 영역
+            // 줌 컨트롤러 영역
             Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
@@ -100,7 +113,6 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
               ),
               child: Column(
                 children: [
-                  // 줌 슬라이더
                   SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       trackHeight: 2,
@@ -114,7 +126,6 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                       onChanged: (val) => _updateZoom(val),
                     ),
                   ),
-                  // 퀵 숫자 버튼들
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     child: Row(
@@ -136,9 +147,10 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, "ZOOM:$_currentZoom"), // ❗ 취소 시에도 현재 줌 값 전달 (선택사항)
           child: const Text("취소"),
         ),
+        // ... (나머지 IconButton들은 유지)
         IconButton(
           icon: ValueListenableBuilder(
             valueListenable: _controller,
