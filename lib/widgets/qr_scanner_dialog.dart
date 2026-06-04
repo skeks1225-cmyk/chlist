@@ -11,7 +11,7 @@ class QrScannerDialog extends StatefulWidget {
 }
 
 class _QrScannerDialogState extends State<QrScannerDialog> {
-  final MobileScannerController _controller = MobileScannerController();
+  final MobileScannerController _controller = MobileScannerController(autoStart: false); // ❗ 수동 시작 설정
   late double _currentZoom;
   bool _isCameraStarted = false; // ❗ 카메라 시작 여부 플래그
 
@@ -19,6 +19,23 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
   void initState() {
     super.initState();
     _currentZoom = widget.initialZoom;
+    _startCamera(); // ❗ 비동기 시작 호출
+  }
+
+  Future<void> _startCamera() async {
+    try {
+      // 카메라 시작 대기
+      await _controller.start();
+      if (mounted) {
+        // 시작 직후 즉시 줌 적용
+        await _controller.setZoomScale(_currentZoom);
+        setState(() {
+          _isCameraStarted = true;
+        });
+      }
+    } catch (e) {
+      debugPrint("Scanner Start Error: $e");
+    }
   }
 
   Future<void> _updateZoom(double value) async {
@@ -42,7 +59,7 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
     String zoomText = (_currentZoom * 2.0 + 1.0).toStringAsFixed(1);
 
     return AlertDialog(
-      title: const Text("바코드/QR 스캔", style: TextStyle(fontWeight: FontWeight.bold)), // ❗ 문구 범용으로 수정
+      title: const Text("바코드/QR 스캔", style: TextStyle(fontWeight: FontWeight.bold)),
       content: SizedBox(
         width: 300,
         height: 380,
@@ -55,15 +72,6 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                   children: [
                     MobileScanner(
                       controller: _controller,
-                      onStart: (arguments) {
-                        // ❗ 카메라가 실제로 시작된 직후 줌 적용 및 가림막 해제
-                        if (mounted) {
-                          _controller.setZoomScale(_currentZoom);
-                          setState(() {
-                            _isCameraStarted = true;
-                          });
-                        }
-                      },
                       onDetect: (capture) {
                         final List<Barcode> barcodes = capture.barcodes;
                         if (barcodes.isNotEmpty) {
@@ -74,7 +82,7 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                         }
                       },
                     ),
-                    // ❗ 카메라 준비 중일 때 표시할 가림막 (버벅임 방지 트릭)
+                    // ❗ 카메라 준비 중일 때 표시할 가림막
                     if (!_isCameraStarted)
                       Container(
                         color: Colors.black,
