@@ -767,7 +767,51 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   void _toggleSectionSelection(String headerTitle) { String? currentHeader; List<int> sectionRealIndices = []; for (var item in _originalItems) { if (item.isSubheading) { currentHeader = item.itemCode; if (currentHeader == headerTitle) sectionRealIndices.add(item.realIndex); } else if (currentHeader == headerTitle) sectionRealIndices.add(item.realIndex); } setState(() { bool allSelected = sectionRealIndices.every((idx) => _selectedIndices.contains(idx)); if (allSelected) { for (var idx in sectionRealIndices) _selectedIndices.remove(idx); } else _selectedIndices.addAll(sectionRealIndices); }); }
   bool _isSectionSelected(String header) { String? current; List<int> indices = []; for (var i in _originalItems) { if (i.isSubheading) current = i.itemCode; else if (current == header) indices.add(i.realIndex); } return indices.isNotEmpty && indices.every((idx) => _selectedIndices.contains(idx)); }
 
-  Widget _buildSummaryWidget(bool isDark) { if (_originalItems.isEmpty) return const SizedBox.shrink(); final dataItems = _originalItems.where((i) => !i.isSubheading); int total = dataItems.length; int completed = dataItems.where((i) => i.complete).length; final fItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1); int fTotal = fItems.length; int fComp = fItems.where((i) => i.complete).length; bool isFiltered = total != fTotal || _showUnfinishedOnly; return InkWell(onTap: () { setState(() => _showUnfinishedOnly = !_showUnfinishedOnly); _applyFilterAndSort(); }, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [Text("[전체 $total / 완료 $completed / ${(total>0?(completed/total*100):0).toStringAsFixed(1)}%]", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey[800])), if (isFiltered) Text("[필터 $fTotal / 완료 $fComp / ${(fTotal>0?(fComp/fTotal*100):0).toStringAsFixed(1)}%]", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orangeAccent))]))); }
+  Widget _buildSummaryWidget(bool isDark) {
+    if (_originalItems.isEmpty) return const SizedBox.shrink();
+    final dataItems = _originalItems.where((i) => !i.isSubheading);
+    int total = dataItems.length;
+    int completed = dataItems.where((i) => i.complete).length;
+    int shortage = dataItems.where((i) => i.complement == "부족").length;
+    int rework = dataItems.where((i) => i.complement == "재작업").length;
+
+    final fItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1);
+    int fTotal = fItems.length;
+    int fComp = fItems.where((i) => i.complete).length;
+    int fShortage = fItems.where((i) => i.complement == "부족").length;
+    int fRework = fItems.where((i) => i.complement == "재작업").length;
+
+    bool isFiltered = total != fTotal || _showUnfinishedOnly || _columnFilters.values.any((s) => s.isNotEmpty) || _searchQuery.isNotEmpty;
+
+    String totalStr = "전체 $total / 완료 $completed";
+    if (shortage > 0) totalStr += " / 부족 $shortage";
+    if (rework > 0) totalStr += " / 재작업 $rework";
+    totalStr += " / ${(total > 0 ? (completed / total * 100) : 0).toStringAsFixed(1)}%";
+
+    String filterStr = "";
+    if (isFiltered) {
+      filterStr = "필터 $fTotal / 완료 $fComp";
+      if (fShortage > 0) filterStr += " / 부족 $fShortage";
+      if (fRework > 0) filterStr += " / 재작업 $fRework";
+      filterStr += " / ${(fTotal > 0 ? (fComp / fTotal * 100) : 0).toStringAsFixed(1)}%";
+    }
+
+    return InkWell(
+      onTap: () { setState(() => _showUnfinishedOnly = !_showUnfinishedOnly); _applyFilterAndSort(); },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        alignment: Alignment.centerLeft,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            FittedBox(fit: BoxFit.scaleDown, child: Text("[$totalStr]", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey[800]))),
+            if (isFiltered) FittedBox(fit: BoxFit.scaleDown, child: Text("[$filterStr]", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orangeAccent))),
+          ],
+        ),
+      ),
+    );
+  }
   Widget _topBtn(String label, VoidCallback? onTap, {Color? bgColor}) { return Expanded(child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(backgroundColor: bgColor ?? Colors.blueGrey[700], foregroundColor: Colors.white, minimumSize: const Size(0, 45), padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: FittedBox(child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))))); }
 
   Future<void> _handleItemClick(ItemModel item) async {
@@ -1097,13 +1141,21 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       body: SafeArea(child: Listener(onPointerDown: (_) { _clearHighlight(); _forgetFocus(); if (_temporaryVisibleItem != null) { setState(() { _temporaryVisibleItem = null; }); _applyFilterAndSort(); } }, behavior: HitTestBehavior.translucent, child: Column(children: [
         if (!_isEditMode && !_isReorderMode) Padding(padding: const EdgeInsets.all(8.0), child: Row(children: [
           _topBtn("설정", _openSettings), const SizedBox(width: 4), _topBtn("엑셀선택", () => _pickSource('file')), const SizedBox(width: 4), _topBtn("PDF폴더", () => _pickSource('dir')), const SizedBox(width: 4),
-          _topBtn("부분제목", () { setState(() { _isSubheadingViewMode = !_isSubheadingViewMode; }); _applyFilterAndSort(); }, bgColor: _isSubheadingViewMode ? Colors.blue : Colors.indigo[800]), const SizedBox(width: 4),
+          _topBtn("부분제목", () { 
+            setState(() { 
+              if (_isSubheadingViewMode) {
+                _selectedSections.clear(); // ❗ 모드 해제 시 필터 초기화
+              }
+              _isSubheadingViewMode = !_isSubheadingViewMode; 
+            }); 
+            _applyFilterAndSort(); 
+          }, bgColor: _isSubheadingViewMode ? Colors.blue : Colors.indigo[800]), const SizedBox(width: 4),
           _topBtn("행삭제", () => setState(() => _isEditMode = true), bgColor: Colors.orange[800]), const SizedBox(width: 4),
           if (_pdfFolderPath.startsWith("smb://")) ...[_topBtn("PDF동기화", _isSyncing ? null : _syncAllPdfs, bgColor: Colors.deepOrange[900]), const SizedBox(width: 4)],
           _topBtn("리셋", _showResetConfirm, bgColor: Colors.red[700]), const SizedBox(width: 4), _topBtn("저장", () { _forgetFocus(); _manualSave(); }, bgColor: Colors.green[700]),
         ])),
         if (!_isReorderMode) Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: Row(children: [
-          Expanded(flex: 2, child: TextField(controller: _searchController, focusNode: _searchFocusNode, decoration: InputDecoration(hintText: "품목코드 검색", border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 10), prefixIcon: (_searchFocusNode.hasFocus || _searchController.text.isNotEmpty) ? null : const Icon(Icons.search), suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+          Expanded(flex: 3, child: TextField(controller: _searchController, focusNode: _searchFocusNode, decoration: InputDecoration(hintText: "품목코드 검색", border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 10), prefixIcon: (_searchFocusNode.hasFocus || _searchController.text.isNotEmpty) ? null : const Icon(Icons.search), suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
             if (_searchController.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchQuery = ""; _applyFilterAndSort(); WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); }); }),
             IconButton(icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue), onPressed: () async {
               _forgetFocus();
@@ -1168,10 +1220,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               }
             }),
           ])), onChanged: (v) { if (_searchQuery.isEmpty && v.isNotEmpty) _preSearchScrollOffset = _scrollController.offset; setState(() => _searchQuery = v); _applyFilterAndSort(); if (v.isEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); })),
-          Expanded(flex: 1, child: _buildSummaryWidget(isDark)),
+          Expanded(flex: 2, child: _buildSummaryWidget(isDark)),
         ])),
         if (!_isReorderMode) _buildHeader(isDark),
-        Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(onReorder: _reorderSubheading, children: _originalItems.where((i) => i.isSubheading).map((item) => ListTile(key: ValueKey("reorder-${item.itemCode}"), title: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold)), trailing: const Icon(Icons.drag_handle), tileColor: isDark ? Colors.white10 : Colors.grey[200])).toList()) : ListView.builder(controller: _scrollController, itemCount: _displayItems.length, itemBuilder: (ctx, idx) {
+        Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
+          onReorder: _reorderSubheading, 
+          buildDefaultDragHandles: false, // ❗ 기본 핸들 비활성화
+          children: _originalItems.where((i) => i.isSubheading).toList().asMap().entries.map((entry) {
+            final idx = entry.key;
+            final item = entry.value;
+            return ListTile(
+              key: ValueKey("reorder-${item.itemCode}"), 
+              title: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold)), 
+              trailing: ReorderableDragStartListener(index: idx, child: const Icon(Icons.drag_handle)), // ❗ 즉시 드래그 핸들 적용
+              tileColor: isDark ? Colors.white10 : Colors.grey[200]
+            );
+          }).toList()) : ListView.builder(controller: _scrollController, itemCount: _displayItems.length, itemBuilder: (ctx, idx) {
           final item = _displayItems[idx];
           if (item.isSubheading) {
             bool isSectionSel = _selectedSections.contains(item.itemCode);
