@@ -1164,17 +1164,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           IconButton(onPressed: () { setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red)),
         ]
       ),
-      body: SafeArea(child: Listener(onPointerDown: (_) { 
-        _clearHighlight(); 
-        _forgetFocus(); 
-        setState(() {
-          _trackedItemCode = null; // ❗ 사용자 터치 시 추적 중단
-        });
-        if (_temporaryVisibleItem != null) { 
-          setState(() { _temporaryVisibleItem = null; }); 
-          _applyFilterAndSort(); 
-        } 
-      }, behavior: HitTestBehavior.translucent, child: Column(children: [
+      body: SafeArea(child: Column(children: [
         if (!_isEditMode && !_isReorderMode) Padding(padding: const EdgeInsets.all(8.0), child: Row(children: [
           _topBtn("설정", _openSettings), const SizedBox(width: 4), _topBtn("엑셀선택", () => _pickSource('file')), const SizedBox(width: 4), _topBtn("PDF폴더", () => _pickSource('dir')), const SizedBox(width: 4),
           _topBtn("부분제목", () { 
@@ -1259,7 +1249,18 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           Expanded(flex: 2, child: _buildSummaryWidget(isDark)),
         ])),
         if (!_isReorderMode) _buildHeader(isDark),
-        Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
+        Expanded(child: Listener(onPointerDown: (_) { 
+          // ❗ 리스트 영역 터치 시에만 포커스 해제 (상단 버튼 영역 보호)
+          _clearHighlight(); 
+          _forgetFocus(); 
+          setState(() {
+            _trackedItemCode = null; 
+          });
+          if (_temporaryVisibleItem != null) { 
+            setState(() { _temporaryVisibleItem = null; }); 
+            _applyFilterAndSort(); 
+          } 
+        }, behavior: HitTestBehavior.translucent, child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
           onReorder: _reorderSubheading, 
           buildDefaultDragHandles: false, // ❗ 기본 핸들 비활성화
           children: _originalItems.where((i) => i.isSubheading).toList().asMap().entries.map((entry) {
