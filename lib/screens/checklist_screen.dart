@@ -72,6 +72,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   final ScrollController _scrollController = ScrollController();
   int? _highlightedRealIndex;
+  String? _trackedItemCode; // ❗ 필터가 바뀌어도 기억을 유지할 품목코드
   final double _subheadingHeight = 80.0; // ❗ 60.0 -> 80.0 상향 (3단 고정 레이아웃 대응)
   final double _itemHeight = 45.0;
   double _preSearchScrollOffset = 0.0; 
@@ -373,6 +374,18 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
 
     setState(() { _displayItems = results; });
+
+    // ❗ 필터 변경 후 추적 중인 항목이 리스트에 있다면 자동 포커스 복원
+    if (_trackedItemCode != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _trackedItemCode != null) {
+          final bool exists = _displayItems.any((i) => !i.isSubheading && i.itemCode == _trackedItemCode);
+          if (exists) {
+            _scrollToItem(_trackedItemCode!);
+          }
+        }
+      });
+    }
   }
 
   void _resetSort() {
@@ -817,7 +830,20 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   Future<void> _handleItemClick(ItemModel item) async {
     _forgetFocus(); if (_autoSave) _manualSave(silent: true); if (_pdfFolderPath.startsWith("smb://")) { setState(() => _isLoading = true); try { String shareWithRest = _pdfFolderPath.replaceFirst("smb://", ""); int firstSlash = shareWithRest.indexOf("/"); String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest; String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : ""; String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf"; await _smbService.downloadFile(share, remoteFilePath, "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf"); } catch (_) {} finally { setState(() => _isLoading = false); } }
     if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) it.complement = ""; }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
-    if (lastItemCode != null) { bool isDisplayed = _displayItems.any((i) => !i.isSubheading && i.itemCode == lastItemCode); if (!isDisplayed) { final targetItem = _originalItems.firstWhere((i) => !i.isSubheading && i.itemCode == lastItemCode); setState(() { _temporaryVisibleItem = targetItem; }); _applyFilterAndSort(); } WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(lastItemCode)); }
+    if (lastItemCode != null) { 
+      // ❗ 추적 메모리에 기록
+      setState(() {
+        _trackedItemCode = lastItemCode;
+      });
+      
+      bool isDisplayed = _displayItems.any((i) => !i.isSubheading && i.itemCode == lastItemCode); 
+      if (!isDisplayed) { 
+        final targetItem = _originalItems.firstWhere((i) => !i.isSubheading && i.itemCode == lastItemCode); 
+        setState(() { _temporaryVisibleItem = targetItem; }); 
+        _applyFilterAndSort(); 
+      } 
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(lastItemCode)); 
+    }
   }
 
   void _showResetConfirm() {
@@ -1138,7 +1164,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           IconButton(onPressed: () { setState(() => _autoSave = !_autoSave); _saveSettings(); }, icon: Icon(Icons.save, color: _autoSave ? Colors.green : Colors.red)),
         ]
       ),
-      body: SafeArea(child: Listener(onPointerDown: (_) { _clearHighlight(); _forgetFocus(); if (_temporaryVisibleItem != null) { setState(() { _temporaryVisibleItem = null; }); _applyFilterAndSort(); } }, behavior: HitTestBehavior.translucent, child: Column(children: [
+      body: SafeArea(child: Listener(onPointerDown: (_) { 
+        _clearHighlight(); 
+        _forgetFocus(); 
+        setState(() {
+          _trackedItemCode = null; // ❗ 사용자 터치 시 추적 중단
+        });
+        if (_temporaryVisibleItem != null) { 
+          setState(() { _temporaryVisibleItem = null; }); 
+          _applyFilterAndSort(); 
+        } 
+      }, behavior: HitTestBehavior.translucent, child: Column(children: [
         if (!_isEditMode && !_isReorderMode) Padding(padding: const EdgeInsets.all(8.0), child: Row(children: [
           _topBtn("설정", _openSettings), const SizedBox(width: 4), _topBtn("엑셀선택", () => _pickSource('file')), const SizedBox(width: 4), _topBtn("PDF폴더", () => _pickSource('dir')), const SizedBox(width: 4),
           _topBtn("부분제목", () { 
