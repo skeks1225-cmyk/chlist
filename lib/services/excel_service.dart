@@ -3,7 +3,7 @@ import 'package:excel/excel.dart';
 import '../models/item_model.dart';
 
 class ExcelService {
-  final List<String> _fixedHeader = ['no', '품목코드', '수량', '완료', '보완', '공정', '비고'];
+  final List<String> _fixedHeader = ['no', '품목코드', '수량', '완료', '공정', '보완', '비고'];
 
   Future<List<ItemModel>> loadExcel(String path) async {
     try {
@@ -52,8 +52,8 @@ class ExcelService {
           itemCode: code,
           quantity: qty,
           complete: _getSafe(row, 3).toUpperCase() == "V",
-          complement: _getSafe(row, 4),
-          process: _getSafe(row, 5),
+          process: _getSafe(row, 4),
+          complement: _getSafe(row, 5),
           remarks: _getSafe(row, 6),
           isSubheading: isSub,
           subheadingTitle: isSub ? "" : currentSubheadingTitle, // ❗ 부분제목 저장
@@ -91,8 +91,8 @@ class ExcelService {
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: r), TextCellValue(item.itemCode));
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: r), TextCellValue(item.quantity));
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: r), TextCellValue(item.complete ? "V" : ""));
-        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: r), TextCellValue(item.complement));
-        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: r), TextCellValue(item.process));
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: r), TextCellValue(item.process));
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: r), TextCellValue(item.complement));
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: r), TextCellValue(item.remarks));
       }
 
