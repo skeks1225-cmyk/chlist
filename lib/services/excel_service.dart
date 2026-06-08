@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:excel/excel.dart';
+import 'package:flutter/material.dart';
 import '../models/item_model.dart';
 
 class ExcelService {
@@ -104,6 +105,33 @@ class ExcelService {
       }
       return false;
     } catch (e) {
+      return false;
+    }
+  }
+
+  // ❗ 빈 엑셀 파일 생성 기능 (헤더만 포함)
+  Future<bool> createEmptyExcel(String path) async {
+    try {
+      var excel = Excel.createExcel();
+      String sheetName = "Sheet1";
+      excel.rename(excel.getDefaultSheet()!, sheetName);
+      var sheet = excel[sheetName];
+
+      // 헤더 작성
+      for (int i = 0; i < _fixedHeader.length; i++) {
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0), TextCellValue(_fixedHeader[i]));
+      }
+
+      final fileBytes = excel.save();
+      if (fileBytes != null) {
+        final file = File(path);
+        if (!file.parent.existsSync()) file.parent.createSync(recursive: true);
+        file.writeAsBytesSync(fileBytes, flush: true);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint("Create Excel Error: $e");
       return false;
     }
   }

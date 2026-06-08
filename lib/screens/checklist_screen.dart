@@ -603,7 +603,67 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     });
   }
 
-  Future<void> _pickSource(String mode) async { _forgetFocus(); showModalBottomSheet(context: context, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [ListTile(leading: const Icon(Icons.phone_android), title: const Text("내 휴대폰"), onTap: () { Navigator.pop(ctx); _openCustomPicker(mode); }), ListTile(leading: const Icon(Icons.computer), title: const Text("PC 공유폴더 (SMB)"), onTap: () { Navigator.pop(ctx); _openSmbShares(mode); }), const SizedBox(height: 10)]))); }
+  Future<void> _pickSource(String mode) async {
+    _forgetFocus();
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(leading: const Icon(Icons.phone_android), title: const Text("내 휴대폰"), onTap: () { Navigator.pop(ctx); _openCustomPicker(mode); }),
+            ListTile(leading: const Icon(Icons.computer), title: const Text("PC 공유폴더 (SMB)"), onTap: () { Navigator.pop(ctx); _openSmbShares(mode); }),
+            if (mode == 'file') ...[
+              const Divider(),
+              ListTile(leading: const Icon(Icons.add_box_outlined, color: Colors.blue), title: const Text("새 파일 만들기", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(ctx); _createNewFile(); }),
+            ],
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _createNewFile() {
+    final nameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("새 엑셀 파일 생성"),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(hintText: "파일명 입력 (예: 새체크시트)", suffixText: ".xlsx"),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
+          TextButton(
+            onPressed: () async {
+              String name = nameController.text.trim();
+              if (name.isEmpty) return;
+              if (!name.endsWith(".xlsx")) name += ".xlsx";
+              
+              String newPath = "$_baseDownloadPath/CheckSheet/$name";
+              if (File(newPath).existsSync()) {
+                _showError("생성 실패", "이미 동일한 이름의 파일이 존재합니다.");
+                return;
+              }
+              
+              bool ok = await _excelService.createEmptyExcel(newPath);
+              if (ok) {
+                Navigator.pop(ctx);
+                _loadExcelData(newPath);
+                _showSnackBar("새 파일이 생성되었습니다.");
+              } else {
+                _showError("오류", "파일 생성에 실패했습니다.");
+              }
+            },
+            child: const Text("생성", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _openSettings() async {
     _forgetFocus(); final prefs = await SharedPreferences.getInstance();

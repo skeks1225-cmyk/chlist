@@ -7,7 +7,7 @@ plugins {
 android {
     namespace = "org.example.checksheet"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "28.2.13676358"
+    ndkVersion = "26.1.10909125"
 
     defaultConfig {
         applicationId = "org.example.checksheet"
