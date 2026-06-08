@@ -613,10 +613,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           children: [
             ListTile(leading: const Icon(Icons.phone_android), title: const Text("내 휴대폰"), onTap: () { Navigator.pop(ctx); _openCustomPicker(mode); }),
             ListTile(leading: const Icon(Icons.computer), title: const Text("PC 공유폴더 (SMB)"), onTap: () { Navigator.pop(ctx); _openSmbShares(mode); }),
-            if (mode == 'file') ...[
-              const Divider(),
-              ListTile(leading: const Icon(Icons.add_box_outlined, color: Colors.blue), title: const Text("새 파일 만들기", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(ctx); _createNewFile(); }),
-            ],
             const SizedBox(height: 10),
           ],
         ),
@@ -624,16 +620,32 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  void _createNewFile() {
-    final nameController = TextEditingController();
+  void _createNewFile(String currentPath) {
+    // ❗ 기본 파일명 생성 (체크시트_YYYYMMDD)
+    final now = DateTime.now();
+    final dateStr = "${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}";
+    String baseName = "체크시트_$dateStr";
+    String finalName = baseName;
+    
+    // ❗ 중복 체크 및 자동 넘버링
+    int counter = 1;
+    while (File("$currentPath/$finalName.xlsx").existsSync()) {
+      finalName = "$baseName($counter)";
+      counter++;
+    }
+
+    final nameController = TextEditingController(text: finalName);
+    // ❗ 텍스트 전체 선택 상태로 시작
+    nameController.selection = TextSelection(baseOffset: 0, extentOffset: nameController.text.length);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("새 엑셀 파일 생성"),
         content: TextField(
           controller: nameController,
-          decoration: const InputDecoration(hintText: "파일명 입력 (예: 새체크시트)", suffixText: ".xlsx"),
-          autofocus: true,
+          decoration: const InputDecoration(hintText: "파일명 입력", suffixText: ".xlsx"),
+          autofocus: true, // ❗ 키보드 자동 팝업
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
@@ -643,15 +655,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               if (name.isEmpty) return;
               if (!name.endsWith(".xlsx")) name += ".xlsx";
               
-              String newPath = "$_baseDownloadPath/CheckSheet/$name";
-              if (File(newPath).existsSync()) {
+              String newPath = "$currentPath/$name";
+              if (File(newPath).existsSync() && name != "$finalName.xlsx") {
                 _showError("생성 실패", "이미 동일한 이름의 파일이 존재합니다.");
                 return;
               }
               
               bool ok = await _excelService.createEmptyExcel(newPath);
               if (ok) {
-                Navigator.pop(ctx);
+                Navigator.pop(ctx); // 생성창 닫기
+                if (mounted) Navigator.pop(context); // 탐색기 닫기 (context 사용)
                 _loadExcelData(newPath);
                 _showSnackBar("새 파일이 생성되었습니다.");
               } else {
@@ -809,7 +822,18 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _showFileBrowser(String mode, String initialPath) {
     showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (context, setModalState) { final dir = Directory(initialPath); List<FileSystemEntity> entities = []; try { entities = dir.listSync().where((e) { if (e is Directory) return true; return mode == 'file' ? (e.path.endsWith('.xlsx') || e.path.endsWith('.xls')) : e.path.endsWith('.pdf'); }).toList(); entities.sort((a, b) => p.basename(a.path).toLowerCase().compareTo(p.basename(b.path).toLowerCase())); } catch (_) {}
-      return AlertDialog(title: Text(p.basename(initialPath)), content: SizedBox(width: double.maxFinite, height: 400, child: Column(children: [ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showFileBrowser(mode, p.dirname(initialPath)); }), Expanded(child: ListView.builder(itemCount: entities.length, itemBuilder: (c, i) { final e = entities[i]; final isDir = e is Directory; return ListTile(leading: Icon(isDir ? Icons.folder : Icons.description, color: isDir ? Colors.amber : Colors.blue), title: Text(p.basename(e.path)), onTap: () { if (isDir) { Navigator.pop(ctx); _showFileBrowser(mode, e.path); } else if (mode == 'file') { Navigator.pop(ctx); _loadExcelData(e.path); } }); }))])), actions: [if (mode == 'dir') TextButton(onPressed: () { setState(() => _pdfFolderPath = initialPath); _saveSettings(); Navigator.pop(ctx); }, child: const Text("현재 폴더 선택")), TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))]);
+      return AlertDialog(
+        title: Text(p.basename(initialPath)), 
+        content: SizedBox(width: double.maxFinite, height: 400, child: Column(children: [
+          ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showFileBrowser(mode, p.dirname(initialPath)); }), 
+          Expanded(child: ListView.builder(itemCount: entities.length, itemBuilder: (c, i) { final e = entities[i]; final isDir = e is Directory; return ListTile(leading: Icon(isDir ? Icons.folder : Icons.description, color: isDir ? Colors.amber : Colors.blue), title: Text(p.basename(e.path)), onTap: () { if (isDir) { Navigator.pop(ctx); _showFileBrowser(mode, e.path); } else if (mode == 'file') { Navigator.pop(ctx); _loadExcelData(e.path); } }); }))
+        ])), 
+        actions: [
+          if (mode == 'file') TextButton(onPressed: () => _createNewFile(initialPath), child: const Text("새 파일 만들기", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold))),
+          if (mode == 'dir') TextButton(onPressed: () { setState(() => _pdfFolderPath = initialPath); _saveSettings(); Navigator.pop(ctx); }, child: const Text("현재 폴더 선택")), 
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))
+        ]
+      );
     }));
   }
 
