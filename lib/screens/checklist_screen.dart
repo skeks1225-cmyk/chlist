@@ -158,7 +158,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _excelPath = prefs.getString('excelPath') ?? "";
       _pdfFolderPath = prefs.getString('pdfFolderPath') ?? "";
       _autoSave = prefs.getBool('autoSave') ?? true;
-      _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0; // ❗ 줌 설정 로드
+      _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0;
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -173,8 +173,38 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           _processColors = decoded.map((key, value) => MapEntry(key, value as int));
         } catch (_) { _processColors = {}; }
       } else { _processColors = {}; }
+
+      // ❗ 필터 상태 복구
+      _searchQuery = prefs.getString('filter_searchQuery') ?? "";
+      _searchController.text = _searchQuery;
+      _currentSortCol = prefs.getString('filter_currentSortCol') ?? "";
+      _isAscending = prefs.getBool('filter_isAscending') ?? true;
+      _isSorted = prefs.getBool('filter_isSorted') ?? false;
+      _showUnfinishedOnly = prefs.getBool('filter_showUnfinishedOnly') ?? false;
+      _isSubheadingViewMode = prefs.getBool('filter_isSubheadingViewMode') ?? false;
+      _noFilterMode = prefs.getInt('filter_noFilterMode') ?? 0;
+      _remarksFilterQuery = prefs.getString('filter_remarksFilterQuery') ?? "";
+      _remarksExcludeQuery = prefs.getString('filter_remarksExcludeQuery') ?? "";
+      _remarksIncludeLogic = prefs.getString('filter_remarksIncludeLogic') ?? "AND";
+      _remarksExcludeLogic = prefs.getString('filter_remarksExcludeLogic') ?? "OR";
+      _quantitySearchQuery = prefs.getString('filter_quantitySearchQuery') ?? "";
+
+      String? colFilterJson = prefs.getString('filter_columnFilters');
+      if (colFilterJson != null) {
+        try {
+          Map<String, dynamic> decoded = jsonDecode(colFilterJson);
+          decoded.forEach((key, value) {
+            if (_columnFilters.containsKey(key)) {
+              _columnFilters[key] = (value as List).map((e) => e.toString()).toSet();
+            }
+          });
+        } catch (_) {}
+      }
+
+      List<String>? selSections = prefs.getStringList('filter_selectedSections');
+      if (selSections != null) _selectedSections = selSections.toSet();
     });
-    if (_excelPath.isNotEmpty && File(_excelPath).existsSync()) _loadExcelData(_excelPath);
+    if (_excelPath.isNotEmpty && File(_excelPath).existsSync()) _loadExcelData(_excelPath, keepFilters: true);
   }
 
   Future<void> _saveSettings() async {
@@ -182,12 +212,30 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setString('excelPath', _excelPath);
     await prefs.setString('pdfFolderPath', _pdfFolderPath);
     await prefs.setBool('autoSave', _autoSave);
-    await prefs.setDouble('scannerZoom', _scannerZoom); // ❗ 줌 설정 저장
+    await prefs.setDouble('scannerZoom', _scannerZoom);
     await prefs.setStringList('processList', _processList);
     await prefs.setString('processColors', jsonEncode(_processColors));
+
+    // ❗ 필터 상태 저장
+    await prefs.setString('filter_searchQuery', _searchQuery);
+    await prefs.setString('filter_currentSortCol', _currentSortCol);
+    await prefs.setBool('filter_isAscending', _isAscending);
+    await prefs.setBool('filter_isSorted', _isSorted);
+    await prefs.setBool('filter_showUnfinishedOnly', _showUnfinishedOnly);
+    await prefs.setBool('filter_isSubheadingViewMode', _isSubheadingViewMode);
+    await prefs.setInt('filter_noFilterMode', _noFilterMode);
+    await prefs.setString('filter_remarksFilterQuery', _remarksFilterQuery);
+    await prefs.setString('filter_remarksExcludeQuery', _remarksExcludeQuery);
+    await prefs.setString('filter_remarksIncludeLogic', _remarksIncludeLogic);
+    await prefs.setString('filter_remarksExcludeLogic', _remarksExcludeLogic);
+    await prefs.setString('filter_quantitySearchQuery', _quantitySearchQuery);
+
+    Map<String, List<String>> colFilterMap = _columnFilters.map((k, v) => MapEntry(k, v.toList()));
+    await prefs.setString('filter_columnFilters', jsonEncode(colFilterMap));
+    await prefs.setStringList('filter_selectedSections', _selectedSections.toList());
   }
 
-  Future<void> _loadExcelData(String path) async {
+  Future<void> _loadExcelData(String path, {bool keepFilters = false}) async {
     setState(() => _isLoading = true);
     try {
       final items = await _excelService.loadExcel(path);
@@ -196,24 +244,35 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         _displayItems = List.from(items);
         _currentFileName = p.basename(path);
         _excelPath = path;
-        _isSorted = false;
-        _currentSortCol = "";
-        _searchController.clear();
-        _searchQuery = "";
-        _showUnfinishedOnly = false;
-        _selectedSections.clear();
+
+        if (!keepFilters) {
+          _isSorted = false;
+          _currentSortCol = "";
+          _searchController.clear();
+          _searchQuery = "";
+          _showUnfinishedOnly = false;
+          _selectedSections.clear();
+          _noFilterMode = 0;
+          _remarksFilterQuery = "";
+          _remarksExcludeQuery = "";
+          _remarksIncludeLogic = "AND";
+          _remarksExcludeLogic = "OR";
+          _quantitySearchQuery = "";
+          _isSubheadingViewMode = false;
+          _columnFilters.forEach((key, value) => value.clear());
+        }
+        
         _isEditMode = false;
         _isReorderMode = false;
         _selectedIndices.clear();
-        _noFilterMode = 0;
         _temporaryVisibleItem = null;
-        _remarksFilterQuery = "";
-        _remarksExcludeQuery = "";
-        _remarksIncludeLogic = "AND";
-        _remarksExcludeLogic = "OR";
-        _columnFilters.forEach((key, value) => value.clear());
       });
-      _saveSettings();
+
+      if (keepFilters) {
+        _applyFilterAndSort();
+      } else {
+        _saveSettings(); // 초기화된 상태 저장
+      }
       _saveLastDir(path);
     } catch (e) {
       _showError("로드 오류", "엑셀 파일을 읽을 수 없습니다.");
@@ -246,6 +305,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         results.add(ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "부분제목 없음", quantity: "", isSubheading: true));
       }
       setState(() { _displayItems = results; });
+      _saveSettings(); // ❗ 상태 변경 저장
       return;
     }
 
@@ -386,6 +446,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         }
       });
     }
+    _saveSettings(); // ❗ 상태 변경 저장
   }
 
   void _resetSort() {
@@ -839,7 +900,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _handleClose() { _forgetFocus(); if (_originalItems.isEmpty) return; showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("리스트 닫기"), content: const Text("현재 리스트를 닫으시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")), TextButton(onPressed: () { setState(() { _originalItems = []; _displayItems = []; _currentFileName = "파일을 선택하세요"; _excelPath = ""; _isSorted = false; _currentSortCol = ""; _searchController.clear(); _searchQuery = ""; _showUnfinishedOnly = false; _selectedSections.clear(); }); _saveSettings(); Navigator.pop(ctx); _showSnackBar("리스트가 닫혔습니다."); }, child: const Text("예", style: TextStyle(color: Colors.red)))])); }
 
-  void _handleRefresh() { _forgetFocus(); if (_excelPath.isEmpty) return; if (File(_excelPath).existsSync()) { _loadExcelData(_excelPath); _showSnackBar("🔄 리스트를 새로고침했습니다."); } }
+  void _handleRefresh() { _forgetFocus(); if (_excelPath.isEmpty) return; if (File(_excelPath).existsSync()) { _loadExcelData(_excelPath, keepFilters: true); _showSnackBar("🔄 리스트를 새로고침했습니다."); } }
 
   void _showComplementDialog(ItemModel item) { _forgetFocus(); showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("보완 선택"), content: Column(mainAxisSize: MainAxisSize.min, children: [_dialogBtn("부족", Colors.orange, () { item.complement = "부족"; item.complete = false; }), _dialogBtn("재작업", Colors.red, () { item.complement = "재작업"; item.complete = false; }), const Divider(), _dialogBtn("지우기", Colors.grey, () { item.complement = ""; }), _dialogBtn("선택취소", Colors.blueGrey, () {}),]))); }
 
