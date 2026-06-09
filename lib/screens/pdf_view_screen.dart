@@ -208,7 +208,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       onPopInvokedWithResult: (didPop, result) { if (didPop) return; Navigator.pop(context, item.itemCode); },
       child: Scaffold(
         appBar: AppBar(
-          title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [if (item.subheadingTitle.isNotEmpty) Text(item.subheadingTitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.white70), overflow: TextOverflow.ellipsis), Text(item.itemCode, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))]),
+          title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (item.subheadingTitle.isNotEmpty) Text(item.subheadingTitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.white70), overflow: TextOverflow.ellipsis),
+            Row(
+              children: [
+                Text(item.itemCode, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 8),
+                Text("(수량: ${item.quantity})", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.yellowAccent)),
+              ],
+            )
+          ]),
           backgroundColor: isDark ? Colors.black : Colors.blueGrey[900], foregroundColor: Colors.white,
           leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context, item.itemCode)),
           actions: [TextButton(onPressed: _resetFit, child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16)))],
@@ -224,7 +233,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           })),
           SafeArea(child: Container(padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8), color: isDark ? Colors.grey[900] : Colors.white, child: Column(children: [
             Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [
-              Expanded(child: TextField(controller: _searchController, focusNode: _searchFocusNode, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14), decoration: InputDecoration(hintText: "코드 검색...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]), prefixIcon: const Icon(Icons.search, size: 18), suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+              Expanded(child: TextField(controller: _searchController, focusNode: _searchFocusNode, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14), decoration: InputDecoration(hintText: "코드 검색...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]), prefixIcon: (_searchFocusNode.hasFocus || _searchController.text.isNotEmpty) ? null : const Icon(Icons.search, size: 18), suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
                 if (_searchController.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchResults = []; }); }),
                 IconButton(icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue), onPressed: () async {
                   _searchFocusNode.unfocus();
