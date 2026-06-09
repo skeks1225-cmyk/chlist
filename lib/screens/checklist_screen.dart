@@ -902,14 +902,77 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _handleRefresh() { _forgetFocus(); if (_excelPath.isEmpty) return; if (File(_excelPath).existsSync()) { _loadExcelData(_excelPath, keepFilters: true); _showSnackBar("🔄 리스트를 새로고침했습니다."); } }
 
-  void _showComplementDialog(ItemModel item) { _forgetFocus(); showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("보완 선택"), content: Column(mainAxisSize: MainAxisSize.min, children: [_dialogBtn("부족", Colors.orange, () { item.complement = "부족"; item.complete = false; }), _dialogBtn("재작업", Colors.red, () { item.complement = "재작업"; item.complete = false; }), const Divider(), _dialogBtn("지우기", Colors.grey, () { item.complement = ""; }), _dialogBtn("선택취소", Colors.blueGrey, () {}),]))); }
+  void _showComplementDialog(ItemModel item) {
+    _forgetFocus();
+    String lastRecord = "마지막 기록: 없음";
+    if (item.complementTime.isNotEmpty) {
+      lastRecord = "마지막 기록: ${item.complement}: ${item.complementTime}";
+    }
+    
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)),
+        ],
+      ),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        _dialogBtn("부족", Colors.orange, () { 
+          item.complement = "부족"; 
+          item.complete = false; 
+          item.complementTime = DateTime.now().toString().substring(0, 16);
+        }), 
+        _dialogBtn("재작업", Colors.red, () { 
+          item.complement = "재작업"; 
+          item.complete = false; 
+          item.complementTime = DateTime.now().toString().substring(0, 16);
+        }), 
+        const Divider(), 
+        _dialogBtn("지우기", Colors.grey, () { 
+          item.complement = ""; 
+          item.complementTime = "";
+        }), 
+        _dialogBtn("선택취소", Colors.blueGrey, () {}),
+      ]),
+    ));
+  }
 
   void _showProcessDialog(ItemModel item) {
-    _forgetFocus(); List<String> sortedDisplayList = List.from(_processList); bool hasFinished = sortedDisplayList.remove("완료"); if (hasFinished) sortedDisplayList.add("완료");
-    showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("공정 선택"), content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+    _forgetFocus();
+    String lastRecord = "마지막 기록: 없음";
+    if (item.processTime.isNotEmpty) {
+      lastRecord = "마지막 기록: ${item.process}: ${item.processTime}";
+    }
+    
+    List<String> sortedDisplayList = List.from(_processList);
+    bool hasFinished = sortedDisplayList.remove("완료");
+    if (hasFinished) sortedDisplayList.add("완료");
+    
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)),
+        ],
+      ),
+      content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
                 GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 3, childAspectRatio: 2.0, mainAxisSpacing: 8, crossAxisSpacing: 8, children: sortedDisplayList.map((p) { 
- int? colorVal = _processColors[p]; Color btnColor; if (colorVal != null) { btnColor = Color(colorVal); } else { if (p == "완료") btnColor = Colors.purple; else if (p == "보류") btnColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnColor = Colors.orange; else btnColor = Colors.blueGrey[700]!; } return ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white), onPressed: () { setState(() { item.process = p; }); if (_autoSave) _manualSave(silent: true); Navigator.pop(context); }, child: Text(p)); }).toList()),
-                const Divider(), _dialogBtn("지우기", Colors.grey, () { item.process = ""; }), _dialogBtn("선택취소", Colors.blueGrey, () {}),
+ int? colorVal = _processColors[p]; Color btnColor; if (colorVal != null) { btnColor = Color(colorVal); } else { if (p == "완료") btnColor = Colors.purple; else if (p == "보류") btnColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnColor = Colors.orange; else btnColor = Colors.blueGrey[700]!; } return ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white), onPressed: () { 
+   setState(() { 
+     item.process = p; 
+     item.processTime = DateTime.now().toString().substring(0, 16);
+   }); 
+   if (_autoSave) _manualSave(silent: true); Navigator.pop(context); 
+ }, child: Text(p)); }).toList()),
+                const Divider(), _dialogBtn("지우기", Colors.grey, () { 
+                  item.process = ""; 
+                  item.processTime = "";
+                }), 
+                _dialogBtn("선택취소", Colors.blueGrey, () {}),
               ])))));
   }
 
@@ -974,7 +1037,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _handleItemClick(ItemModel item) async {
     _forgetFocus(); if (_autoSave) _manualSave(silent: true); if (_pdfFolderPath.startsWith("smb://")) { setState(() => _isLoading = true); try { String shareWithRest = _pdfFolderPath.replaceFirst("smb://", ""); int firstSlash = shareWithRest.indexOf("/"); String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest; String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : ""; String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf"; await _smbService.downloadFile(share, remoteFilePath, "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf"); } catch (_) {} finally { setState(() => _isLoading = false); } }
-    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) it.complement = ""; }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
+    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.complement = ""; it.complementTime = ""; it.process = ""; it.processTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
     if (lastItemCode != null) { 
       // ❗ 추적 메모리에 기록
       setState(() {
@@ -1262,7 +1325,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       if (isAll) {
         for (var i in _originalItems) {
           if (i.isSubheading) continue;
-          if (status) { i.complete = false; i.complement = ""; i.process = ""; }
+          if (status) { 
+            i.complete = false; 
+            i.complement = ""; 
+            i.complementTime = "";
+            i.process = ""; 
+            i.processTime = "";
+          }
           if (remarks) i.remarks = "";
         }
       } else if (subheadingItem != null) {
@@ -1270,7 +1339,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         if (startIdx != -1) {
           for (int i = startIdx + 1; i < _originalItems.length; i++) {
             if (_originalItems[i].isSubheading) break;
-            if (status) { _originalItems[i].complete = false; _originalItems[i].complement = ""; _originalItems[i].process = ""; }
+            if (status) { 
+              _originalItems[i].complete = false; 
+              _originalItems[i].complement = ""; 
+              _originalItems[i].complementTime = "";
+              _originalItems[i].process = ""; 
+              _originalItems[i].processTime = "";
+            }
             if (remarks) _originalItems[i].remarks = "";
           }
         }
@@ -1570,7 +1645,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Widget _buildHeader(bool isDark) { return Container(color: isDark ? Colors.grey[900] : Colors.grey[800], height: 40, child: Row(children: [if (_isEditMode) const SizedBox(width: 35), _headerBtn("No", "no", 35), Expanded(flex: 5, child: _headerBtn("품목코드", "itemCode", null)), _headerBtn("수량", "quantity", 40), _headerBtn("완료", "complete", 50), _headerBtn("공정", "process", 50), _headerBtn("보완", "complement", 50), Expanded(flex: 3, child: _headerBtn("비고", "remarks", null))])); }
   Widget _headerBtn(String label, String? colKey, double? width) { bool isTarget = colKey != null && _currentSortCol == colKey; bool isNoFilt = colKey == 'no' && _noFilterMode != 0; String dLabel = (colKey == 'no' && _noFilterMode == 2) ? "-No" : label; bool isFiltActive = false; if (colKey != null && ['complete', 'complement', 'process', 'quantity'].contains(colKey)) isFiltActive = _columnFilters[colKey]!.isNotEmpty || (colKey == 'quantity' && _quantitySearchQuery.isNotEmpty); else if (colKey == 'remarks') isFiltActive = _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty; return InkWell(onTap: colKey == null ? null : () => _sortBy(colKey), child: Container(width: width, alignment: Alignment.center, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Flexible(child: Text(dLabel, style: TextStyle(color: (isNoFilt || isFiltActive) ? Colors.yellow : Colors.white, fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis)), if (isTarget) Icon(_isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: Colors.yellow, size: 18)]))); }
-  Widget _buildDataRow(ItemModel item, bool isDark) { bool isSel = _selectedIndices.contains(item.realIndex); bool isHigh = item.realIndex == _highlightedRealIndex; return GestureDetector(onTap: _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : null, behavior: HitTestBehavior.opaque, child: Container(decoration: BoxDecoration(color: isSel ? Colors.blue.withOpacity(0.1) : (item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null), border: isHigh ? Border.all(color: Colors.blue, width: 2) : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45, child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)), SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))), Expanded(flex: 5, child: InkWell(onTap: () => _handleItemClick(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), alignment: Alignment.centerLeft, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))), SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))), _cellCheck(item.complete, isDark, _isEditMode ? null : () { setState(() { item.complete = !item.complete; if (item.complete) item.complement = ""; }); if (_autoSave) _manualSave(silent: true); }), _cellProcess(item.process, isDark, _isEditMode ? null : () => _showProcessDialog(item)), _cellComplement(item.complement, isDark, _isEditMode ? null : () => _showComplementDialog(item)), Expanded(flex: 3, child: IgnorePointer(ignoring: _isEditMode, child: _RemarksCell(item: item, onSave: () { if (_autoSave) _manualSave(silent: true); }, onForgetFocus: _forgetFocus)))]))); }
+  Widget _buildDataRow(ItemModel item, bool isDark) { bool isSel = _selectedIndices.contains(item.realIndex); bool isHigh = item.realIndex == _highlightedRealIndex; return GestureDetector(onTap: _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : null, behavior: HitTestBehavior.opaque, child: Container(decoration: BoxDecoration(color: isSel ? Colors.blue.withOpacity(0.1) : (item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null), border: isHigh ? Border.all(color: Colors.blue, width: 2) : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45, child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)), SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))), Expanded(flex: 5, child: InkWell(onTap: () => _handleItemClick(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), alignment: Alignment.centerLeft, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))), SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))), _cellCheck(item.complete, isDark, _isEditMode ? null : () { setState(() { item.complete = !item.complete; if (item.complete) { item.complement = ""; item.complementTime = ""; item.process = ""; item.processTime = ""; } }); if (_autoSave) _manualSave(silent: true); }), _cellProcess(item.process, isDark, _isEditMode ? null : () => _showProcessDialog(item)), _cellComplement(item.complement, isDark, _isEditMode ? null : () => _showComplementDialog(item)), Expanded(flex: 3, child: IgnorePointer(ignoring: _isEditMode, child: _RemarksCell(item: item, onSave: () { if (_autoSave) _manualSave(silent: true); }, onForgetFocus: _forgetFocus)))]))); }
   Widget _cellCheck(bool val, bool isDark, VoidCallback? onTap) { return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: val ? Colors.green.withOpacity(0.3) : null, child: val ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
   Widget _cellComplement(String txt, bool isDark, VoidCallback? onTap) { if (txt.isEmpty) return InkWell(onTap: onTap, child: const SizedBox(width: 50)); Color baseColor = (txt == "부족") ? Colors.orange : Colors.red; return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 50, decoration: BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))))); }
   Widget _cellProcess(String txt, bool isDark, VoidCallback? onTap) { int? colorVal = txt.isNotEmpty ? _processColors[txt] : null; Color baseColor; if (colorVal != null) { baseColor = Color(colorVal); } else { if (txt == "완료") baseColor = Colors.purple; else if (txt == "보류") baseColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(txt)) baseColor = Colors.orange; else baseColor = Colors.blueGrey; } return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 50, decoration: txt.isEmpty ? const BoxDecoration(color: Colors.transparent) : BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: txt.isNotEmpty ? FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))) : null)); }

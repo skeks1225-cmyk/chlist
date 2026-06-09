@@ -136,24 +136,60 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   void _showComplementDialog(ItemModel item) {
+    String lastRecord = "마지막 기록: 없음";
+    if (item.complementTime.isNotEmpty) {
+      lastRecord = "마지막 기록: ${item.complement}: ${item.complementTime}";
+    }
+    
     showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)),
+        ],
+      ),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        _dialogBtn("부족", Colors.orange, () { item.complement = "부족"; item.complete = false; }),
-        _dialogBtn("재작업", Colors.red, () { item.complement = "재작업"; item.complete = false; }),
-        const Divider(), _dialogBtn("지우기", Colors.grey, () { item.complement = ""; }),
+        _dialogBtn("부족", Colors.orange, () { 
+          item.complement = "부족"; 
+          item.complete = false; 
+          item.complementTime = DateTime.now().toString().substring(0, 16);
+        }),
+        _dialogBtn("재작업", Colors.red, () { 
+          item.complement = "재작업"; 
+          item.complete = false; 
+          item.complementTime = DateTime.now().toString().substring(0, 16);
+        }),
+        const Divider(), 
+        _dialogBtn("지우기", Colors.grey, () { 
+          item.complement = ""; 
+          item.complementTime = "";
+        }),
         _dialogBtn("선택취소", Colors.blueGrey, () {}),
       ]),
     ));
   }
 
   void _showProcessDialog(ItemModel item) {
+    String lastRecord = "마지막 기록: 없음";
+    if (item.processTime.isNotEmpty) {
+      lastRecord = "마지막 기록: ${item.process}: ${item.processTime}";
+    }
+    
     List<String> sortedDisplayList = List.from(widget.processList);
     bool hasFinished = sortedDisplayList.remove("완료");
     if (hasFinished) sortedDisplayList.add("완료");
 
     showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)),
+        ],
+      ),
       content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         GridView.count(
           shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
@@ -173,12 +209,21 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             }
             return ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white, textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-              onPressed: () { setState(() { item.process = p; }); widget.onStatusUpdate(item, 'process'); Navigator.pop(ctx); },
+              onPressed: () { 
+                setState(() { 
+                  item.process = p; 
+                  item.processTime = DateTime.now().toString().substring(0, 16);
+                }); 
+                widget.onStatusUpdate(item, 'process'); Navigator.pop(ctx); 
+              },
               child: Text(p),
             );
           }).toList(),
         ),
-        const Divider(), _dialogBtn("지우기", Colors.grey, () { item.process = ""; }),
+        const Divider(), _dialogBtn("지우기", Colors.grey, () { 
+          item.process = ""; 
+          item.processTime = "";
+        }),
         _dialogBtn("선택취소", Colors.blueGrey, () {}),
       ]))),
     ));

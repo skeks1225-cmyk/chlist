@@ -8,6 +8,8 @@ class ItemModel {
   String complement; 
   String process;    
   String remarks;
+  String processTime;      // ❗ 공정 기록 시간
+  String complementTime;   // ❗ 보완 기록 시간
   bool isSubheading;
   String subheadingTitle; // ❗ 해당 항목이 속한 부분제목
 
@@ -21,6 +23,8 @@ class ItemModel {
     this.complement = "",
     this.process = "",
     this.remarks = "",
+    this.processTime = "",
+    this.complementTime = "",
     this.isSubheading = false,
     this.subheadingTitle = "",
   }) {
@@ -32,6 +36,8 @@ class ItemModel {
     if (this.complement.toLowerCase() == "null") this.complement = "";
     if (this.process.toLowerCase() == "null") this.process = "";
     if (this.remarks.toLowerCase() == "null") this.remarks = "";
+    if (this.processTime.toLowerCase() == "null") this.processTime = "";
+    if (this.complementTime.toLowerCase() == "null") this.complementTime = "";
     if (this.subheadingTitle.toLowerCase() == "null") this.subheadingTitle = "";
   }
 }
