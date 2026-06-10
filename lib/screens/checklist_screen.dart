@@ -69,6 +69,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   ItemModel? _temporaryVisibleItem; 
 
   bool _isEditMode = false;
+  bool _isSelectionFiltered = false; // ❗ 선택 필터 활성화 여부
   final Set<int> _selectedIndices = {}; 
   bool _isSelecting = false; // ❗ 드래그 선택 중인지 여부
   Timer? _scrollTimer; // ❗ 자동 스크롤 타이머
@@ -381,6 +382,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         sectionItems = sectionItems.where((item) => !item.complete).toList();
       }
 
+      if (_isSelectionFiltered) {
+        sectionItems = sectionItems.where((item) => _selectedIndices.contains(item.realIndex)).toList();
+      }
+
       if (_noFilterMode == 1) {
         sectionItems = sectionItems.where((item) => item.no.isNotEmpty).toList();
       } else if (_noFilterMode == 2) {
@@ -461,6 +466,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _isReorderMode = false;
       _searchQuery = "";
       _searchController.clear();
+      _isSelectionFiltered = false;
+      _selectedIndices.clear();
     });
     _applyFilterAndSort();
   }
@@ -1496,19 +1503,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ] : _isEditMode ? [
           TextButton(onPressed: () {
             setState(() {
-              final selectedItems = _originalItems.where((i) => !i.isSubheading && _selectedIndices.contains(i.realIndex)).toList();
-              if (selectedItems.isEmpty) {
+              if (_selectedIndices.isEmpty) {
                 _showSnackBar("선택된 항목이 없습니다.");
                 return;
               }
-              _displayItems = selectedItems;
-              // ❗ 필터 활성화 상태로 인식되게 함 (기타 필터 변수들은 그대로 유지)
+              _isSelectionFiltered = true;
+              _isEditMode = false; // ❗ 모드 자동 종료
             });
+            _applyFilterAndSort(); // ❗ 시스템 필터 로직을 통해 부분제목 포함하여 다시 그림
           }, child: const Text("선택필터", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
           TextButton.icon(onPressed: _deleteSelectedRows, icon: const Icon(Icons.delete_forever, color: Colors.redAccent), label: Text("삭제(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
           TextButton(onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); _applyFilterAndSort(); }), child: const Text("취소", style: TextStyle(color: Colors.white))),
         ] : [
-          if (_isSorted || _selectedSections.isNotEmpty || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _quantitySearchQuery.isNotEmpty || _isSubheadingViewMode || _noFilterMode != 0 || _searchQuery.isNotEmpty || _columnFilters.values.any((s) => s.isNotEmpty)) 
+          if (_isSorted || _selectedSections.isNotEmpty || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _quantitySearchQuery.isNotEmpty || _isSubheadingViewMode || _noFilterMode != 0 || _searchQuery.isNotEmpty || _columnFilters.values.any((s) => s.isNotEmpty) || _isSelectionFiltered) 
             TextButton(onPressed: _resetSort, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
           TextButton(onPressed: _handleRefresh, child: const Text("새로고침", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
           TextButton(onPressed: _handleClose, child: const Text("닫기", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
@@ -1848,8 +1855,103 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Widget _buildHeader(bool isDark) { return Container(color: isDark ? Colors.grey[900] : Colors.grey[800], height: 40, child: Row(children: [if (_isEditMode) const SizedBox(width: 35), _headerBtn("No", "no", 35), Expanded(flex: 5, child: _headerBtn("품목코드", "itemCode", null)), _headerBtn("수량", "quantity", 40), _headerBtn("완료", "complete", 50), _headerBtn("공정", "process", 50), _headerBtn("보완", "complement", 50), Expanded(flex: 3, child: _headerBtn("비고", "remarks", null))])); }
   Widget _headerBtn(String label, String? colKey, double? width) { bool isTarget = colKey != null && _currentSortCol == colKey; bool isNoFilt = colKey == 'no' && _noFilterMode != 0; String dLabel = (colKey == 'no' && _noFilterMode == 2) ? "-No" : label; bool isFiltActive = false; if (colKey != null && ['complete', 'complement', 'process', 'quantity'].contains(colKey)) isFiltActive = _columnFilters[colKey]!.isNotEmpty || (colKey == 'quantity' && _quantitySearchQuery.isNotEmpty); else if (colKey == 'remarks') isFiltActive = _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty; return InkWell(onTap: colKey == null ? null : () => _sortBy(colKey), child: Container(width: width, alignment: Alignment.center, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Flexible(child: Text(dLabel, style: TextStyle(color: (isNoFilt || isFiltActive) ? Colors.yellow : Colors.white, fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis)), if (isTarget) Icon(_isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: Colors.yellow, size: 18)]))); }
-  Widget _buildDataRow(ItemModel item, bool isDark) { bool isSel = _selectedIndices.contains(item.realIndex); bool isHigh = item.realIndex == _highlightedRealIndex; return GestureDetector(onTap: _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : null, behavior: HitTestBehavior.opaque, child: Container(decoration: BoxDecoration(color: isSel ? Colors.blue.withOpacity(0.1) : (item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null), border: isHigh ? Border.all(color: Colors.blue, width: 2) : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45, child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)), SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))), Expanded(flex: 5, child: InkWell(onTap: _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : () => _handleItemClick(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), alignment: Alignment.centerLeft, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))), SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))), _cellCheck(item, isDark, _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : () { setState(() { item.complete = !item.complete; if (item.complete) { item.completeTime = DateTime.now().toString().substring(0, 16); item.complement = ""; item.complementTime = ""; } else { item.completeTime = ""; } }); if (_autoSave) _manualSave(silent: true); }), _cellProcess(item.process, isDark, _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : () => _showProcessDialog(item)), _cellComplement(item.complement, isDark, _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : () => _showComplementDialog(item)), Expanded(flex: 3, child: IgnorePointer(ignoring: _isEditMode, child: _RemarksCell(item: item, onSave: () { if (_autoSave) _manualSave(silent: true); }, onForgetFocus: _forgetFocus)))]))); }
-  Widget _cellCheck(ItemModel item, bool isDark, VoidCallback? onTap) { return InkWell(onTap: onTap, onLongPress: _isEditMode ? null : () => _showCompleteTimeDialog(item), child: Container(width: 50, alignment: Alignment.center, color: item.complete ? Colors.green.withOpacity(0.3) : null, child: item.complete ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
+  Widget _buildDataRow(ItemModel item, bool isDark) {
+    bool isSel = _selectedIndices.contains(item.realIndex);
+    bool isHigh = item.realIndex == _highlightedRealIndex;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: isSel ? Colors.blue.withOpacity(0.1) : (item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null),
+        border: isHigh ? Border.all(color: Colors.blue, width: 2) : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))
+      ),
+      height: 45,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ❗ 스크롤 영역 (No, 품목코드) - GestureDetector로 묶어서 ListView 스크롤 제어
+          if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
+          SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+          
+          Expanded(
+            flex: 5,
+            child: GestureDetector(
+              onVerticalDragUpdate: _isEditMode ? (details) {
+                // ❗ 선택모드일 때 품목코드 열을 드래그하면 리스트 스크롤
+                _scrollController.jumpTo(_scrollController.offset - details.delta.dy);
+              } : null,
+              onTap: _isEditMode ? () {
+                setState(() {
+                  if (isSel) _selectedIndices.remove(item.realIndex);
+                  else _selectedIndices.add(item.realIndex);
+                });
+              } : () => _handleItemClick(item),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                alignment: Alignment.centerLeft,
+                color: Colors.transparent, // 터치 영역 확보
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    item.itemCode,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.blue[300] : Colors.blue[700],
+                      fontWeight: FontWeight.bold
+                    )
+                  )
+                )
+              )
+            )
+          ),
+
+          // ❗ 드래그 선택 영역 (나머지 컬럼들)
+          _buildSelectableCell(SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))), item),
+          _buildSelectableCell(_cellCheck(item, isDark, _isEditMode ? null : () { 
+            setState(() { 
+              item.complete = !item.complete; 
+              if (item.complete) { 
+                item.completeTime = DateTime.now().toString().substring(0, 16); 
+                item.complement = ""; 
+                item.complementTime = ""; 
+              } else { 
+                item.completeTime = ""; 
+              } 
+            }); 
+            if (_autoSave) _manualSave(silent: true); 
+          }), item),
+          _buildSelectableCell(_cellProcess(item.process, isDark, _isEditMode ? null : () => _showProcessDialog(item)), item),
+          _buildSelectableCell(_cellComplement(item.complement, isDark, _isEditMode ? null : () => _showComplementDialog(item)), item),
+          
+          Expanded(
+            flex: 3,
+            child: IgnorePointer(
+              ignoring: _isEditMode,
+              child: _RemarksCell(
+                item: item,
+                onSave: () { if (_autoSave) _manualSave(silent: true); },
+                onForgetFocus: _forgetFocus
+              )
+            )
+          )
+        ]
+      )
+    );
+  }
+
+  // ❗ 선택모드 전용 셀 래퍼 (탭으로 선택, 드래그 무시하여 상위 GestureDetector에 전달)
+  Widget _buildSelectableCell(Widget child, ItemModel item) {
+    if (!_isEditMode) return child;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (_selectedIndices.contains(item.realIndex)) _selectedIndices.remove(item.realIndex);
+          else _selectedIndices.add(item.realIndex);
+        });
+      },
+      child: child,
+    );
+  }  Widget _cellCheck(ItemModel item, bool isDark, VoidCallback? onTap) { return InkWell(onTap: onTap, onLongPress: _isEditMode ? null : () => _showCompleteTimeDialog(item), child: Container(width: 50, alignment: Alignment.center, color: item.complete ? Colors.green.withOpacity(0.3) : null, child: item.complete ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
   Widget _cellComplement(String txt, bool isDark, VoidCallback? onTap) { if (txt.isEmpty) return InkWell(onTap: onTap, child: const SizedBox(width: 50)); Color baseColor = (txt == "부족") ? Colors.orange : Colors.red; return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 50, decoration: BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))))); }
   Widget _cellProcess(String txt, bool isDark, VoidCallback? onTap) { int? colorVal = txt.isNotEmpty ? _processColors[txt] : null; Color baseColor; if (colorVal != null) { baseColor = Color(colorVal); } else { if (txt == "완료") baseColor = Colors.purple; else if (txt == "보류") baseColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(txt)) baseColor = Colors.orange; else baseColor = Colors.blueGrey; } return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 50, decoration: txt.isEmpty ? const BoxDecoration(color: Colors.transparent) : BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: txt.isNotEmpty ? FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))) : null)); }
   void _showError(String t, String m) { showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(t), content: Text(m), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))])); }
