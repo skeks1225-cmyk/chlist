@@ -72,6 +72,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _isSelectionFiltered = false; // ❗ 선택 필터 활성화 여부
   final Set<int> _selectedIndices = {}; 
   bool _isSelecting = false; // ❗ 드래그 선택 중인지 여부
+  final GlobalKey _scrollKey = GlobalKey(); // ❗ 스크롤 영역 좌표 계산용
   Timer? _scrollTimer; // ❗ 자동 스크롤 타이머
   final ScrollController _scrollController = ScrollController();
   int? _highlightedRealIndex;
@@ -1607,23 +1608,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           Expanded(flex: 2, child: _buildSummaryWidget(isDark)),
         ])),
         if (!_isReorderMode) _buildHeader(isDark),
-        Expanded(child: GestureDetector(
-          onVerticalDragStart: _isEditMode ? (details) {
-            setState(() {
-              _isSelecting = true;
-            });
-            _handleDragUpdate(details.localPosition.dy);
-          } : null,
-          onVerticalDragUpdate: _isEditMode ? (details) {
-            _handleDragUpdate(details.localPosition.dy);
-            _handleAutoScroll(details.localPosition.dy);
-          } : null,
-          onVerticalDragEnd: _isEditMode ? (_) {
-            setState(() {
-              _isSelecting = false;
-            });
-            _scrollTimer?.cancel();
-          } : null,
+        Expanded(
           child: Listener(onPointerDown: (_) { 
             // ❗ 리스트 영역 터치 시에만 포커스 해제 (상단 버튼 영역 보호)
             _clearHighlight(); 
@@ -1635,7 +1620,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               setState(() { _temporaryVisibleItem = null; }); 
               _applyFilterAndSort(); 
             } 
-          }, behavior: HitTestBehavior.translucent, child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
+          }, behavior: HitTestBehavior.translucent, child: Container(
+            key: _scrollKey,
+            child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
             onReorder: _reorderSubheading, 
             buildDefaultDragHandles: false, // ❗ 기본 핸들 비활성화
             children: _originalItems.where((i) => i.isSubheading).toList().asMap().entries.map((entry) {
@@ -1648,9 +1635,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 tileColor: isDark ? Colors.white10 : Colors.grey[200]
               );
             }).toList()) : ListView.builder(
-              controller: _scrollController,
-              physics: _isEditMode ? const NeverScrollableScrollPhysics() : const AlwaysScrollableScrollPhysics(), // ❗ 선택모드에서는 리스트 자체 스크롤 비활성화 (드래그 선택 우선)
-              itemCount: _displayItems.length,
+              controller: _scrollController, 
+              physics: const AlwaysScrollableScrollPhysics(), // ❗ 부드러운 스크롤 보장
+              itemCount: _displayItems.length, 
               itemBuilder: (ctx, idx) {
             final item = _displayItems[idx];
             if (item.isSubheading) {
@@ -1803,7 +1790,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  void _handleDragUpdate(double localY) {
+  void _handleDragUpdate(double globalY) {
+    final RenderBox? renderBox = _scrollKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final Offset localPosition = renderBox.globalToLocal(Offset(0, globalY));
+    double localY = localPosition.dy;
+
     double currentOffset = _scrollController.offset;
     double targetY = localY + currentOffset;
     
@@ -1831,16 +1824,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
   }
 
-  void _handleAutoScroll(double localY) {
+  void _handleAutoScroll(double globalY) {
     _scrollTimer?.cancel();
-    const double threshold = 50.0;
-    double viewHeight = _scrollController.position.viewportDimension;
+    final RenderBox? renderBox = _scrollKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final Offset localPosition = renderBox.globalToLocal(Offset(0, globalY));
+    double localY = localPosition.dy;
+
+    const double threshold = 60.0;
+    double viewHeight = renderBox.size.height;
     
     if (localY < threshold) {
       _scrollTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
         if (_scrollController.offset > 0) {
           _scrollController.jumpTo(_scrollController.offset - 10);
-          _handleDragUpdate(localY);
+          _handleDragUpdate(globalY);
         } else {
           timer.cancel();
         }
@@ -1849,12 +1848,41 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _scrollTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
         if (_scrollController.offset < _scrollController.position.maxScrollExtent) {
           _scrollController.jumpTo(_scrollController.offset + 10);
-          _handleDragUpdate(localY);
+          _handleDragUpdate(globalY);
         } else {
           timer.cancel();
         }
       });
     }
+  }
+
+  Widget _buildSelectionZone({required Widget child, required ItemModel item}) {
+    if (!_isEditMode) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragStart: (details) {
+        setState(() => _isSelecting = true);
+        _handleDragUpdate(details.globalPosition.dy);
+      },
+      onVerticalDragUpdate: (details) {
+        _handleDragUpdate(details.globalPosition.dy);
+        _handleAutoScroll(details.globalPosition.dy);
+      },
+      onVerticalDragEnd: (_) {
+        setState(() => _isSelecting = false);
+        _scrollTimer?.cancel();
+      },
+      onTap: () {
+        setState(() {
+          if (_selectedIndices.contains(item.realIndex)) {
+            _selectedIndices.remove(item.realIndex);
+          } else {
+            _selectedIndices.add(item.realIndex);
+          }
+        });
+      },
+      child: child,
+    );
   }
 
   Widget _buildHeader(bool isDark) { return Container(color: isDark ? Colors.grey[900] : Colors.grey[800], height: 40, child: Row(children: [if (_isEditMode) const SizedBox(width: 35), _headerBtn("No", "no", 35), Expanded(flex: 5, child: _headerBtn("품목코드", "itemCode", null)), _headerBtn("수량", "quantity", 40), _headerBtn("완료", "complete", 50), _headerBtn("공정", "process", 50), _headerBtn("보완", "complement", 50), Expanded(flex: 3, child: _headerBtn("비고", "remarks", null))])); }
@@ -1872,17 +1900,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ❗ 스크롤 영역 (No, 품목코드) - GestureDetector로 묶어서 ListView 스크롤 제어
-          if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
-          SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+          // ❗ 선택 영역 1: No 및 체크박스 (수직 드래그 시 선택 활성화)
+          _buildSelectionZone(
+            item: item,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
+                SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+              ],
+            ),
+          ),
           
+          // ❗ 스크롤 전용 영역: 품목코드 (수직 드래그 없음 -> ListView 스크롤로 전달)
           Expanded(
             flex: 5,
             child: GestureDetector(
-              onVerticalDragUpdate: _isEditMode ? (details) {
-                // ❗ 선택모드일 때 품목코드 열을 드래그하면 리스트 스크롤
-                _scrollController.jumpTo(_scrollController.offset - details.delta.dy);
-              } : null,
               onTap: _isEditMode ? () {
                 setState(() {
                   if (isSel) _selectedIndices.remove(item.realIndex);
@@ -1909,53 +1942,49 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             )
           ),
 
-          // ❗ 드래그 선택 영역 (나머지 컬럼들)
-          _buildSelectableCell(SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))), item),
-          _buildSelectableCell(_cellCheck(item, isDark, _isEditMode ? null : () { 
-            setState(() { 
-              item.complete = !item.complete; 
-              if (item.complete) { 
-                item.completeTime = DateTime.now().toString().substring(0, 16); 
-                item.complement = ""; 
-                item.complementTime = ""; 
-              } else { 
-                item.completeTime = ""; 
-              } 
-            }); 
-            if (_autoSave) _manualSave(silent: true); 
-          }), item),
-          _buildSelectableCell(_cellProcess(item.process, isDark, _isEditMode ? null : () => _showProcessDialog(item)), item),
-          _buildSelectableCell(_cellComplement(item.complement, isDark, _isEditMode ? null : () => _showComplementDialog(item)), item),
-          
+          // ❗ 선택 영역 2: 나머지 컬럼들 (수직 드래그 시 선택 활성화)
           Expanded(
-            flex: 3,
-            child: IgnorePointer(
-              ignoring: _isEditMode,
-              child: _RemarksCell(
-                item: item,
-                onSave: () { if (_autoSave) _manualSave(silent: true); },
-                onForgetFocus: _forgetFocus
-              )
-            )
+            child: _buildSelectionZone(
+              item: item,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+                  _cellCheck(item, isDark, _isEditMode ? null : () { 
+                    setState(() { 
+                      item.complete = !item.complete; 
+                      if (item.complete) { 
+                        item.completeTime = DateTime.now().toString().substring(0, 16); 
+                        item.complement = ""; 
+                        item.complementTime = ""; 
+                      } else { 
+                        item.completeTime = ""; 
+                      } 
+                    }); 
+                    if (_autoSave) _manualSave(silent: true); 
+                  }),
+                  _cellProcess(item.process, isDark, _isEditMode ? null : () => _showProcessDialog(item)),
+                  _cellComplement(item.complement, isDark, _isEditMode ? null : () => _showComplementDialog(item)),
+                  Expanded(
+                    flex: 3,
+                    child: IgnorePointer(
+                      ignoring: _isEditMode,
+                      child: _RemarksCell(
+                        item: item,
+                        onSave: () { if (_autoSave) _manualSave(silent: true); },
+                        onForgetFocus: _forgetFocus
+                      )
+                    )
+                  )
+                ],
+              ),
+            ),
           )
         ]
       )
     );
   }
-
-  // ❗ 선택모드 전용 셀 래퍼 (탭으로 선택, 드래그 무시하여 상위 GestureDetector에 전달)
-  Widget _buildSelectableCell(Widget child, ItemModel item) {
-    if (!_isEditMode) return child;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          if (_selectedIndices.contains(item.realIndex)) _selectedIndices.remove(item.realIndex);
-          else _selectedIndices.add(item.realIndex);
-        });
-      },
-      child: child,
-    );
-  }  Widget _cellCheck(ItemModel item, bool isDark, VoidCallback? onTap) { return InkWell(onTap: onTap, onLongPress: _isEditMode ? null : () => _showCompleteTimeDialog(item), child: Container(width: 50, alignment: Alignment.center, color: item.complete ? Colors.green.withOpacity(0.3) : null, child: item.complete ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
+  Widget _cellCheck(ItemModel item, bool isDark, VoidCallback? onTap) { return InkWell(onTap: onTap, onLongPress: _isEditMode ? null : () => _showCompleteTimeDialog(item), child: Container(width: 50, alignment: Alignment.center, color: item.complete ? Colors.green.withOpacity(0.3) : null, child: item.complete ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
   Widget _cellComplement(String txt, bool isDark, VoidCallback? onTap) { if (txt.isEmpty) return InkWell(onTap: onTap, child: const SizedBox(width: 50)); Color baseColor = (txt == "부족") ? Colors.orange : Colors.red; return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 50, decoration: BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))))); }
   Widget _cellProcess(String txt, bool isDark, VoidCallback? onTap) { int? colorVal = txt.isNotEmpty ? _processColors[txt] : null; Color baseColor; if (colorVal != null) { baseColor = Color(colorVal); } else { if (txt == "완료") baseColor = Colors.purple; else if (txt == "보류") baseColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(txt)) baseColor = Colors.orange; else baseColor = Colors.blueGrey; } return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 50, decoration: txt.isEmpty ? const BoxDecoration(color: Colors.transparent) : BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: txt.isNotEmpty ? FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))) : null)); }
   void _showError(String t, String m) { showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(t), content: Text(m), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))])); }
