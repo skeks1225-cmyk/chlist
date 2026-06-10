@@ -14,309 +14,146 @@ import 'package:path/path.dart' as p;
 
 class ChecklistScreen extends StatefulWidget {
   const ChecklistScreen({super.key});
-
-  @override
-  State<ChecklistScreen> createState() => _ChecklistScreenState();
+  @override State<ChecklistScreen> createState() => _ChecklistScreenState();
 }
 
 class _ChecklistScreenState extends State<ChecklistScreen> {
   final ExcelService _excelService = ExcelService();
   final SmbService _smbService = SmbService();
-  
   List<ItemModel> _originalItems = []; 
   List<ItemModel> _displayItems = [];  
-  
-  String _excelPath = "";
-  String _pdfFolderPath = "";
-  String _currentFileName = "파일을 선택하세요";
-  bool _autoSave = true;
-  bool _isLoading = false;
-  bool _isSorted = false;
-  bool _isSyncing = false;
-  double _scannerZoom = 0.0; 
-
-  String _currentSortCol = ""; 
-  bool _isAscending = true;   
-
-  final Map<String, Set<String>> _columnFilters = {
-    'complete': {},
-    'complement': {},
-    'process': {},
-    'quantity': {},
-  };
-  String _remarksExcludeQuery = "";
-  String _quantitySearchQuery = ""; 
-  String _remarksIncludeLogic = "AND"; 
-  String _remarksExcludeLogic = "OR";  
-
+  String _excelPath = ""; String _pdfFolderPath = ""; String _currentFileName = "파일을 선택하세요";
+  bool _autoSave = true; bool _isLoading = false; bool _isSorted = false; bool _isSyncing = false;
+  double _scannerZoom = 0.0; String _currentSortCol = ""; bool _isAscending = true;   
+  final Map<String, Set<String>> _columnFilters = { 'complete': {}, 'complement': {}, 'process': {}, 'quantity': {}, };
+  String _remarksExcludeQuery = ""; String _quantitySearchQuery = ""; 
+  String _remarksIncludeLogic = "AND"; String _remarksExcludeLogic = "OR";  
   final String _baseDownloadPath = "/storage/emulated/0/Download";
   final FocusNode _dummyFocusNode = FocusNode();
-
   List<String> _processList = ['레이저', 'CS', '탭', '버링탭', '헤밍', 'ZB', '절곡', '압입', '리베팅', '버핑', '용접', '도장', '도금', '인쇄', '보류', '사급', '완료'];
   Map<String, int> _processColors = {}; 
-
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  String _searchQuery = "";
-  String _remarksFilterQuery = ""; 
-
-  bool _showUnfinishedOnly = false; 
-  Set<String> _selectedSections = {}; 
-  bool _isSubheadingViewMode = false; 
-  bool _isReorderMode = false; 
-  List<ItemModel> _preReorderItems = []; 
-  int _noFilterMode = 0; 
+  String _searchQuery = ""; String _remarksFilterQuery = ""; 
+  bool _showUnfinishedOnly = false; Set<String> _selectedSections = {}; 
+  bool _isSubheadingViewMode = false; bool _isReorderMode = false; 
+  List<ItemModel> _preReorderItems = []; int _noFilterMode = 0; 
   ItemModel? _temporaryVisibleItem; 
-
-  bool _isEditMode = false;
-  bool _isSelectionFiltered = false; 
-  final Set<int> _selectedIndices = {}; 
-  bool _isSelecting = false; 
-  bool _isScrollingArea = false; 
-  Timer? _scrollTimer; 
-  final ScrollController _scrollController = ScrollController();
-  int? _highlightedRealIndex;
-  String? _trackedItemCode; 
-  final double _subheadingHeight = 80.0; 
-  final double _itemHeight = 45.0;
+  bool _isEditMode = false; bool _isSelectionFiltered = false; 
+  final Set<int> _selectedIndices = {}; bool _isSelecting = false; bool _isScrollingArea = false; 
+  Timer? _scrollTimer; final ScrollController _scrollController = ScrollController();
+  int? _highlightedRealIndex; String? _trackedItemCode; 
+  final double _subheadingHeight = 80.0; final double _itemHeight = 45.0;
   double _preSearchScrollOffset = 0.0; 
 
-  @override
-  void initState() {
-    super.initState();
-    _initApp();
-    _searchFocusNode.addListener(() => setState(() {})); 
-  }
+  @override void initState() { super.initState(); _initApp(); _searchFocusNode.addListener(() => setState(() {})); }
+  @override void dispose() { _scrollController.dispose(); _dummyFocusNode.dispose(); _searchController.dispose(); _searchFocusNode.dispose(); super.dispose(); }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    _dummyFocusNode.dispose();
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    super.dispose();
-  }
-
-  void _clearHighlight() {
-    if (_highlightedRealIndex != null) {
-      setState(() => _highlightedRealIndex = null);
+  void _clearHighlight() { if (_highlightedRealIndex != null) setState(() => _highlightedRealIndex = null); }
+  void _scrollToItem(String code) {
+    int idx = -1; double off = 0.0; int? rIdx;
+    for (int i = 0; i < _displayItems.length; i++) { final it = _displayItems[i]; if (!it.isSubheading && it.itemCode == code) { idx = i; rIdx = it.realIndex; break; } off += it.isSubheading ? _subheadingHeight : _itemHeight; }
+    if (idx != -1 && rIdx != null) {
+      setState(() => _highlightedRealIndex = null); final sH = MediaQuery.of(context).size.height;
+      double tO = off - (sH / 2) + (kToolbarHeight / 2) + (_itemHeight / 2);
+      if (tO < 0) tO = 0; if (_scrollController.hasClients && tO > _scrollController.position.maxScrollExtent) tO = _scrollController.position.maxScrollExtent;
+      if (_scrollController.hasClients) _scrollController.jumpTo(tO); if (mounted) setState(() => _highlightedRealIndex = rIdx);
     }
   }
-
-  void _scrollToItem(String itemCode) {
-    int targetIndex = -1;
-    double offset = 0.0;
-    int? foundRealIndex;
-    for (int i = 0; i < _displayItems.length; i++) {
-      final item = _displayItems[i];
-      if (!item.isSubheading && item.itemCode == itemCode) {
-        targetIndex = i;
-        foundRealIndex = item.realIndex;
-        break;
-      }
-      offset += item.isSubheading ? _subheadingHeight : _itemHeight;
-    }
-    if (targetIndex != -1 && foundRealIndex != null) {
-      setState(() => _highlightedRealIndex = null);
-      final screenHeight = MediaQuery.of(context).size.height;
-      final appBarHeight = kToolbarHeight + 50; 
-      double targetOffset = offset - (screenHeight / 2) + (appBarHeight / 2) + (_itemHeight / 2);
-      if (targetOffset < 0) targetOffset = 0;
-      if (_scrollController.hasClients && targetOffset > _scrollController.position.maxScrollExtent) {
-        targetOffset = _scrollController.position.maxScrollExtent;
-      }
-      if (_scrollController.hasClients) { _scrollController.jumpTo(targetOffset); }
-      if (mounted) { setState(() { _highlightedRealIndex = foundRealIndex; }); }
-    }
-  }
-
-  Future<void> _initApp() async {
-    if (Platform.isAndroid) {
-      if (!await Permission.manageExternalStorage.isGranted) {
-        await Permission.manageExternalStorage.request();
-      }
-    }
-    await _loadSettings();
-    await _ensureBaseDirectory();
-  }
-
-  Future<void> _ensureBaseDirectory() async {
-    final baseDir = Directory("$_baseDownloadPath/CheckSheet");
-    if (!baseDir.existsSync()) baseDir.createSync(recursive: true);
-  }
+  Future<void> _initApp() async { if (Platform.isAndroid && !await Permission.manageExternalStorage.isGranted) await Permission.manageExternalStorage.request(); await _loadSettings(); await _ensureBaseDir(); }
+  Future<void> _ensureBaseDir() async { final d = Directory("$_baseDownloadPath/CheckSheet"); if (!d.existsSync()) d.createSync(recursive: true); }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _excelPath = prefs.getString('excelPath') ?? "";
-      _pdfFolderPath = prefs.getString('pdfFolderPath') ?? "";
-      _autoSave = prefs.getBool('autoSave') ?? true;
-      _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0;
-      _smbService.setConfig(
-        prefs.getString('smbIp') ?? "",
-        prefs.getString('smbUser') ?? "",
-        prefs.getString('smbPass') ?? "",
-      );
+      _excelPath = prefs.getString('excelPath') ?? ""; _pdfFolderPath = prefs.getString('pdfFolderPath') ?? ""; _autoSave = prefs.getBool('autoSave') ?? true; _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0;
+      _smbService.setConfig(prefs.getString('smbIp')??"", prefs.getString('smbUser')??"", prefs.getString('smbPass')??"");
       _processList = prefs.getStringList('processList') ?? ['레이저', 'CS', '탭', '버링탭', '헤밍', 'ZB', '절곡', '압입', '리베팅', '버핑', '용접', '도장', '도금', '인쇄', '보류', '사급', '완료'];
-      String? colorsJson = prefs.getString('processColors');
-      if (colorsJson != null) {
-        try {
-          Map<String, dynamic> decoded = jsonDecode(colorsJson);
-          _processColors = decoded.map((key, value) => MapEntry(key, value as int));
-        } catch (_) { _processColors = {}; }
-      } else { _processColors = {}; }
-      _searchQuery = prefs.getString('filter_searchQuery') ?? "";
-      _searchController.text = _searchQuery;
-      _currentSortCol = prefs.getString('filter_currentSortCol') ?? "";
-      _isAscending = prefs.getBool('filter_isAscending') ?? true;
-      _isSorted = prefs.getBool('filter_isSorted') ?? false;
-      _showUnfinishedOnly = prefs.getBool('filter_showUnfinishedOnly') ?? false;
-      _isSubheadingViewMode = prefs.getBool('filter_isSubheadingViewMode') ?? false;
-      _noFilterMode = prefs.getInt('filter_noFilterMode') ?? 0;
-      _remarksFilterQuery = prefs.getString('filter_remarksFilterQuery') ?? "";
-      _remarksExcludeQuery = prefs.getString('filter_remarksExcludeQuery') ?? "";
-      _remarksIncludeLogic = prefs.getString('filter_remarksIncludeLogic') ?? "AND";
-      _remarksExcludeLogic = prefs.getString('filter_remarksExcludeLogic') ?? "OR";
+      try { Map<String, dynamic> d = jsonDecode(prefs.getString('processColors')??"{}"); _processColors = d.map((k, v) => MapEntry(k, v as int)); } catch (_) { _processColors = {}; }
+      _searchQuery = prefs.getString('filter_searchQuery') ?? ""; _searchController.text = _searchQuery; _currentSortCol = prefs.getString('filter_currentSortCol') ?? "";
+      _isAscending = prefs.getBool('filter_isAscending') ?? true; _isSorted = prefs.getBool('filter_isSorted') ?? false; _showUnfinishedOnly = prefs.getBool('filter_showUnfinishedOnly') ?? false;
+      _isSubheadingViewMode = prefs.getBool('filter_isSubheadingViewMode') ?? false; _noFilterMode = prefs.getInt('filter_noFilterMode') ?? 0;
+      _remarksFilterQuery = prefs.getString('filter_remarksFilterQuery') ?? ""; _remarksExcludeQuery = prefs.getString('filter_remarksExcludeQuery') ?? "";
+      _remarksIncludeLogic = prefs.getString('filter_remarksIncludeLogic') ?? "AND"; _remarksExcludeLogic = prefs.getString('filter_remarksExcludeLogic') ?? "OR";
       _quantitySearchQuery = prefs.getString('filter_quantitySearchQuery') ?? "";
-      String? colFilterJson = prefs.getString('filter_columnFilters');
-      if (colFilterJson != null) {
-        try {
-          Map<String, dynamic> decoded = jsonDecode(colFilterJson);
-          decoded.forEach((key, value) {
-            if (_columnFilters.containsKey(key)) {
-              _columnFilters[key] = (value as List).map((e) => e.toString()).toSet();
-            }
-          });
-        } catch (_) {}
-      }
-      List<String>? selSections = prefs.getStringList('filter_selectedSections');
-      if (selSections != null) _selectedSections = selSections.toSet();
+      try { Map<String, dynamic> d = jsonDecode(prefs.getString('filter_columnFilters')??"{}"); d.forEach((k, v) { if (_columnFilters.containsKey(k)) _columnFilters[k] = (v as List).map((e) => e.toString()).toSet(); }); } catch (_) {}
+      _selectedSections = (prefs.getStringList('filter_selectedSections') ?? []).toSet();
     });
     if (_excelPath.isNotEmpty && File(_excelPath).existsSync()) _loadExcelData(_excelPath, keepFilters: true);
   }
 
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('excelPath', _excelPath);
-    await prefs.setString('pdfFolderPath', _pdfFolderPath);
-    await prefs.setBool('autoSave', _autoSave);
-    await prefs.setDouble('scannerZoom', _scannerZoom);
-    await prefs.setStringList('processList', _processList);
-    await prefs.setString('processColors', jsonEncode(_processColors));
-    await prefs.setString('filter_searchQuery', _searchQuery);
-    await prefs.setString('filter_currentSortCol', _currentSortCol);
-    await prefs.setBool('filter_isAscending', _isAscending);
-    await prefs.setBool('filter_isSorted', _isSorted);
-    await prefs.setBool('filter_showUnfinishedOnly', _showUnfinishedOnly);
-    await prefs.setBool('filter_isSubheadingViewMode', _isSubheadingViewMode);
-    await prefs.setInt('filter_noFilterMode', _noFilterMode);
-    await prefs.setString('filter_remarksFilterQuery', _remarksFilterQuery);
-    await prefs.setString('filter_remarksExcludeQuery', _remarksExcludeQuery);
-    await prefs.setString('filter_remarksIncludeLogic', _remarksIncludeLogic);
-    await prefs.setString('filter_remarksExcludeLogic', _remarksExcludeLogic);
-    await prefs.setString('filter_quantitySearchQuery', _quantitySearchQuery);
-    Map<String, List<String>> colFilterMap = _columnFilters.map((k, v) => MapEntry(k, v.toList()));
-    await prefs.setString('filter_columnFilters', jsonEncode(colFilterMap));
-    await prefs.setStringList('filter_selectedSections', _selectedSections.toList());
+    await prefs.setString('excelPath', _excelPath); await prefs.setString('pdfFolderPath', _pdfFolderPath); await prefs.setBool('autoSave', _autoSave); await prefs.setDouble('scannerZoom', _scannerZoom);
+    await prefs.setStringList('processList', _processList); await prefs.setString('processColors', jsonEncode(_processColors));
+    await prefs.setString('filter_searchQuery', _searchQuery); await prefs.setString('filter_currentSortCol', _currentSortCol); await prefs.setBool('filter_isAscending', _isAscending);
+    await prefs.setBool('filter_isSorted', _isSorted); await prefs.setBool('filter_showUnfinishedOnly', _showUnfinishedOnly); await prefs.setBool('filter_isSubheadingViewMode', _isSubheadingViewMode);
+    await prefs.setInt('filter_noFilterMode', _noFilterMode); await prefs.setString('filter_remarksFilterQuery', _remarksFilterQuery); await prefs.setString('filter_remarksExcludeQuery', _remarksExcludeQuery);
+    await prefs.setString('filter_remarksIncludeLogic', _remarksIncludeLogic); await prefs.setString('filter_remarksExcludeLogic', _remarksExcludeLogic); await prefs.setString('filter_quantitySearchQuery', _quantitySearchQuery);
+    await prefs.setString('filter_columnFilters', jsonEncode(_columnFilters.map((k, v) => MapEntry(k, v.toList())))); await prefs.setStringList('filter_selectedSections', _selectedSections.toList());
   }
 
-  Future<void> _loadExcelData(String path, {bool keepFilters = false}) async {
+  Future<void> _loadExcelData(String p, {bool keepFilters = false}) async {
     setState(() => _isLoading = true);
     try {
-      final items = await _excelService.loadExcel(path);
+      final items = await _excelService.loadExcel(p);
       setState(() {
-        _originalItems = items;
-        _displayItems = List.from(items);
-        _currentFileName = p.basename(path);
-        _excelPath = path;
-        if (!keepFilters) {
-          _isSorted = false; _currentSortCol = ""; _searchController.clear(); _searchQuery = ""; _showUnfinishedOnly = false; _selectedSections.clear(); _noFilterMode = 0; _remarksFilterQuery = ""; _remarksExcludeQuery = ""; _remarksIncludeLogic = "AND"; _remarksExcludeLogic = "OR"; _quantitySearchQuery = ""; _isSubheadingViewMode = false; _columnFilters.forEach((key, value) => value.clear());
-        }
+        _originalItems = items; _displayItems = List.from(items); _currentFileName = p.basename(p); _excelPath = p;
+        if (!keepFilters) { _isSorted = false; _currentSortCol = ""; _searchController.clear(); _searchQuery = ""; _showUnfinishedOnly = false; _selectedSections.clear(); _noFilterMode = 0; _remarksFilterQuery = ""; _remarksExcludeQuery = ""; _remarksIncludeLogic = "AND"; _remarksExcludeLogic = "OR"; _quantitySearchQuery = ""; _isSubheadingViewMode = false; _columnFilters.forEach((k, v) => v.clear()); }
         _isEditMode = false; _isReorderMode = false; _selectedIndices.clear(); _temporaryVisibleItem = null;
       });
       if (keepFilters) _applyFilterAndSort(); else _saveSettings();
-      _saveLastDir(path);
     } catch (e) { _showError("로드 오류", "엑셀 파일을 읽을 수 없습니다."); } finally { setState(() => _isLoading = false); }
   }
 
-  Future<void> _saveLastDir(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('lastDir', p.dirname(path));
-  }
-
-  void _forgetFocus() {
-    if (!mounted) return;
-    _searchFocusNode.unfocus();
-    FocusScope.of(context).requestFocus(_dummyFocusNode);
-  }
+  void _forgetFocus() { if (!mounted) return; _searchFocusNode.unfocus(); FocusScope.of(context).requestFocus(_dummyFocusNode); }
 
   void _applyFilterAndSort() {
-    List<ItemModel> results = [];
+    List<ItemModel> res = [];
     if (_isSubheadingViewMode) {
-      results = _originalItems.where((i) => i.isSubheading).toList();
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        results = results.where((i) => i.itemCode.toLowerCase().contains(query)).toList();
-      }
-      if (results.isEmpty) results.add(ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "부분제목 없음", quantity: "", isSubheading: true));
-      setState(() { _displayItems = results; });
-      _saveSettings();
-      return;
+      res = _originalItems.where((i) => i.isSubheading).toList();
+      if (_searchQuery.isNotEmpty) res = res.where((i) => i.itemCode.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+      if (res.isEmpty) res.add(ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "부분제목 없음", quantity: "", isSubheading: true));
+      setState(() => _displayItems = res); _saveSettings(); return;
     }
-    String? currentHeader; Map<String, List<ItemModel>> sectionMap = {}; List<String> headerOrder = [];
-    for (var item in _originalItems) {
-      if (item.isSubheading) { currentHeader = item.itemCode; sectionMap[currentHeader] = []; headerOrder.add(currentHeader); }
-      else {
-        if (currentHeader != null) sectionMap[currentHeader]!.add(item);
-        else { if (!sectionMap.containsKey("ROOT")) { sectionMap["ROOT"] = []; headerOrder.insert(0, "ROOT"); } sectionMap["ROOT"]!.add(item); }
-      }
-    }
-    for (var header in headerOrder) {
-      if (_selectedSections.isNotEmpty && !_selectedSections.contains(header)) continue;
-      List<ItemModel> sectionItems = List.from(sectionMap[header]!);
-      if (_searchQuery.isNotEmpty) { final q = _searchQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty); sectionItems = sectionItems.where((it) { final t = it.itemCode.toLowerCase(); return q.every((p) => t.contains(p)); }).toList(); }
+    String? curH; Map<String, List<ItemModel>> sMap = {}; List<String> hOrd = [];
+    for (var it in _originalItems) { if (it.isSubheading) { curH = it.itemCode; sMap[curH] = []; hOrd.add(curH); } else { if (curH != null) sMap[curH]!.add(it); else { if (!sMap.containsKey("ROOT")) { sMap["ROOT"] = []; hOrd.insert(0, "ROOT"); } sMap["ROOT"]!.add(it); } } }
+    for (var h in hOrd) {
+      if (_selectedSections.isNotEmpty && !_selectedSections.contains(h)) continue;
+      List<ItemModel> sIts = List.from(sMap[h]!);
+      if (_searchQuery.isNotEmpty) { final q = _searchQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty); sIts = sIts.where((it) => q.every((p) => it.itemCode.toLowerCase().contains(p))).toList(); }
       _columnFilters.forEach((col, sel) {
         if (sel.isNotEmpty || (col == 'quantity' && _quantitySearchQuery.isNotEmpty)) {
-          sectionItems = sectionItems.where((it) {
-            String v = ""; if (col == 'complete') v = it.complete ? "완료" : "미완료"; else if (col == 'complement') v = it.complement.isEmpty ? "(빈칸)" : it.complement; else if (col == 'process') v = it.process.isEmpty ? "(빈칸)" : it.process; else if (col == 'quantity') v = it.quantity;
+          sIts = sIts.where((it) {
+            String v = (col == 'complete') ? (it.complete ? "완료" : "미완료") : (col == 'complement') ? (it.complement.isEmpty ? "(빈칸)" : it.complement) : (col == 'process') ? (it.process.isEmpty ? "(빈칸)" : it.process) : it.quantity;
             bool s = sel.contains(v); if (col == 'quantity' && _quantitySearchQuery.isNotEmpty) { final q = _quantitySearchQuery.split(' ').where((p) => p.isNotEmpty); s = s || q.any((p) => v == p); } return s;
           }).toList();
         }
       });
-      if (_remarksFilterQuery.isNotEmpty) { final q = _remarksFilterQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty); sectionItems = sectionItems.where((it) { final t = it.remarks.toLowerCase(); return _remarksIncludeLogic == "AND" ? q.every((p) => t.contains(p)) : q.any((p) => t.contains(p)); }).toList(); }
-      if (_remarksExcludeQuery.isNotEmpty) { final q = _remarksExcludeQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty); sectionItems = sectionItems.where((it) { final t = it.remarks.toLowerCase(); bool e = _remarksExcludeLogic == "AND" ? q.every((p) => t.contains(p)) : q.any((p) => t.contains(p)); return !e; }).toList(); }
-      if (_showUnfinishedOnly) sectionItems = sectionItems.where((it) => !it.complete).toList();
-      if (_isSelectionFiltered) sectionItems = sectionItems.where((it) => _selectedIndices.contains(it.realIndex)).toList();
-      if (_noFilterMode == 1) sectionItems = sectionItems.where((it) => it.no.isNotEmpty).toList();
-      else if (_noFilterMode == 2) sectionItems = sectionItems.where((it) { if (it.displayNo.contains('-')) return true; if (it.no.isNotEmpty) return !_originalItems.any((o) => !o.isSubheading && o.displayNo.startsWith("${it.no}-")); return false; }).toList();
+      if (_remarksFilterQuery.isNotEmpty) { final q = _remarksFilterQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty); sIts = sIts.where((it) => _remarksIncludeLogic == "AND" ? q.every((p) => it.remarks.toLowerCase().contains(p)) : q.any((p) => it.remarks.toLowerCase().contains(p))).toList(); }
+      if (_remarksExcludeQuery.isNotEmpty) { final q = _remarksExcludeQuery.toLowerCase().split(' ').where((p) => p.isNotEmpty); sIts = sIts.where((it) => !(_remarksExcludeLogic == "AND" ? q.every((p) => it.remarks.toLowerCase().contains(p)) : q.any((p) => it.remarks.toLowerCase().contains(p)))).toList(); }
+      if (_showUnfinishedOnly) sIts = sIts.where((it) => !it.complete).toList();
+      if (_isSelectionFiltered) sIts = sIts.where((it) => _selectedIndices.contains(it.realIndex)).toList();
+      if (_noFilterMode == 1) sIts = sIts.where((it) => it.no.isNotEmpty).toList();
+      else if (_noFilterMode == 2) sIts = sIts.where((it) { if (it.displayNo.contains('-')) return true; if (it.no.isNotEmpty) return !_originalItems.any((o) => !o.isSubheading && o.displayNo.startsWith("${it.no}-")); return false; }).toList();
       if (_temporaryVisibleItem != null && !_temporaryVisibleItem!.isSubheading) {
-        String tH = "ROOT"; String? temp; for (var i in _originalItems) { if (i.isSubheading) temp = i.itemCode; if (i == _temporaryVisibleItem) { tH = temp ?? "ROOT"; break; } }
-        if (header == tH) { if (!sectionItems.any((it) => it.realIndex == _temporaryVisibleItem!.realIndex)) { sectionItems.add(_temporaryVisibleItem!); sectionItems.sort((a, b) => a.realIndex.compareTo(b.realIndex)); } }
+        String tH = "ROOT"; String? tC; for (var i in _originalItems) { if (i.isSubheading) tC = i.itemCode; if (i == _temporaryVisibleItem) { tH = tC ?? "ROOT"; break; } }
+        if (h == tH && !sIts.any((it) => it.realIndex == _temporaryVisibleItem!.realIndex)) { sIts.add(_temporaryVisibleItem!); sIts.sort((a, b) => a.realIndex.compareTo(b.realIndex)); }
       }
-      if (sectionItems.isNotEmpty) { if (header != "ROOT") results.add(_originalItems.firstWhere((i) => i.isSubheading && i.itemCode == header)); results.addAll(sectionItems); }
-      else if (_selectedSections.contains(header)) results.add(_originalItems.firstWhere((i) => i.isSubheading && i.itemCode == header));
+      if (sIts.isNotEmpty) { if (h != "ROOT") res.add(_originalItems.firstWhere((i) => i.isSubheading && i.itemCode == h)); res.addAll(sIts); }
+      else if (_selectedSections.contains(h)) res.add(_originalItems.firstWhere((i) => i.isSubheading && i.itemCode == h));
     }
     if (_isSorted && _currentSortCol.isNotEmpty) {
-      results = results.where((i) => !i.isSubheading).toList();
-      results.sort((a, b) { int cmp = 0; switch (_currentSortCol) { case 'no': cmp = _compareDisplayNo(a.displayNo, b.displayNo); break; case 'itemCode': cmp = a.itemCode.compareTo(b.itemCode); break; case 'quantity': cmp = (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0); break; case 'complete': cmp = (a.complete ? 1 : 0).compareTo(b.complete ? 1 : 0); break; case 'complement': cmp = a.complement.compareTo(b.complement); break; case 'process': cmp = a.process.compareTo(b.process); break; case 'remarks': cmp = a.remarks.compareTo(b.remarks); break; } return _isAscending ? cmp : -cmp; });
+      res = res.where((i) => !i.isSubheading).toList();
+      res.sort((a, b) { int c = 0; switch (_currentSortCol) { case 'no': c = _compareDisplayNo(a.displayNo, b.displayNo); break; case 'itemCode': c = a.itemCode.compareTo(b.itemCode); break; case 'quantity': c = (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0); break; case 'complete': c = (a.complete ? 1 : 0).compareTo(b.complete ? 1 : 0); break; case 'complement': c = a.complement.compareTo(b.complement); break; case 'process': c = a.process.compareTo(b.process); break; case 'remarks': c = a.remarks.compareTo(b.remarks); break; } return _isAscending ? c : -c; });
     }
-    setState(() { _displayItems = results; });
-    if (_trackedItemCode != null) { WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted && _trackedItemCode != null) { if (_displayItems.any((i) => !i.isSubheading && i.itemCode == _trackedItemCode)) _scrollToItem(_trackedItemCode!); } }); }
+    setState(() => _displayItems = res);
+    if (_trackedItemCode != null) WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted && _trackedItemCode != null && _displayItems.any((i) => !i.isSubheading && i.itemCode == _trackedItemCode)) _scrollToItem(_trackedItemCode!); });
     _saveSettings();
   }
 
-  void _resetSort() {
-    _forgetFocus(); setState(() {
-      _isSorted = false; _currentSortCol = ""; _remarksFilterQuery = ""; _remarksExcludeQuery = ""; _quantitySearchQuery = ""; _remarksIncludeLogic = "AND"; _remarksExcludeLogic = "OR"; _noFilterMode = 0; _temporaryVisibleItem = null; _columnFilters.forEach((k, v) => v.clear()); _showUnfinishedOnly = false; _selectedSections.clear(); _isSubheadingViewMode = false; _isReorderMode = false; _searchQuery = ""; _searchController.clear(); _isSelectionFiltered = false; _selectedIndices.clear();
-    });
-    _applyFilterAndSort();
-  }
-
-  void _sortBy(String col) {
-    _forgetFocus(); if (col == 'itemCode') { setState(() { if (_currentSortCol == col) { if (_isAscending) _isAscending = false; else { _isSorted = false; _currentSortCol = ""; } } else { _currentSortCol = col; _isAscending = true; _isSorted = true; } }); _applyFilterAndSort(); return; }
-    if (col == 'no') { setState(() => _noFilterMode = (_noFilterMode + 1) % 3); _applyFilterAndSort(); return; }
-    _showFilterDialog(col);
-  }
+  void _resetSort() { _forgetFocus(); setState(() { _isSorted = false; _currentSortCol = ""; _remarksFilterQuery = ""; _remarksExcludeQuery = ""; _quantitySearchQuery = ""; _remarksIncludeLogic = "AND"; _remarksExcludeLogic = "OR"; _noFilterMode = 0; _temporaryVisibleItem = null; _columnFilters.forEach((k, v) => v.clear()); _showUnfinishedOnly = false; _selectedSections.clear(); _isSubheadingViewMode = false; _isReorderMode = false; _searchQuery = ""; _searchController.clear(); _isSelectionFiltered = false; _selectedIndices.clear(); }); _applyFilterAndSort(); }
+  void _sortBy(String col) { _forgetFocus(); if (col == 'itemCode') { setState(() { if (_currentSortCol == col) { if (_isAscending) _isAscending = false; else { _isSorted = false; _currentSortCol = ""; } } else { _currentSortCol = col; _isAscending = true; _isSorted = true; } }); _applyFilterAndSort(); return; } if (col == 'no') { setState(() => _noFilterMode = (_noFilterMode + 1) % 3); _applyFilterAndSort(); return; } _showFilterDialog(col); }
 
   Set<String> _getValidOptionsForColumn(String col) {
     Set<String> validSet = {};
@@ -329,12 +166,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       if (_noFilterMode == 2) { if (!item.displayNo.contains('-')) { if (item.no.isNotEmpty) { if (_originalItems.any((o) => !o.isSubheading && o.displayNo.startsWith("${item.no}-"))) continue; } else continue; } }
       bool pass = true; _columnFilters.forEach((c, sel) {
         if (c == col) return; if (sel.isNotEmpty || (c == 'quantity' && _quantitySearchQuery.isNotEmpty)) {
-          String v = ""; if (c == 'complete') v = item.complete ? "완료" : "미완료"; else if (c == 'complement') v = item.complement.isEmpty ? "(빈칸)" : item.complement; else if (c == 'process') v = item.process.isEmpty ? "(빈칸)" : item.process; else if (c == 'quantity') v = item.quantity;
+          String v = (c == 'complete') ? (item.complete ? "완료" : "미완료") : (c == 'complement') ? (item.complement.isEmpty ? "(빈칸)" : item.complement) : (c == 'process') ? (item.process.isEmpty ? "(빈칸)" : item.process) : item.quantity;
           bool s = sel.contains(v); if (c == 'quantity' && _quantitySearchQuery.isNotEmpty) { final q = _quantitySearchQuery.split(' ').where((p) => p.isNotEmpty); s = s || q.any((p) => v == p); } if (!s) pass = false;
         }
       });
       if (!pass) continue;
-      String val = ""; if (col == 'complete') val = item.complete ? "완료" : "미완료"; else if (col == 'complement') val = item.complement.isEmpty ? "(빈칸)" : item.complement; else if (col == 'process') val = item.process.isEmpty ? "(빈칸)" : item.process; else if (col == 'quantity') val = item.quantity;
+      String val = (col == 'complete') ? (item.complete ? "완료" : "미완료") : (col == 'complement') ? (item.complement.isEmpty ? "(빈칸)" : item.complement) : (col == 'process') ? (item.process.isEmpty ? "(빈칸)" : item.process) : item.quantity;
       validSet.add(val);
     }
     return validSet;
@@ -374,19 +211,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Widget _buildFilterGrid(List<String> options, Set<String> filt, String col, StateSetter setModal, {Set<String>? validOptions}) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
     return LayoutBuilder(builder: (ctx, constraints) {
       double w = col == 'complete' ? constraints.maxWidth / 2 : constraints.maxWidth / 3;
       return Wrap(children: options.map((o) {
         bool valid = validOptions == null || validOptions.contains(o); bool sel = filt.contains(o);
-        return SizedBox(width: w, child: InkWell(onTap: !valid ? null : () => setModal(() { if (col == 'complete') { if (sel) filt.clear(); else { filt.clear(); filt.add(o); } } else { if (sel) filt.remove(o); else filt.add(o); } }), child: Opacity(opacity: valid ? 1.0 : 0.3, child: Row(mainAxisSize: MainAxisSize.min, children: [Checkbox(value: sel, onChanged: !valid ? null : (v) => setModal(() { if (col == 'complete') { if (sel && !v!) filt.clear(); else { filt.clear(); if (v!) filt.add(o); } } else { if (v!) filt.add(o); else filt.remove(o); } }), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact), if (col == 'process' && o != "(빈칸)") Container(width: 4, height: 16, margin: const EdgeInsets.only(right: 4), decoration: BoxDecoration(color: (() { int? c = _processColors[o]; if (c != null) return Color(c); if (o == "완료") return Colors.purple; if (o == "보류") return Colors.red; if (["용접", "도장", "도금", "인쇄"].contains(o)) return Colors.orange; return Colors.blueGrey; })(), borderRadius: BorderRadius.circular(2))), Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(o, style: TextStyle(fontSize: 12, fontWeight: col == 'process' ? FontWeight.bold : FontWeight.normal, color: isDark ? Colors.white : Colors.black87))))]))));
+        return SizedBox(width: w, child: InkWell(onTap: !valid ? null : () => setModal(() { if (col == 'complete') { if (sel) filt.clear(); else { filt.clear(); filt.add(o); } } else { if (sel) filt.remove(o); else filt.add(o); } }), child: Opacity(opacity: valid ? 1.0 : 0.3, child: Row(mainAxisSize: MainAxisSize.min, children: [Checkbox(value: sel, onChanged: !valid ? null : (v) => setModal(() { if (col == 'complete') { if (sel && !v!) filt.clear(); else { filt.clear(); if (v!) filt.add(o); } } else { if (v!) filt.add(o); else filt.remove(o); } }), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact), if (col == 'process' && o != "(빈칸)") Container(width: 4, height: 16, margin: const EdgeInsets.only(right: 4), decoration: BoxDecoration(color: (() { int? c = _processColors[o]; if (c != null) return Color(c); if (o == "완료") return Colors.purple; if (o == "보류") return Colors.red; if (["용접", "도장", "도금", "인쇄"].contains(o)) return Colors.orange; return Colors.blueGrey; })(), borderRadius: BorderRadius.circular(2))), Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(o, style: TextStyle(fontSize: 12, fontWeight: col == 'process' ? FontWeight.bold : FontWeight.normal, color: dark ? Colors.white : Colors.black87))))]))));
       }).toList());
     });
   }
 
-  Future<void> _pickSource(String mode) async {
-    _forgetFocus(); showModalBottomSheet(context: context, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [ListTile(leading: const Icon(Icons.phone_android), title: const Text("내 휴대폰"), onTap: () { Navigator.pop(ctx); _openCustomPicker(mode); }), ListTile(leading: const Icon(Icons.computer), title: const Text("PC 공유폴더 (SMB)"), onTap: () { Navigator.pop(ctx); _openSmbShares(mode); }), const SizedBox(height: 10)])));
-  }
+  Future<void> _pickSource(String mode) async { _forgetFocus(); showModalBottomSheet(context: context, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [ListTile(leading: const Icon(Icons.phone_android), title: const Text("내 휴대폰"), onTap: () { Navigator.pop(ctx); _openCustomPicker(mode); }), ListTile(leading: const Icon(Icons.computer), title: const Text("PC 공유폴더 (SMB)"), onTap: () { Navigator.pop(ctx); _openSmbShares(mode); }), const SizedBox(height: 10)]))); }
 
   void _createNewFile(String currentPath) {
     final now = DateTime.now(); final date = "${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}"; String name = "체크시트_$date"; int c = 1; while (File("$currentPath/$name.xlsx").existsSync()) { name = "체크시트_$date($c)"; c++; }
@@ -421,7 +256,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _showSmbFiles(String share, String path, String mode) async {
     setState(() => _isLoading = true); List<Map<String, dynamic>> files = await _smbService.listFiles(share, path); setState(() => _isLoading = false); if (!mounted) return; List<Map<String, dynamic>> filt = files.where((f) { if (f['isDirectory'] as bool) return true; String n = (f['name'] as String).toLowerCase(); return mode == 'file' ? (n.endsWith('.xlsx') || n.endsWith('.xls')) : n.endsWith('.pdf'); }).toList();
-    showDialog(context: context, builder: (ctx) => AlertDialog(title: Text("$share/$path"), content: SizedBox(width: double.maxFinite, height: 400, child: Column(children: [if (path != "") ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showSmbFiles(share, p.dirname(path) == "." ? "" : p.dirname(path), mode); }), Expanded(child: ListView.builder(itemCount: filt.length, itemBuilder: (c, i) { final f = filt[i]; bool isDir = f['isDirectory'] as bool; String n = f['name'] as String; return ListTile(leading: Icon(isDir ? Icons.folder : Icons.description), title: Text(n), onTap: () { if (isDir) { Navigator.pop(ctx); _showFileBrowser(mode, "${path == "" ? "" : "$path/"}$n"); } else if (mode == 'file') { Navigator.pop(ctx); _downloadAndLoad(share, "${path == "" ? "" : "$path/"}$n"); } }); }))])), actions: [if (mode == 'dir') TextButton(onPressed: () { setState(() => _pdfFolderPath = "smb://$share/$path"); _saveSettings(); Navigator.pop(ctx); }, child: const Text("현재 폴더 선택")), TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))]));
+    showDialog(context: context, builder: (ctx) => AlertDialog(title: Text("$share/$path"), content: SizedBox(width: double.maxFinite, height: 400, child: Column(children: [if (path != "") ListTile(leading: const Icon(Icons.arrow_upward), title: const Text(".. 상위"), onTap: () { Navigator.pop(ctx); _showSmbFiles(share, p.dirname(path) == "." ? "" : p.dirname(path), mode); }), Expanded(child: ListView.builder(itemCount: filt.length, itemBuilder: (c, i) { final f = filt[i]; bool isDir = f['isDirectory'] as bool; String n = f['name'] as String; return ListTile(leading: Icon(isDir ? Icons.folder : Icons.description), title: Text(n), onTap: () { if (isDir) { Navigator.pop(ctx); _showSmbFiles(share, "${path == "" ? "" : "$path/"}$n", mode); } else if (mode == 'file') { Navigator.pop(ctx); _downloadAndLoad(share, "${path == "" ? "" : "$path/"}$n"); } }); }))])), actions: [if (mode == 'dir') TextButton(onPressed: () { setState(() => _pdfFolderPath = "smb://$share/$path"); _saveSettings(); Navigator.pop(ctx); }, child: const Text("현재 폴더 선택")), TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))]));
   }
 
   Future<void> _downloadAndLoad(String share, String remotePath) async { setState(() => _isLoading = true); String local = "$_baseDownloadPath/CheckSheet/${p.basename(remotePath)}"; File? f = await _smbService.downloadFile(share, remotePath, local); setState(() => _isLoading = false); if (f != null) _loadExcelData(f.path); else _showError("오류", "다운로드 실패"); }
@@ -442,26 +277,23 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   void _handleClose() { _forgetFocus(); if (_originalItems.isEmpty) return; showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("리스트 닫기"), content: const Text("현재 리스트를 닫으시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")), TextButton(onPressed: () { setState(() { _originalItems = []; _displayItems = []; _currentFileName = "파일을 선택하세요"; _excelPath = ""; _isSorted = false; _currentSortCol = ""; _searchController.clear(); _searchQuery = ""; _showUnfinishedOnly = false; _selectedSections.clear(); }); _saveSettings(); Navigator.pop(ctx); _showSnackBar("리스트가 닫혔습니다."); }, child: const Text("예", style: TextStyle(color: Colors.red)))])); }
   void _handleRefresh() { _forgetFocus(); if (_excelPath.isEmpty) return; if (File(_excelPath).existsSync()) { _loadExcelData(_excelPath, keepFilters: true); _showSnackBar("🔄 리스트를 새로고침했습니다."); } }
 
-  void _showCompleteTimeDialog(ItemModel item) {
-    _forgetFocus(); String record = item.completeTime.isEmpty ? "기록 없음" : item.completeTime;
-    showDialog(context: context, builder: (ctx) => AlertDialog(title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [FittedBox(fit: BoxFit.scaleDown, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))), const SizedBox(height: 8), const Text("완료 입력 시간", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))]), content: Text("입력시간 : $record", style: const TextStyle(fontSize: 16)), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
-  }
+  void _showCompleteTimeDialog(ItemModel it) { _forgetFocus(); String r = it.completeTime.isEmpty ? "기록 없음" : it.completeTime; showDialog(context: context, builder: (ctx) => AlertDialog(title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [FittedBox(fit: BoxFit.scaleDown, child: Text(it.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))), const SizedBox(height: 8), const Text("완료 입력 시간", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))]), content: Text("입력시간 : $r", style: const TextStyle(fontSize: 16)), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))])); }
 
   void _resetFilteredItemsColumn(String col) {
-    final filtered = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(); if (filtered.isEmpty) return;
-    String name = (col == 'complete') ? "완료" : (col == 'process' ? "공정" : "보완");
-    showDialog(context: context, builder: (ctx) => AlertDialog(title: Text("리스트 항목 $name 리셋"), content: Text("현재 화면에 보이는 ${filtered.length}개 항목의 [$name] 항목을 리셋하시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")), TextButton(onPressed: () { setState(() { for (var it in filtered) { if (col == 'complete') { it.complete = false; it.completeTime = ""; it.complement = ""; it.complementTime = ""; } else if (col == 'process') { it.process = ""; it.processTime = ""; } else if (col == 'complement') { it.complement = ""; it.complementTime = ""; } } }); if (_autoSave) _manualSave(silent: true); Navigator.pop(ctx); _showSnackBar("$name 리셋 완료"); }, child: const Text("리셋 실행", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))]));
+    final filt = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(); if (filt.isEmpty) return;
+    String n = (col == 'complete') ? "완료" : (col == 'process' ? "공정" : "보완");
+    showDialog(context: context, builder: (ctx) => AlertDialog(title: Text("리스트 항목 $n 리셋"), content: Text("현재 화면에 보이는 ${filt.length}개 항목의 [$n] 항목을 리셋하시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")), TextButton(onPressed: () { setState(() { for (var it in filt) { if (col == 'complete') { it.complete = false; it.completeTime = ""; it.complement = ""; it.complementTime = ""; } else if (col == 'process') { it.process = ""; it.processTime = ""; } else if (col == 'complement') { it.complement = ""; it.complementTime = ""; } } }); if (_autoSave) _manualSave(silent: true); Navigator.pop(ctx); _showSnackBar("$n 리셋 완료"); }, child: const Text("리셋 실행", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))]));
   }
 
-  void _showComplementDialog(ItemModel item) {
-    _forgetFocus(); String last = item.complementTime.isNotEmpty ? "입력시간 : ${item.complementTime}" : "입력시간 : 없음";
-    showDialog(context: context, builder: (ctx) => AlertDialog(title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [FittedBox(fit: BoxFit.scaleDown, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))), const SizedBox(height: 8), Row(children: [const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)), if (item.complement.isNotEmpty) ...[const SizedBox(width: 10), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: (item.complement == "부족") ? Colors.orange : Colors.red, borderRadius: BorderRadius.circular(4)), child: Text(item.complement, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)))]]), const SizedBox(height: 4), Text(last, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.blueGrey))]), content: Column(mainAxisSize: MainAxisSize.min, children: [_dialogBtn("부족", Colors.orange, () { item.complement = "부족"; item.complete = false; item.complementTime = DateTime.now().toString().substring(0, 16); }), _dialogBtn("재작업", Colors.red, () { item.complement = "재작업"; item.complete = false; item.complementTime = DateTime.now().toString().substring(0, 16); }), const Divider(), _dialogBtn("지우기", Colors.grey, () { item.complement = ""; item.complementTime = ""; }), _dialogBtn("선택취소", Colors.blueGrey, () {})])));
+  void _showComplementDialog(ItemModel it) {
+    _forgetFocus(); String last = it.complementTime.isNotEmpty ? "입력시간 : ${it.complementTime}" : "입력시간 : 없음";
+    showDialog(context: context, builder: (ctx) => AlertDialog(title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [FittedBox(fit: BoxFit.scaleDown, child: Text(it.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))), const SizedBox(height: 8), Row(children: [const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)), if (it.complement.isNotEmpty) ...[const SizedBox(width: 10), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: (it.complement == "부족") ? Colors.orange : Colors.red, borderRadius: BorderRadius.circular(4)), child: Text(it.complement, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)))]]), const SizedBox(height: 4), Text(last, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.blueGrey))]), content: Column(mainAxisSize: MainAxisSize.min, children: [_dialogBtn("부족", Colors.orange, () { it.complement = "부족"; it.complete = false; it.complementTime = DateTime.now().toString().substring(0, 16); }), _dialogBtn("재작업", Colors.red, () { it.complement = "재작업"; it.complete = false; it.complementTime = DateTime.now().toString().substring(0, 16); }), const Divider(), _dialogBtn("지우기", Colors.grey, () { it.complement = ""; it.complementTime = ""; }), _dialogBtn("선택취소", Colors.blueGrey, () {})])));
   }
 
-  void _showProcessDialog(ItemModel item) {
-    _forgetFocus(); String last = item.processTime.isNotEmpty ? "입력시간 : ${item.processTime}" : "입력시간 : 없음";
-    List<String> sorted = List.from(_processList); bool hasF = sorted.remove("완료"); if (hasF) sorted.add("완료");
-    showDialog(context: context, builder: (ctx) => AlertDialog(title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [FittedBox(fit: BoxFit.scaleDown, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))), const SizedBox(height: 8), Row(children: [const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)), if (item.process.isNotEmpty) ...[const SizedBox(width: 10), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: (() { int? c = _processColors[item.process]; if (c != null) return Color(c); if (item.process == "완료") return Colors.purple; if (item.process == "보류") return Colors.red; return Colors.blueGrey; })(), borderRadius: BorderRadius.circular(4)), child: Text(item.process, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)))]]), const SizedBox(height: 4), Text(last, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.blueGrey))]), content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 3, childAspectRatio: 2.0, mainAxisSpacing: 8, crossAxisSpacing: 8, children: sorted.map((p) { int? c = _processColors[p]; Color btnC; if (c != null) btnC = Color(c); else { if (p == "완료") btnC = Colors.purple; else if (p == "보류") btnC = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnC = Colors.orange; else btnC = Colors.blueGrey[700]!; } return ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: btnC, foregroundColor: Colors.white), onPressed: () { setState(() { item.process = p; item.processTime = DateTime.now().toString().substring(0, 16); }); if (_autoSave) _manualSave(silent: true); Navigator.pop(context); }, child: Text(p)); }).toList()), const Divider(), _dialogBtn("지우기", Colors.grey, () { item.process = ""; item.processTime = ""; }), _dialogBtn("선택취소", Colors.blueGrey, () {})])))));
+  void _showProcessDialog(ItemModel it) {
+    _forgetFocus(); String last = it.processTime.isNotEmpty ? "입력시간 : ${it.processTime}" : "입력시간 : 없음";
+    List<String> srt = List.from(_processList); bool hasF = srt.remove("완료"); if (hasF) srt.add("완료");
+    showDialog(context: context, builder: (ctx) => AlertDialog(title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [FittedBox(fit: BoxFit.scaleDown, child: Text(it.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))), const SizedBox(height: 8), Row(children: [const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)), if (it.process.isNotEmpty) ...[const SizedBox(width: 10), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: (() { int? c = _processColors[it.process]; if (c != null) return Color(c); if (it.process == "완료") return Colors.purple; if (it.process == "보류") return Colors.red; return Colors.blueGrey; })(), borderRadius: BorderRadius.circular(4)), child: Text(it.process, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)))]]), const SizedBox(height: 4), Text(last, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.blueGrey))]), content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 3, childAspectRatio: 2.0, mainAxisSpacing: 8, crossAxisSpacing: 8, children: srt.map((p) { int? c = _processColors[p]; Color btnC; if (c != null) btnC = Color(c); else { if (p == "완료") btnC = Colors.purple; else if (p == "보류") btnC = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnC = Colors.orange; else btnC = Colors.blueGrey[700]!; } return ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: btnC, foregroundColor: Colors.white), onPressed: () { setState(() { it.process = p; it.processTime = DateTime.now().toString().substring(0, 16); }); if (_autoSave) _manualSave(silent: true); Navigator.pop(context); }, child: Text(p)); }).toList()), const Divider(), _dialogBtn("지우기", Colors.grey, () { it.process = ""; it.processTime = ""; }), _dialogBtn("선택취소", Colors.blueGrey, () {})])))));
   }
 
   Widget _dialogBtn(String label, Color color, VoidCallback onSelected) { return Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50)), onPressed: () { setState(onSelected); if (_autoSave) _manualSave(silent: true); Navigator.pop(context); }, child: Text(label))); }
@@ -473,24 +305,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setM) => AlertDialog(title: const Text("행 삭제"), content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [Text("선택한 섹션 및 하위 항목 포함 총 ${finalD.length}개를 삭제하시겠습니까?"), if (!isSmb) ...[const SizedBox(height: 15), Row(children: [Checkbox(value: delPdf, onChanged: (v) => setM(() => delPdf = v!)), const Expanded(child: Text("관련 로컬 PDF 파일도 함께 삭제", style: TextStyle(fontSize: 13, color: Colors.redAccent)))])]]), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")), TextButton(onPressed: () async { final List<String> pdfs = []; if (delPdf) { for (int dIdx in finalD) { try { final it = _originalItems.firstWhere((i) => i.realIndex == dIdx); if (!it.isSubheading && it.itemCode.isNotEmpty) pdfs.add(it.itemCode.trim()); } catch (_) {} } } int delCount = 0; if (delPdf && pdfs.isNotEmpty) { for (String code in pdfs) { final f = File("$_baseDownloadPath/CheckSheet/$code.pdf"); if (await f.exists()) { try { await f.delete(); delCount++; } catch (_) {} } } } setState(() { _originalItems.removeWhere((it) => finalD.contains(it.realIndex)); _isEditMode = false; _selectedIndices.clear(); }); _applyFilterAndSort(); Navigator.pop(ctx); String msg = "${finalD.length}개 항목 삭제됨"; if (delCount > 0) msg += " (PDF $delCount개 삭제)"; _showSnackBar(msg); if (_autoSave) _manualSave(silent: true); }, child: const Text("삭제", style: TextStyle(color: Colors.red)))])));
   }
 
-  void _toggleSectionSelection(String headerTitle) { String? current; List<int> indices = []; for (var it in _originalItems) { if (it.isSubheading) { current = it.itemCode; if (current == headerTitle) indices.add(it.realIndex); } else if (current == headerTitle) indices.add(it.realIndex); } setState(() { bool all = indices.every((idx) => _selectedIndices.contains(idx)); if (all) { for (var idx in indices) _selectedIndices.remove(idx); } else _selectedIndices.addAll(indices); }); }
-  bool _isSectionSelected(String header) { String? current; List<int> indices = []; for (var i in _originalItems) { if (i.isSubheading) current = i.itemCode; else if (current == header) indices.add(i.realIndex); } return indices.isNotEmpty && indices.every((idx) => _selectedIndices.contains(idx)); }
+  void _toggleSectionSelection(String headerTitle) { String? cur; List<int> idxs = []; for (var it in _originalItems) { if (it.isSubheading) { cur = it.itemCode; if (cur == headerTitle) idxs.add(it.realIndex); } else if (cur == headerTitle) idxs.add(it.realIndex); } setState(() { bool all = idxs.every((idx) => _selectedIndices.contains(idx)); if (all) { for (var idx in idxs) _selectedIndices.remove(idx); } else _selectedIndices.addAll(idxs); }); }
+  bool _isSectionSelected(String header) { String? cur; List<int> idxs = []; for (var i in _originalItems) { if (i.isSubheading) cur = i.itemCode; else if (cur == header) idxs.add(i.realIndex); } return idxs.isNotEmpty && idxs.every((idx) => _selectedIndices.contains(idx)); }
 
-  Widget _buildSummaryWidget(bool isDark) {
+  Widget _buildSummaryWidget(bool dark) {
     if (_originalItems.isEmpty) return const SizedBox.shrink();
-    final dItems = _originalItems.where((i) => !i.isSubheading); int total = dItems.length; int comp = dItems.where((i) => i.complete).length;
-    final fItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1); int fTotal = fItems.length; int fComp = fItems.where((i) => i.complete).length;
+    final dIts = _originalItems.where((i) => !i.isSubheading); int total = dIts.length; int comp = dIts.where((i) => i.complete).length;
+    final fIts = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1); int fTotal = fIts.length; int fComp = fIts.where((i) => i.complete).length;
     bool isF = total != fTotal || _showUnfinishedOnly || _columnFilters.values.any((s) => s.isNotEmpty) || _searchQuery.isNotEmpty;
-    String totalS = "전체 $total / 완료 $comp / ${(total > 0 ? (comp / total * 100) : 0).toStringAsFixed(1)}%";
-    String filterS = isF ? "필터 $fTotal / 완료 $fComp / ${(fTotal > 0 ? (fComp / fTotal * 100) : 0).toStringAsFixed(1)}%" : "";
-    return InkWell(onTap: () { setState(() => _showUnfinishedOnly = !_showUnfinishedOnly); _applyFilterAndSort(); }, child: Container(padding: const EdgeInsets.symmetric(horizontal: 4), alignment: Alignment.centerLeft, child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [FittedBox(fit: BoxFit.scaleDown, child: Text("[$totalS]", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey[800]))), if (isF) FittedBox(fit: BoxFit.scaleDown, child: Text("[$filterS]", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orangeAccent)))])));
+    String tS = "전체 $total / 완료 $comp / ${(total > 0 ? (comp / total * 100) : 0).toStringAsFixed(1)}%";
+    String fS = isF ? "필터 $fTotal / 완료 $fComp / ${(fTotal > 0 ? (fComp / fTotal * 100) : 0).toStringAsFixed(1)}%" : "";
+    return InkWell(onTap: () { setState(() => _showUnfinishedOnly = !_showUnfinishedOnly); _applyFilterAndSort(); }, child: Container(padding: const EdgeInsets.symmetric(horizontal: 4), alignment: Alignment.centerLeft, child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [FittedBox(fit: BoxFit.scaleDown, child: Text("[$tS]", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: dark ? Colors.white70 : Colors.blueGrey[800]))), if (isF) FittedBox(fit: BoxFit.scaleDown, child: Text("[$fS]", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orangeAccent)))])));
   }
   Widget _topBtn(String label, VoidCallback? onTap, {Color? bgColor}) { return Expanded(child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(backgroundColor: bgColor ?? Colors.blueGrey[700], foregroundColor: Colors.white, minimumSize: const Size(0, 45), padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: FittedBox(child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))))); }
 
-  Future<void> _handleItemClick(ItemModel item) async {
-    _forgetFocus(); if (_autoSave) _manualSave(silent: true); if (_pdfFolderPath.startsWith("smb://")) { setState(() => _isLoading = true); try { String sWR = _pdfFolderPath.replaceFirst("smb://", ""); int firstS = sWR.indexOf("/"); String share = firstS != -1 ? sWR.substring(0, firstS) : sWR; String fP = firstS != -1 ? sWR.substring(firstS + 1) : ""; String r = fP.isEmpty ? "${item.itemCode}.pdf" : "$fP/${item.itemCode}.pdf"; await _smbService.downloadFile(share, r, "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf"); } catch (_) {} finally { setState(() => _isLoading = false); } }
-    if (!mounted) return; final String? lastCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
-    if (lastCode != null) { setState(() { _trackedItemCode = lastCode; }); if (!_displayItems.any((i) => !i.isSubheading && i.itemCode == lastCode)) { final target = _originalItems.firstWhere((i) => !i.isSubheading && i.itemCode == lastCode); setState(() { _temporaryVisibleItem = target; }); _applyFilterAndSort(); } WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(lastCode)); }
+  Future<void> _handleItemClick(ItemModel it) async {
+    _forgetFocus(); if (_autoSave) _manualSave(silent: true); if (_pdfFolderPath.startsWith("smb://")) { setState(() => _isLoading = true); try { String sWR = _pdfFolderPath.replaceFirst("smb://", ""); int firstS = sWR.indexOf("/"); String share = firstS != -1 ? sWR.substring(0, firstS) : sWR; String fP = firstS != -1 ? sWR.substring(firstS + 1) : ""; String r = fP.isEmpty ? "${it.itemCode}.pdf" : "$fP/${it.itemCode}.pdf"; await _smbService.downloadFile(share, r, "$_baseDownloadPath/CheckSheet/${it.itemCode}.pdf"); } catch (_) {} finally { setState(() => _isLoading = false); } }
+    if (!mounted) return; final String? lastC = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(it), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, onStatusUpdate: (item, type) { if (type == 'complete') { setState(() { item.complete = !item.complete; if (item.complete) { item.completeTime = DateTime.now().toString().substring(0, 16); item.complement = ""; item.complementTime = ""; } else item.completeTime = ""; }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
+    if (lastC != null) { setState(() { _trackedItemCode = lastC; }); if (!_displayItems.any((i) => !i.isSubheading && i.itemCode == lastC)) { final target = _originalItems.firstWhere((i) => !i.isSubheading && i.itemCode == lastC); setState(() { _temporaryVisibleItem = target; }); _applyFilterAndSort(); } WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(lastC)); }
   }
 
   void _showResetConfirm() {
@@ -520,8 +352,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     if (_autoSave) _manualSave(silent: true); _applyFilterAndSort();
   }
 
-  @override
-  Widget build(BuildContext context) {
+  @override Widget build(BuildContext context) {
     final bool dark = Theme.of(context).brightness == Brightness.dark; final double sW = MediaQuery.of(context).size.width;
     final double flexU = (sW - 260) / 8; final double cStart = 70.0; final double cEnd = 70.0 + (flexU * 5);
     return Scaffold(
