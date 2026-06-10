@@ -620,9 +620,29 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         if (col != 'itemCode') ...[
           const Divider(),
           if (col == 'remarks') ...[
-            const Text("포함 필터", style: TextStyle(fontWeight: FontWeight.bold)), TextField(controller: includeController),
+            const Text("포함 필터", style: TextStyle(fontWeight: FontWeight.bold)), 
+            TextField(
+              controller: includeController,
+              decoration: InputDecoration(
+                isDense: true,
+                suffixIcon: includeController.text.isNotEmpty 
+                  ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => setModalState(() => includeController.clear())) 
+                  : null
+              ),
+              onChanged: (v) => setModalState(() {}),
+            ),
             Row(children: [const Text("로직: "), Radio<String>(value: "AND", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)), const Text("AND"), Radio<String>(value: "OR", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)), const Text("OR")]),
-            const SizedBox(height: 10), const Text("제외 필터", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)), TextField(controller: excludeController),
+            const SizedBox(height: 10), const Text("제외 필터", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)), 
+            TextField(
+              controller: excludeController,
+              decoration: InputDecoration(
+                isDense: true,
+                suffixIcon: excludeController.text.isNotEmpty 
+                  ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => setModalState(() => excludeController.clear())) 
+                  : null
+              ),
+              onChanged: (v) => setModalState(() {}),
+            ),
             Row(children: [const Text("로직: "), Radio<String>(value: "AND", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)), const Text("AND"), Radio<String>(value: "OR", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)), const Text("OR")]),
           ] else ...[
             Row(children: [Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.addAll(options.where((o) => col == 'process' || col == 'quantity' || validOptions.contains(o)))), child: const Text("전체 선택", style: TextStyle(fontSize: 12)))), const SizedBox(width: 8), Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.clear()), child: const Text("전체 해제", style: TextStyle(fontSize: 12))))]),
@@ -1491,17 +1511,213 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     if (_autoSave) _manualSave(silent: true); _applyFilterAndSort();
   }
 
+  void _selectAllVisible() {
+    setState(() {
+      for (var item in _displayItems) {
+        if (!item.isSubheading && item.realIndex != -1) {
+          _selectedIndices.add(item.realIndex);
+        }
+      }
+    });
+  }
+
+  void _deselectAll() {
+    setState(() {
+      _selectedIndices.clear();
+    });
+  }
+
+  void _showBatchInputDialog() {
+    if (_selectedIndices.isEmpty) {
+      _showSnackBar("선택된 항목이 없습니다.");
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("일괄 입력 항목 선택"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _batchTypeBtn("공정 일괄 변경", () => _showBatchValueSelection("process")),
+            _batchTypeBtn("보완 일괄 변경", () => _showBatchValueSelection("complement")),
+            _batchTypeBtn("완료 일괄 변경", () => _showBatchValueSelection("complete")),
+          ],
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))],
+      ),
+    );
+  }
+
+  Widget _batchTypeBtn(String label, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          minimumSize: const Size(double.infinity, 50),
+          backgroundColor: Colors.blueGrey[700],
+          foregroundColor: Colors.white,
+        ),
+        onPressed: onTap,
+        child: Text(label),
+      ),
+    );
+  }
+
+  void _showBatchValueSelection(String type) {
+    Navigator.pop(context); // 타입 선택창 닫기
+    
+    String title = "";
+    List<Widget> options = [];
+
+    if (type == "process") {
+      title = "공정 일괄 선택";
+      List<String> sortedList = List.from(_processList);
+      bool hasFinished = sortedList.remove("완료");
+      if (hasFinished) sortedList.add("완료");
+
+      options = [
+        Wrap(
+          spacing: 8, runSpacing: 8,
+          children: sortedList.map((p) {
+            int? colorVal = _processColors[p];
+            Color btnColor;
+            if (colorVal != null) btnColor = Color(colorVal);
+            else {
+              if (p == "완료") btnColor = Colors.purple;
+              else if (p == "보류") btnColor = Colors.red;
+              else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnColor = Colors.orange;
+              else btnColor = Colors.blueGrey[700]!;
+            }
+            return ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white),
+              onPressed: () => _applyBatchInput(type, p),
+              child: Text(p),
+            );
+          }).toList(),
+        ),
+        const Divider(),
+        _batchValueBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
+      ];
+    } else if (type == "complement") {
+      title = "보완 일괄 선택";
+      options = [
+        _batchValueBtn("부족", Colors.orange, () => _applyBatchInput(type, "부족")),
+        _batchValueBtn("재작업", Colors.red, () => _applyBatchInput(type, "재작업")),
+        const Divider(),
+        _batchValueBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
+      ];
+    } else if (type == "complete") {
+      title = "완료 여부 일괄 변경";
+      options = [
+        _batchValueBtn("완료 처리", Colors.green, () => _applyBatchInput(type, true)),
+        _batchValueBtn("미완료 처리 (체크해제)", Colors.blueGrey, () => _applyBatchInput(type, false)),
+      ];
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: options)),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))],
+      ),
+    );
+  }
+
+  Widget _batchValueBtn(String label, Color color, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          minimumSize: const Size(double.infinity, 45),
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+        ),
+        onPressed: onTap,
+        child: Text(label),
+      ),
+    );
+  }
+
+  void _applyBatchInput(String type, dynamic value) async {
+    Navigator.pop(context); // 값 선택창 닫기
+
+    final targets = _originalItems.where((i) => _selectedIndices.contains(i.realIndex) && !i.isSubheading).toList();
+    if (targets.isEmpty) return;
+
+    // 덮어쓰기 확인이 필요한지 체크
+    bool hasData = targets.any((i) {
+      if (type == "process") return i.process.isNotEmpty;
+      if (type == "complement") return i.complement.isNotEmpty;
+      if (type == "complete") return i.complete;
+      return false;
+    });
+
+    if (hasData) {
+      bool confirm = await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("데이터 덮어쓰기 확인"),
+          content: const Text("선택한 항목 중 이미 데이터가 있는 항목이 있습니다.\n기존 데이터를 무시하고 덮어쓰시겠습니까?"),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("덮어쓰기", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+          ],
+        ),
+      ) ?? false;
+      if (!confirm) return;
+    }
+
+    setState(() {
+      String now = DateTime.now().toString().substring(0, 16);
+      for (var item in targets) {
+        if (type == "process") {
+          item.process = value.toString();
+          item.processTime = value.toString().isEmpty ? "" : now;
+        } else if (type == "complement") {
+          item.complement = value.toString();
+          item.complementTime = value.toString().isEmpty ? "" : now;
+          if (value.toString().isNotEmpty) {
+            item.complete = false;
+            item.completeTime = "";
+          }
+        } else if (type == "complete") {
+          bool val = value as bool;
+          item.complete = val;
+          item.completeTime = val ? now : "";
+          if (val) {
+            item.complement = "";
+            item.complementTime = "";
+          }
+        }
+      }
+    });
+
+    if (_autoSave) _manualSave(silent: true);
+    _showSnackBar("일괄 처리가 완료되었습니다.");
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
-        title: _isReorderMode ? const Text("순서 변경 모드", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orangeAccent)) : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(_currentFileName, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)]), 
+        title: (_isReorderMode) 
+          ? const Text("순서 변경 모드", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orangeAccent)) 
+          : (_isEditMode)
+            ? const SizedBox.shrink() // ❗ 선택모드 시 제목 숨김으로 공간 확보
+            : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(_currentFileName, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)]), 
         backgroundColor: isDark ? Colors.black : Colors.blueGrey[900], foregroundColor: Colors.white, 
         actions: _isReorderMode ? [
           TextButton(onPressed: () { setState(() { _originalItems = List.from(_preReorderItems); _isReorderMode = false; }); _applyFilterAndSort(); }, child: const Text("취소", style: TextStyle(color: Colors.white))),
           TextButton(onPressed: () => setState(() => _isReorderMode = false), child: const Text("완료", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
         ] : _isEditMode ? [
+          TextButton(onPressed: _selectAllVisible, child: const Text("전체선택", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+          TextButton(onPressed: _deselectAll, child: const Text("전체해제", style: TextStyle(color: Colors.white))),
+          TextButton(onPressed: _showBatchInputDialog, child: const Text("일괄입력", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
+          const VerticalDivider(color: Colors.white24, indent: 15, endIndent: 15),
           TextButton(onPressed: () {
             setState(() {
               if (_selectedIndices.isEmpty) {
@@ -1513,7 +1729,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             });
             _applyFilterAndSort(); // ❗ 시스템 필터 로직을 통해 부분제목 포함하여 다시 그림
           }, child: const Text("선택필터", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
-          TextButton.icon(onPressed: _deleteSelectedRows, icon: const Icon(Icons.delete_forever, color: Colors.redAccent), label: Text("삭제(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
+          TextButton(onPressed: _deleteSelectedRows, child: Text("삭제(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
           TextButton(onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); _applyFilterAndSort(); }), child: const Text("취소", style: TextStyle(color: Colors.white))),
         ] : [
           if (_isSorted || _selectedSections.isNotEmpty || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _quantitySearchQuery.isNotEmpty || _isSubheadingViewMode || _noFilterMode != 0 || _searchQuery.isNotEmpty || _columnFilters.values.any((s) => s.isNotEmpty) || _isSelectionFiltered) 
