@@ -1493,6 +1493,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final double screenWidth = MediaQuery.of(context).size.width;
+    
+    // ❗ 품목코드 열의 정확한 X축 범위 계산 (제스처 분리용)
+    // 체크박스(35) + No(35) = 70
+    // 전체 고정폭(260) 제외한 나머지 flex 영역(8) 중 5만큼 차지
+    final double flexUnit = (screenWidth - 260) / 8;
+    final double itemCodeStart = 70.0;
+    final double itemCodeEnd = 70.0 + (flexUnit * 5);
+
     return Scaffold(
       appBar: AppBar(
         title: _isReorderMode ? const Text("순서 변경 모드", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orangeAccent)) : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("CheckSheet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(_currentFileName, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)]), 
@@ -1607,35 +1616,38 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           Expanded(flex: 2, child: _buildSummaryWidget(isDark)),
         ])),
         if (!_isReorderMode) _buildHeader(isDark),
-        Expanded(child: GestureDetector(
-          onVerticalDragStart: _isEditMode ? (details) {
-            setState(() {
-              _isSelecting = true;
-            });
-            _handleDragUpdate(details.localPosition.dy);
-          } : null,
-          onVerticalDragUpdate: _isEditMode ? (details) {
-            _handleDragUpdate(details.localPosition.dy);
-            _handleAutoScroll(details.localPosition.dy);
-          } : null,
-          onVerticalDragEnd: _isEditMode ? (_) {
-            setState(() {
-              _isSelecting = false;
-            });
-            _scrollTimer?.cancel();
-          } : null,
-          child: Listener(onPointerDown: (_) { 
+        Expanded(child: Listener(
+          onPointerDown: _isEditMode ? (event) {
+            double x = event.localPosition.dx;
+            // ❗ 품목코드 영역(스크롤 전용)이 아닌 경우에만 드래그 선택 시작
+            if (x < itemCodeStart || x > itemCodeEnd) {
+              setState(() { _isSelecting = true; });
+              _handleDragUpdate(event.localPosition.dy);
+            } else {
+              setState(() { _isSelecting = false; });
+            }
+          } : (_) { 
             // ❗ 리스트 영역 터치 시에만 포커스 해제 (상단 버튼 영역 보호)
             _clearHighlight(); 
             _forgetFocus(); 
-            setState(() {
-              _trackedItemCode = null; 
-            });
+            setState(() { _trackedItemCode = null; });
             if (_temporaryVisibleItem != null) { 
               setState(() { _temporaryVisibleItem = null; }); 
               _applyFilterAndSort(); 
             } 
-          }, behavior: HitTestBehavior.translucent, child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
+          }, 
+          onPointerMove: _isEditMode ? (event) {
+            if (_isSelecting) {
+              _handleDragUpdate(event.localPosition.dy);
+              _handleAutoScroll(event.localPosition.dy);
+            }
+          } : null,
+          onPointerUp: _isEditMode ? (_) {
+            setState(() { _isSelecting = false; });
+            _scrollTimer?.cancel();
+          } : null,
+          behavior: HitTestBehavior.translucent, 
+          child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
             onReorder: _reorderSubheading, 
             buildDefaultDragHandles: false, // ❗ 기본 핸들 비활성화
             children: _originalItems.where((i) => i.isSubheading).toList().asMap().entries.map((entry) {
@@ -1647,10 +1659,149 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 trailing: ReorderableDragStartListener(index: idx, child: const Icon(Icons.drag_handle)), // ❗ 즉시 드래그 핸들 적용
                 tileColor: isDark ? Colors.white10 : Colors.grey[200]
               );
-            }).toList()) : ListView.builder(controller: _scrollController, itemCount: _displayItems.length, itemBuilder: (ctx, idx) {
+            }).toList()) : ListView.builder(
+            controller: _scrollController, 
+            physics: _isEditMode ? const NeverScrollableScrollPhysics() : const AlwaysScrollableScrollPhysics(), // ❗ 선택모드일 때 기본 스크롤 비활성화 (제스처 충돌 방지)
+            itemCount: _displayItems.length, 
+            itemBuilder: (ctx, idx) {
             final item = _displayItems[idx];
             if (item.isSubheading) {
               bool isSectionSel = _selectedSections.contains(item.itemCode);
+              
+              // 해당 섹션의 요약 정보 계산
+              int totalItems = 0;
+              int completedItems = 0;
+              int startIdx = _originalItems.indexOf(item);
+              int sectionSeq = _originalItems.where((i) => i.isSubheading).toList().indexOf(item) + 1;
+              
+              if (startIdx != -1) {
+                for (int j = startIdx + 1; j < _originalItems.length; j++) {
+                  if (_originalItems[j].isSubheading) break;
+                  totalItems++;
+                  if (_originalItems[j].complete) completedItems++;
+                }
+              }
+              double percent = totalItems > 0 ? (completedItems / totalItems * 100) : 0;
+              bool isAllDone = totalItems > 0 && totalItems == completedItems;
+
+              // ❗ 제목 3단 분리 로직 (3번째 언더바 기준)
+              String rawTitle = item.itemCode;
+              List<String> parts = rawTitle.split('_');
+              String line1 = "";
+              String line2 = "";
+              if (parts.length > 3) {
+                line1 = parts.sublist(0, 3).join('_');
+                line2 = parts.sublist(3).join('_');
+              } else {
+                line1 = rawTitle;
+                line2 = "";
+              }
+
+              return GestureDetector(
+                onTap: () {
+                  if (_isEditMode) { _toggleSectionSelection(item.itemCode); } 
+                  else if (_isSubheadingViewMode) { if (item.realIndex != -1) { setState(() { _selectedSections = {item.itemCode}; _isSubheadingViewMode = false; }); _applyFilterAndSort(); } else setState(() => _isSubheadingViewMode = false); } 
+                  else { setState(() { if (_selectedSections.contains(item.itemCode)) _selectedSections.remove(item.itemCode); else _selectedSections.add(item.itemCode); }); _applyFilterAndSort(); }
+                }, 
+                child: Container(
+                  height: _subheadingHeight, 
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), 
+                  alignment: Alignment.centerLeft, 
+                  decoration: BoxDecoration(
+                    color: isAllDone ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green[100]) : (_selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300])),
+                    border: Border(bottom: BorderSide(color: isDark ? Colors.white24 : Colors.grey[400]!, width: 0.5)),
+                  ),
+                  child: Row(children: [
+                    if (_isSubheadingViewMode && !_isEditMode) Checkbox(value: isSectionSel, onChanged: (v) { setState(() { if (v!) _selectedSections.add(item.itemCode); else _selectedSections.remove(item.itemCode); }); }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // 1행: [순번] + 상위 정보 (Fit 적용)
+                          Row(
+                            children: [
+                              Text(
+                                "[${sectionSeq.toString().padLeft(2, '0')}]",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: SizedBox(
+                                  height: 20,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      line1,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          // 2행: 하위 상세 정보 (모델명 등 - Fit 적용 및 들여쓰기)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 36),
+                            child: SizedBox(
+                              height: 20,
+                              width: double.infinity,
+                              child: line2.isNotEmpty ? FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  line2,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold, 
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ) : const SizedBox.shrink(),
+                            ),
+                          ),
+                          // 3행: 통계 정보 (들여쓰기)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 36),
+                            child: Row(
+                              children: [
+                                Icon(Icons.list_alt, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                                const SizedBox(width: 3),
+                                Text("$totalItems개", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                                const SizedBox(width: 10),
+                                Icon(Icons.check_circle_outline, size: 12, color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[600])),
+                                const SizedBox(width: 3),
+                                Text(
+                                  "완료 $completedItems개 (${percent.toStringAsFixed(1)}%)",
+                                  style: TextStyle(
+                                    fontSize: 11, 
+                                    color: isAllDone ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                    fontWeight: isAllDone ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                                if (isAllDone) ...[
+                                  const SizedBox(width: 6),
+                                  const Text("🏆", style: TextStyle(fontSize: 11)),
+                                ]
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ), 
+                    if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
+                    if (_isSubheadingViewMode && !_isEditMode) IconButton(icon: const Icon(Icons.reorder, size: 20, color: Colors.blue), onPressed: () => setState(() { _preReorderItems = List.from(_originalItems); _isReorderMode = true; }), tooltip: "순서 변경"),
+                  ])
+                )
+              );
+            }
+            return _buildDataRow(item, isDark);
+          })),
+        )),
               
               // 해당 섹션의 요약 정보 계산
               int totalItems = 0;
