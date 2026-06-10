@@ -9,6 +9,7 @@ import 'pdf_view_screen.dart';
 import '../widgets/qr_scanner_dialog.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:async';
 import 'package:path/path.dart' as p;
 
 class ChecklistScreen extends StatefulWidget {
@@ -69,7 +70,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   bool _isEditMode = false;
   final Set<int> _selectedIndices = {}; 
-
+  bool _isSelecting = false; // ❗ 드래그 선택 중인지 여부
+  Timer? _scrollTimer; // ❗ 자동 스크롤 타이머
   final ScrollController _scrollController = ScrollController();
   int? _highlightedRealIndex;
   String? _trackedItemCode; // ❗ 필터가 바뀌어도 기억을 유지할 품목코드
@@ -620,6 +622,21 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             const Text("항목 선택", style: TextStyle(fontWeight: FontWeight.bold)), _buildFilterGrid(options, localFilters, col, setModalState, validOptions: (col == 'complete' || col == 'complement') ? validOptions : null),
           ],
         ],
+        if (['complete', 'process', 'complement'].contains(col)) ...[
+          const Divider(height: 30),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _resetFilteredItemsColumn(col);
+              },
+              icon: const Icon(Icons.restart_alt, size: 18),
+              label: const Text("현재 리스트 항목 리셋", style: TextStyle(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[50], foregroundColor: Colors.red[800], side: BorderSide(color: Colors.red[200]!)),
+            ),
+          )
+        ],
       ]))),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")), TextButton(onPressed: () { setState(() { _isSorted = localIsSorted; if (localIsSorted) { _currentSortCol = col; _isAscending = localIsAscending; } else if (_currentSortCol == col) _currentSortCol = ""; if (_columnFilters.containsKey(col)) _columnFilters[col] = localFilters; if (col == 'remarks') { _remarksFilterQuery = includeController.text; _remarksExcludeQuery = excludeController.text; _remarksIncludeLogic = localIncludeLogic; _remarksExcludeLogic = localExcludeLogic; } if (col == 'quantity') _quantitySearchQuery = quantityController.text; }); _applyFilterAndSort(); Navigator.pop(ctx); }, child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold)))],
     )));
@@ -902,20 +919,99 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _handleRefresh() { _forgetFocus(); if (_excelPath.isEmpty) return; if (File(_excelPath).existsSync()) { _loadExcelData(_excelPath, keepFilters: true); _showSnackBar("🔄 리스트를 새로고침했습니다."); } }
 
+  void _showCompleteTimeDialog(ItemModel item) {
+    _forgetFocus();
+    String record = item.completeTime.isEmpty ? "기록 없음" : item.completeTime;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FittedBox(fit: BoxFit.scaleDown, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))),
+            const SizedBox(height: 8),
+            const Text("완료 입력 시간", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text("입력시간 : $record", style: const TextStyle(fontSize: 16)),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))],
+      ),
+    );
+  }
+
+  void _resetFilteredItemsColumn(String col) {
+    final filtered = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList();
+    if (filtered.isEmpty) return;
+
+    String colName = "";
+    if (col == 'complete') colName = "완료";
+    else if (col == 'process') colName = "공정";
+    else if (col == 'complement') colName = "보완";
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("리스트 항목 $colName 리셋"),
+        content: Text("현재 화면에 보이는 ${filtered.length}개 항목의 [$colName] 항목을 리셋하시겠습니까?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                for (var item in filtered) {
+                  if (col == 'complete') {
+                    item.complete = false;
+                    item.completeTime = "";
+                    item.complement = "";
+                    item.complementTime = "";
+                  } else if (col == 'process') {
+                    item.process = "";
+                    item.processTime = "";
+                  } else if (col == 'complement') {
+                    item.complement = "";
+                    item.complementTime = "";
+                  }
+                }
+              });
+              if (_autoSave) _manualSave(silent: true);
+              Navigator.pop(ctx);
+              _showSnackBar("$colName 리셋 완료");
+            },
+            child: const Text("리셋 실행", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showComplementDialog(ItemModel item) {
     _forgetFocus();
-    String lastRecord = "마지막 기록: 없음";
+    String lastRecord = "입력시간 : 없음";
     if (item.complementTime.isNotEmpty) {
-      lastRecord = "마지막 기록: ${item.complement}: ${item.complementTime}";
+      lastRecord = "입력시간 : ${item.complementTime}";
     }
     
     showDialog(context: context, builder: (ctx) => AlertDialog(
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+          FittedBox(fit: BoxFit.scaleDown, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+              if (item.complement.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(color: (item.complement == "부족") ? Colors.orange : Colors.red, borderRadius: BorderRadius.circular(4)),
+                  child: Text(item.complement, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                ),
+              ]
+            ],
+          ),
           const SizedBox(height: 4),
-          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)),
+          Text(lastRecord, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.blueGrey)),
         ],
       ),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -941,9 +1037,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _showProcessDialog(ItemModel item) {
     _forgetFocus();
-    String lastRecord = "마지막 기록: 없음";
+    String lastRecord = "입력시간 : 없음";
     if (item.processTime.isNotEmpty) {
-      lastRecord = "마지막 기록: ${item.process}: ${item.processTime}";
+      lastRecord = "입력시간 : ${item.processTime}";
     }
     
     List<String> sortedDisplayList = List.from(_processList);
@@ -954,9 +1050,32 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+          FittedBox(fit: BoxFit.scaleDown, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+              if (item.process.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: (() {
+                      int? colorVal = _processColors[item.process];
+                      if (colorVal != null) return Color(colorVal);
+                      if (item.process == "완료") return Colors.purple;
+                      if (item.process == "보류") return Colors.red;
+                      return Colors.blueGrey;
+                    })(),
+                    borderRadius: BorderRadius.circular(4)
+                  ),
+                  child: Text(item.process, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                ),
+              ]
+            ],
+          ),
           const SizedBox(height: 4),
-          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)),
+          Text(lastRecord, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.blueGrey)),
         ],
       ),
       content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1037,7 +1156,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _handleItemClick(ItemModel item) async {
     _forgetFocus(); if (_autoSave) _manualSave(silent: true); if (_pdfFolderPath.startsWith("smb://")) { setState(() => _isLoading = true); try { String shareWithRest = _pdfFolderPath.replaceFirst("smb://", ""); int firstSlash = shareWithRest.indexOf("/"); String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest; String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : ""; String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf"; await _smbService.downloadFile(share, remoteFilePath, "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf"); } catch (_) {} finally { setState(() => _isLoading = false); } }
-    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.complement = ""; it.complementTime = ""; it.process = ""; it.processTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
+    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
     if (lastItemCode != null) { 
       // ❗ 추적 메모리에 기록
       setState(() {
@@ -1327,6 +1446,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           if (i.isSubheading) continue;
           if (status) { 
             i.complete = false; 
+            i.completeTime = "";
             i.complement = ""; 
             i.complementTime = "";
             i.process = ""; 
@@ -1341,6 +1461,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             if (_originalItems[i].isSubheading) break;
             if (status) { 
               _originalItems[i].complete = false; 
+              _originalItems[i].completeTime = "";
               _originalItems[i].complement = ""; 
               _originalItems[i].complementTime = "";
               _originalItems[i].process = ""; 
@@ -1373,9 +1494,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           TextButton(onPressed: () { setState(() { _originalItems = List.from(_preReorderItems); _isReorderMode = false; }); _applyFilterAndSort(); }, child: const Text("취소", style: TextStyle(color: Colors.white))),
           TextButton(onPressed: () => setState(() => _isReorderMode = false), child: const Text("완료", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
         ] : _isEditMode ? [
-          TextButton(onPressed: () { setState(() { _isSubheadingViewMode = !_isSubheadingViewMode; }); _applyFilterAndSort(); }, child: Text(_isSubheadingViewMode ? "전체보기" : "부분제목만", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
-          TextButton.icon(onPressed: _deleteSelectedRows, icon: const Icon(Icons.delete_forever, color: Colors.redAccent), label: Text("확인(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
-          TextButton(onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); }), child: const Text("취소", style: TextStyle(color: Colors.white))),
+          TextButton(onPressed: () {
+            setState(() {
+              final selectedItems = _originalItems.where((i) => !i.isSubheading && _selectedIndices.contains(i.realIndex)).toList();
+              if (selectedItems.isEmpty) {
+                _showSnackBar("선택된 항목이 없습니다.");
+                return;
+              }
+              _displayItems = selectedItems;
+              // ❗ 필터 활성화 상태로 인식되게 함 (기타 필터 변수들은 그대로 유지)
+            });
+          }, child: const Text("선택필터", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
+          TextButton.icon(onPressed: _deleteSelectedRows, icon: const Icon(Icons.delete_forever, color: Colors.redAccent), label: Text("삭제(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
+          TextButton(onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); _applyFilterAndSort(); }), child: const Text("취소", style: TextStyle(color: Colors.white))),
         ] : [
           if (_isSorted || _selectedSections.isNotEmpty || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _quantitySearchQuery.isNotEmpty || _isSubheadingViewMode || _noFilterMode != 0 || _searchQuery.isNotEmpty || _columnFilters.values.any((s) => s.isNotEmpty)) 
             TextButton(onPressed: _resetSort, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
@@ -1396,7 +1527,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             }); 
             _applyFilterAndSort(); 
           }, bgColor: _isSubheadingViewMode ? Colors.blue : Colors.indigo[800]), const SizedBox(width: 4),
-          _topBtn("행삭제", () => setState(() => _isEditMode = true), bgColor: Colors.orange[800]), const SizedBox(width: 4),
+          _topBtn("선택모드", () => setState(() => _isEditMode = true), bgColor: Colors.orange[800]), const SizedBox(width: 4),
           if (_pdfFolderPath.startsWith("smb://")) ...[_topBtn("PDF동기화", _isSyncing ? null : _syncAllPdfs, bgColor: Colors.deepOrange[900]), const SizedBox(width: 4)],
           _topBtn("리셋", _showResetConfirm, bgColor: Colors.red[700]), const SizedBox(width: 4), _topBtn("저장", () { _forgetFocus(); _manualSave(); }, bgColor: Colors.green[700]),
         ])),
@@ -1469,167 +1600,185 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           Expanded(flex: 2, child: _buildSummaryWidget(isDark)),
         ])),
         if (!_isReorderMode) _buildHeader(isDark),
-        Expanded(child: Listener(onPointerDown: (_) { 
-          // ❗ 리스트 영역 터치 시에만 포커스 해제 (상단 버튼 영역 보호)
-          _clearHighlight(); 
-          _forgetFocus(); 
-          setState(() {
-            _trackedItemCode = null; 
-          });
-          if (_temporaryVisibleItem != null) { 
-            setState(() { _temporaryVisibleItem = null; }); 
-            _applyFilterAndSort(); 
-          } 
-        }, behavior: HitTestBehavior.translucent, child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
-          onReorder: _reorderSubheading, 
-          buildDefaultDragHandles: false, // ❗ 기본 핸들 비활성화
-          children: _originalItems.where((i) => i.isSubheading).toList().asMap().entries.map((entry) {
-            final idx = entry.key;
-            final item = entry.value;
-            return ListTile(
-              key: ValueKey("reorder-${item.itemCode}"), 
-              title: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold)), 
-              trailing: ReorderableDragStartListener(index: idx, child: const Icon(Icons.drag_handle)), // ❗ 즉시 드래그 핸들 적용
-              tileColor: isDark ? Colors.white10 : Colors.grey[200]
-            );
-          }).toList()) : ListView.builder(controller: _scrollController, itemCount: _displayItems.length, itemBuilder: (ctx, idx) {
-          final item = _displayItems[idx];
-          if (item.isSubheading) {
-            bool isSectionSel = _selectedSections.contains(item.itemCode);
-            
-            // 해당 섹션의 요약 정보 계산
-            int totalItems = 0;
-            int completedItems = 0;
-            int startIdx = _originalItems.indexOf(item);
-            int sectionSeq = _originalItems.where((i) => i.isSubheading).toList().indexOf(item) + 1;
-            
-            if (startIdx != -1) {
-              for (int j = startIdx + 1; j < _originalItems.length; j++) {
-                if (_originalItems[j].isSubheading) break;
-                totalItems++;
-                if (_originalItems[j].complete) completedItems++;
+        Expanded(child: GestureDetector(
+          onVerticalDragStart: _isEditMode ? (details) {
+            setState(() {
+              _isSelecting = true;
+            });
+            _handleDragUpdate(details.localPosition.dy);
+          } : null,
+          onVerticalDragUpdate: _isEditMode ? (details) {
+            _handleDragUpdate(details.localPosition.dy);
+            _handleAutoScroll(details.localPosition.dy);
+          } : null,
+          onVerticalDragEnd: _isEditMode ? (_) {
+            setState(() {
+              _isSelecting = false;
+            });
+            _scrollTimer?.cancel();
+          } : null,
+          child: Listener(onPointerDown: (_) { 
+            // ❗ 리스트 영역 터치 시에만 포커스 해제 (상단 버튼 영역 보호)
+            _clearHighlight(); 
+            _forgetFocus(); 
+            setState(() {
+              _trackedItemCode = null; 
+            });
+            if (_temporaryVisibleItem != null) { 
+              setState(() { _temporaryVisibleItem = null; }); 
+              _applyFilterAndSort(); 
+            } 
+          }, behavior: HitTestBehavior.translucent, child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
+            onReorder: _reorderSubheading, 
+            buildDefaultDragHandles: false, // ❗ 기본 핸들 비활성화
+            children: _originalItems.where((i) => i.isSubheading).toList().asMap().entries.map((entry) {
+              final idx = entry.key;
+              final item = entry.value;
+              return ListTile(
+                key: ValueKey("reorder-${item.itemCode}"), 
+                title: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold)), 
+                trailing: ReorderableDragStartListener(index: idx, child: const Icon(Icons.drag_handle)), // ❗ 즉시 드래그 핸들 적용
+                tileColor: isDark ? Colors.white10 : Colors.grey[200]
+              );
+            }).toList()) : ListView.builder(controller: _scrollController, itemCount: _displayItems.length, itemBuilder: (ctx, idx) {
+            final item = _displayItems[idx];
+            if (item.isSubheading) {
+              bool isSectionSel = _selectedSections.contains(item.itemCode);
+              
+              // 해당 섹션의 요약 정보 계산
+              int totalItems = 0;
+              int completedItems = 0;
+              int startIdx = _originalItems.indexOf(item);
+              int sectionSeq = _originalItems.where((i) => i.isSubheading).toList().indexOf(item) + 1;
+              
+              if (startIdx != -1) {
+                for (int j = startIdx + 1; j < _originalItems.length; j++) {
+                  if (_originalItems[j].isSubheading) break;
+                  totalItems++;
+                  if (_originalItems[j].complete) completedItems++;
+                }
               }
-            }
-            double percent = totalItems > 0 ? (completedItems / totalItems * 100) : 0;
-            bool isAllDone = totalItems > 0 && totalItems == completedItems;
+              double percent = totalItems > 0 ? (completedItems / totalItems * 100) : 0;
+              bool isAllDone = totalItems > 0 && totalItems == completedItems;
 
-            // ❗ 제목 3단 분리 로직 (3번째 언더바 기준)
-            String rawTitle = item.itemCode;
-            List<String> parts = rawTitle.split('_');
-            String line1 = "";
-            String line2 = "";
-            if (parts.length > 3) {
-              line1 = parts.sublist(0, 3).join('_');
-              line2 = parts.sublist(3).join('_');
-            } else {
-              line1 = rawTitle;
-              line2 = "";
-            }
+              // ❗ 제목 3단 분리 로직 (3번째 언더바 기준)
+              String rawTitle = item.itemCode;
+              List<String> parts = rawTitle.split('_');
+              String line1 = "";
+              String line2 = "";
+              if (parts.length > 3) {
+                line1 = parts.sublist(0, 3).join('_');
+                line2 = parts.sublist(3).join('_');
+              } else {
+                line1 = rawTitle;
+                line2 = "";
+              }
 
-            return GestureDetector(
-              onTap: () {
-                if (_isEditMode) { _toggleSectionSelection(item.itemCode); } 
-                else if (_isSubheadingViewMode) { if (item.realIndex != -1) { setState(() { _selectedSections = {item.itemCode}; _isSubheadingViewMode = false; }); _applyFilterAndSort(); } else setState(() => _isSubheadingViewMode = false); } 
-                else { setState(() { if (_selectedSections.contains(item.itemCode)) _selectedSections.remove(item.itemCode); else _selectedSections.add(item.itemCode); }); _applyFilterAndSort(); }
-              }, 
-              child: Container(
-                height: _subheadingHeight, 
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), 
-                alignment: Alignment.centerLeft, 
-                decoration: BoxDecoration(
-                  color: isAllDone ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green[100]) : (_selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300])),
-                  border: Border(bottom: BorderSide(color: isDark ? Colors.white24 : Colors.grey[400]!, width: 0.5)),
-                ),
-                child: Row(children: [
-                  if (_isSubheadingViewMode && !_isEditMode) Checkbox(value: isSectionSel, onChanged: (v) { setState(() { if (v!) _selectedSections.add(item.itemCode); else _selectedSections.remove(item.itemCode); }); }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // 1행: [순번] + 상위 정보 (Fit 적용)
-                        Row(
-                          children: [
-                            Text(
-                              "[${sectionSeq.toString().padLeft(2, '0')}]",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.blue[300] : Colors.blue[800],
-                                fontSize: 13,
+              return GestureDetector(
+                onTap: () {
+                  if (_isEditMode) { _toggleSectionSelection(item.itemCode); } 
+                  else if (_isSubheadingViewMode) { if (item.realIndex != -1) { setState(() { _selectedSections = {item.itemCode}; _isSubheadingViewMode = false; }); _applyFilterAndSort(); } else setState(() => _isSubheadingViewMode = false); } 
+                  else { setState(() { if (_selectedSections.contains(item.itemCode)) _selectedSections.remove(item.itemCode); else _selectedSections.add(item.itemCode); }); _applyFilterAndSort(); }
+                }, 
+                child: Container(
+                  height: _subheadingHeight, 
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), 
+                  alignment: Alignment.centerLeft, 
+                  decoration: BoxDecoration(
+                    color: isAllDone ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green[100]) : (_selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300])),
+                    border: Border(bottom: BorderSide(color: isDark ? Colors.white24 : Colors.grey[400]!, width: 0.5)),
+                  ),
+                  child: Row(children: [
+                    if (_isSubheadingViewMode && !_isEditMode) Checkbox(value: isSectionSel, onChanged: (v) { setState(() { if (v!) _selectedSections.add(item.itemCode); else _selectedSections.remove(item.itemCode); }); }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // 1행: [순번] + 상위 정보 (Fit 적용)
+                          Row(
+                            children: [
+                              Text(
+                                "[${sectionSeq.toString().padLeft(2, '0')}]",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                  fontSize: 13,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: SizedBox(
-                                height: 20,
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    line1,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: SizedBox(
+                                  height: 20,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      line1,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        // 2행: 하위 상세 정보 (모델명 등 - Fit 적용 및 들여쓰기)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 36),
-                          child: SizedBox(
-                            height: 20,
-                            width: double.infinity,
-                            child: line2.isNotEmpty ? FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                line2,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold, 
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ) : const SizedBox.shrink(),
-                          ),
-                        ),
-                        // 3행: 통계 정보 (들여쓰기)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 36),
-                          child: Row(
-                            children: [
-                              Icon(Icons.list_alt, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[700]),
-                              const SizedBox(width: 3),
-                              Text("$totalItems개", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[700])),
-                              const SizedBox(width: 10),
-                              Icon(Icons.check_circle_outline, size: 12, color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[600])),
-                              const SizedBox(width: 3),
-                              Text(
-                                "완료 $completedItems개 (${percent.toStringAsFixed(1)}%)",
-                                style: TextStyle(
-                                  fontSize: 11, 
-                                  color: isAllDone ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                                  fontWeight: isAllDone ? FontWeight.bold : FontWeight.normal,
-                                ),
-                              ),
-                              if (isAllDone) ...[
-                                const SizedBox(width: 6),
-                                const Text("🏆", style: TextStyle(fontSize: 11)),
-                              ]
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                  ), 
-                  if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
-                  if (_isSubheadingViewMode && !_isEditMode) IconButton(icon: const Icon(Icons.reorder, size: 20, color: Colors.blue), onPressed: () => setState(() { _preReorderItems = List.from(_originalItems); _isReorderMode = true; }), tooltip: "순서 변경"),
-                ])
-              )
-            );
-          }
-          return _buildDataRow(item, isDark);
-        }))),
+                          // 2행: 하위 상세 정보 (모델명 등 - Fit 적용 및 들여쓰기)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 36),
+                            child: SizedBox(
+                              height: 20,
+                              width: double.infinity,
+                              child: line2.isNotEmpty ? FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  line2,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold, 
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ) : const SizedBox.shrink(),
+                            ),
+                          ),
+                          // 3행: 통계 정보 (들여쓰기)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 36),
+                            child: Row(
+                              children: [
+                                Icon(Icons.list_alt, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                                const SizedBox(width: 3),
+                                Text("$totalItems개", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                                const SizedBox(width: 10),
+                                Icon(Icons.check_circle_outline, size: 12, color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[600])),
+                                const SizedBox(width: 3),
+                                Text(
+                                  "완료 $completedItems개 (${percent.toStringAsFixed(1)}%)",
+                                  style: TextStyle(
+                                    fontSize: 11, 
+                                    color: isAllDone ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                    fontWeight: isAllDone ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                                if (isAllDone) ...[
+                                  const SizedBox(width: 6),
+                                  const Text("🏆", style: TextStyle(fontSize: 11)),
+                                ]
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ), 
+                    if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
+                    if (_isSubheadingViewMode && !_isEditMode) IconButton(icon: const Icon(Icons.reorder, size: 20, color: Colors.blue), onPressed: () => setState(() { _preReorderItems = List.from(_originalItems); _isReorderMode = true; }), tooltip: "순서 변경"),
+                  ])
+                )
+              );
+            }
+            return _buildDataRow(item, isDark);
+          })),
+        )),
         if (_isSubheadingViewMode && _selectedSections.isNotEmpty) Container(color: isDark ? Colors.blueGrey[900] : Colors.blueGrey[100], padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: Row(children: [
             Text("선택됨: ${_selectedSections.length}개", style: const TextStyle(fontWeight: FontWeight.bold)), const Spacer(),
             TextButton(onPressed: () { setState(() { _selectedSections.clear(); _isSubheadingViewMode = false; }); _applyFilterAndSort(); }, child: const Text("모두보기", style: TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold))),
@@ -1643,10 +1792,64 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
+  void _handleDragUpdate(double localY) {
+    double currentOffset = _scrollController.offset;
+    double targetY = localY + currentOffset;
+    
+    double accumulatedHeight = 0;
+    int? targetIdx;
+    
+    for (int i = 0; i < _displayItems.length; i++) {
+      double h = _displayItems[i].isSubheading ? _subheadingHeight : _itemHeight;
+      if (targetY >= accumulatedHeight && targetY <= accumulatedHeight + h) {
+        targetIdx = i;
+        break;
+      }
+      accumulatedHeight += h;
+    }
+    
+    if (targetIdx != null) {
+      final item = _displayItems[targetIdx];
+      if (!item.isSubheading && item.realIndex != -1) {
+        if (!_selectedIndices.contains(item.realIndex)) {
+          setState(() {
+            _selectedIndices.add(item.realIndex);
+          });
+        }
+      }
+    }
+  }
+
+  void _handleAutoScroll(double localY) {
+    _scrollTimer?.cancel();
+    const double threshold = 50.0;
+    double viewHeight = _scrollController.position.viewportDimension;
+    
+    if (localY < threshold) {
+      _scrollTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+        if (_scrollController.offset > 0) {
+          _scrollController.jumpTo(_scrollController.offset - 10);
+          _handleDragUpdate(localY);
+        } else {
+          timer.cancel();
+        }
+      });
+    } else if (localY > viewHeight - threshold) {
+      _scrollTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+        if (_scrollController.offset < _scrollController.position.maxScrollExtent) {
+          _scrollController.jumpTo(_scrollController.offset + 10);
+          _handleDragUpdate(localY);
+        } else {
+          timer.cancel();
+        }
+      });
+    }
+  }
+
   Widget _buildHeader(bool isDark) { return Container(color: isDark ? Colors.grey[900] : Colors.grey[800], height: 40, child: Row(children: [if (_isEditMode) const SizedBox(width: 35), _headerBtn("No", "no", 35), Expanded(flex: 5, child: _headerBtn("품목코드", "itemCode", null)), _headerBtn("수량", "quantity", 40), _headerBtn("완료", "complete", 50), _headerBtn("공정", "process", 50), _headerBtn("보완", "complement", 50), Expanded(flex: 3, child: _headerBtn("비고", "remarks", null))])); }
   Widget _headerBtn(String label, String? colKey, double? width) { bool isTarget = colKey != null && _currentSortCol == colKey; bool isNoFilt = colKey == 'no' && _noFilterMode != 0; String dLabel = (colKey == 'no' && _noFilterMode == 2) ? "-No" : label; bool isFiltActive = false; if (colKey != null && ['complete', 'complement', 'process', 'quantity'].contains(colKey)) isFiltActive = _columnFilters[colKey]!.isNotEmpty || (colKey == 'quantity' && _quantitySearchQuery.isNotEmpty); else if (colKey == 'remarks') isFiltActive = _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty; return InkWell(onTap: colKey == null ? null : () => _sortBy(colKey), child: Container(width: width, alignment: Alignment.center, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Flexible(child: Text(dLabel, style: TextStyle(color: (isNoFilt || isFiltActive) ? Colors.yellow : Colors.white, fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis)), if (isTarget) Icon(_isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: Colors.yellow, size: 18)]))); }
-  Widget _buildDataRow(ItemModel item, bool isDark) { bool isSel = _selectedIndices.contains(item.realIndex); bool isHigh = item.realIndex == _highlightedRealIndex; return GestureDetector(onTap: _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : null, behavior: HitTestBehavior.opaque, child: Container(decoration: BoxDecoration(color: isSel ? Colors.blue.withOpacity(0.1) : (item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null), border: isHigh ? Border.all(color: Colors.blue, width: 2) : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45, child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)), SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))), Expanded(flex: 5, child: InkWell(onTap: () => _handleItemClick(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), alignment: Alignment.centerLeft, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))), SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))), _cellCheck(item.complete, isDark, _isEditMode ? null : () { setState(() { item.complete = !item.complete; if (item.complete) { item.complement = ""; item.complementTime = ""; item.process = ""; item.processTime = ""; } }); if (_autoSave) _manualSave(silent: true); }), _cellProcess(item.process, isDark, _isEditMode ? null : () => _showProcessDialog(item)), _cellComplement(item.complement, isDark, _isEditMode ? null : () => _showComplementDialog(item)), Expanded(flex: 3, child: IgnorePointer(ignoring: _isEditMode, child: _RemarksCell(item: item, onSave: () { if (_autoSave) _manualSave(silent: true); }, onForgetFocus: _forgetFocus)))]))); }
-  Widget _cellCheck(bool val, bool isDark, VoidCallback? onTap) { return InkWell(onTap: onTap, child: Container(width: 50, alignment: Alignment.center, color: val ? Colors.green.withOpacity(0.3) : null, child: val ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
+  Widget _buildDataRow(ItemModel item, bool isDark) { bool isSel = _selectedIndices.contains(item.realIndex); bool isHigh = item.realIndex == _highlightedRealIndex; return GestureDetector(onTap: _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : null, behavior: HitTestBehavior.opaque, child: Container(decoration: BoxDecoration(color: isSel ? Colors.blue.withOpacity(0.1) : (item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null), border: isHigh ? Border.all(color: Colors.blue, width: 2) : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))), height: 45, child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)), SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))), Expanded(flex: 5, child: InkWell(onTap: _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : () => _handleItemClick(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8), alignment: Alignment.centerLeft, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(item.itemCode, style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)))))), SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))), _cellCheck(item, isDark, _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : () { setState(() { item.complete = !item.complete; if (item.complete) { item.completeTime = DateTime.now().toString().substring(0, 16); item.complement = ""; item.complementTime = ""; } else { item.completeTime = ""; } }); if (_autoSave) _manualSave(silent: true); }), _cellProcess(item.process, isDark, _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : () => _showProcessDialog(item)), _cellComplement(item.complement, isDark, _isEditMode ? () { setState(() { if (isSel) _selectedIndices.remove(item.realIndex); else _selectedIndices.add(item.realIndex); }); } : () => _showComplementDialog(item)), Expanded(flex: 3, child: IgnorePointer(ignoring: _isEditMode, child: _RemarksCell(item: item, onSave: () { if (_autoSave) _manualSave(silent: true); }, onForgetFocus: _forgetFocus)))]))); }
+  Widget _cellCheck(ItemModel item, bool isDark, VoidCallback? onTap) { return InkWell(onTap: onTap, onLongPress: _isEditMode ? null : () => _showCompleteTimeDialog(item), child: Container(width: 50, alignment: Alignment.center, color: item.complete ? Colors.green.withOpacity(0.3) : null, child: item.complete ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
   Widget _cellComplement(String txt, bool isDark, VoidCallback? onTap) { if (txt.isEmpty) return InkWell(onTap: onTap, child: const SizedBox(width: 50)); Color baseColor = (txt == "부족") ? Colors.orange : Colors.red; return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 50, decoration: BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))))); }
   Widget _cellProcess(String txt, bool isDark, VoidCallback? onTap) { int? colorVal = txt.isNotEmpty ? _processColors[txt] : null; Color baseColor; if (colorVal != null) { baseColor = Color(colorVal); } else { if (txt == "완료") baseColor = Colors.purple; else if (txt == "보류") baseColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(txt)) baseColor = Colors.orange; else baseColor = Colors.blueGrey; } return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 50, decoration: txt.isEmpty ? const BoxDecoration(color: Colors.transparent) : BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: txt.isNotEmpty ? FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))) : null)); }
   void _showError(String t, String m) { showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(t), content: Text(m), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))])); }
