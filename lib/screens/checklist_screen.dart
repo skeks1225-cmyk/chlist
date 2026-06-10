@@ -1900,19 +1900,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ❗ 선택 영역 1: No 및 체크박스 (수직 드래그 시 선택 활성화)
-          _buildSelectionZone(
+          // ❗ 1. 에디트 모드 체크박스 (헤더와 맞춤)
+          if (_isEditMode) _buildSelectionZone(
             item: item,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_isEditMode) Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20)),
-                SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
-              ],
-            ),
+            child: Container(width: 35, alignment: Alignment.center, child: Icon(isSel ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20))
           ),
           
-          // ❗ 스크롤 전용 영역: 품목코드 (수직 드래그 없음 -> ListView 스크롤로 전달)
+          // ❗ 2. No 영역
+          _buildSelectionZone(
+            item: item,
+            child: SizedBox(width: 35, child: Center(child: Text(item.displayNo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+          ),
+          
+          // ❗ 3. 품목코드 (스크롤 구역 - GestureDetector 없음)
           Expanded(
             flex: 5,
             child: GestureDetector(
@@ -1925,7 +1925,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 alignment: Alignment.centerLeft,
-                color: Colors.transparent, // 터치 영역 확보
+                color: Colors.transparent, 
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
@@ -1942,44 +1942,57 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             )
           ),
 
-          // ❗ 선택 영역 2: 나머지 컬럼들 (수직 드래그 시 선택 활성화)
+          // ❗ 4. 수량
+          _buildSelectionZone(
+            item: item,
+            child: SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+          ),
+
+          // ❗ 5. 완료 체크
+          _buildSelectionZone(
+            item: item,
+            child: _cellCheck(item, isDark, _isEditMode ? null : () { 
+              setState(() { 
+                item.complete = !item.complete; 
+                if (item.complete) { 
+                  item.completeTime = DateTime.now().toString().substring(0, 16); 
+                  item.complement = ""; 
+                  item.complementTime = ""; 
+                } else { 
+                  item.completeTime = ""; 
+                } 
+              }); 
+              if (_autoSave) _manualSave(silent: true); 
+            }),
+          ),
+
+          // ❗ 6. 공정
+          _buildSelectionZone(
+            item: item,
+            child: _cellProcess(item.process, isDark, _isEditMode ? null : () => _showProcessDialog(item)),
+          ),
+
+          // ❗ 7. 보완
+          _buildSelectionZone(
+            item: item,
+            child: _cellComplement(item.complement, isDark, _isEditMode ? null : () => _showComplementDialog(item)),
+          ),
+
+          // ❗ 8. 비고 (flex: 3)
           Expanded(
+            flex: 3,
             child: _buildSelectionZone(
               item: item,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
-                  _cellCheck(item, isDark, _isEditMode ? null : () { 
-                    setState(() { 
-                      item.complete = !item.complete; 
-                      if (item.complete) { 
-                        item.completeTime = DateTime.now().toString().substring(0, 16); 
-                        item.complement = ""; 
-                        item.complementTime = ""; 
-                      } else { 
-                        item.completeTime = ""; 
-                      } 
-                    }); 
-                    if (_autoSave) _manualSave(silent: true); 
-                  }),
-                  _cellProcess(item.process, isDark, _isEditMode ? null : () => _showProcessDialog(item)),
-                  _cellComplement(item.complement, isDark, _isEditMode ? null : () => _showComplementDialog(item)),
-                  Expanded(
-                    flex: 3,
-                    child: IgnorePointer(
-                      ignoring: _isEditMode,
-                      child: _RemarksCell(
-                        item: item,
-                        onSave: () { if (_autoSave) _manualSave(silent: true); },
-                        onForgetFocus: _forgetFocus
-                      )
-                    )
-                  )
-                ],
-              ),
-            ),
-          )
+              child: IgnorePointer(
+                ignoring: _isEditMode,
+                child: _RemarksCell(
+                  item: item,
+                  onSave: () { if (_autoSave) _manualSave(silent: true); },
+                  onForgetFocus: _forgetFocus
+                )
+              )
+            )
+          ),
         ]
       )
     );
