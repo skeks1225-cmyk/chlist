@@ -72,6 +72,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _isSelectionFiltered = false; // ❗ 선택 필터 활성화 여부
   final Set<int> _selectedIndices = {}; 
   bool _isSelecting = false; // ❗ 드래그 선택 중인지 여부
+  bool _isScrollingArea = false; // ❗ 현재 터치가 스크롤 영역에서 시작되었는지 여부
   Timer? _scrollTimer; // ❗ 자동 스크롤 타이머
   final ScrollController _scrollController = ScrollController();
   int? _highlightedRealIndex;
@@ -1619,12 +1620,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         Expanded(child: Listener(
           onPointerDown: _isEditMode ? (event) {
             double x = event.localPosition.dx;
-            // ❗ 품목코드 영역(스크롤 전용)이 아닌 경우에만 드래그 선택 시작
-            if (x < itemCodeStart || x > itemCodeEnd) {
-              setState(() { _isSelecting = true; });
-              _handleDragUpdate(event.localPosition.dy);
+            // ❗ 터치 시작 지점에 따라 모드 결정
+            if (x >= itemCodeStart && x <= itemCodeEnd) {
+              _isScrollingArea = true;
+              _isSelecting = false;
             } else {
-              setState(() { _isSelecting = false; });
+              _isScrollingArea = false;
+              _isSelecting = true;
+              _handleDragUpdate(event.localPosition.dy);
             }
           } : (_) { 
             // ❗ 리스트 영역 터치 시에만 포커스 해제 (상단 버튼 영역 보호)
@@ -1637,16 +1640,28 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             } 
           }, 
           onPointerMove: _isEditMode ? (event) {
-            if (_isSelecting) {
+            if (_isScrollingArea) {
+              // ❗ 품목코드 영역에서 시작된 터치는 수동 스크롤 수행
+              if (_scrollController.hasClients) {
+                double newOffset = _scrollController.offset - event.delta.dy;
+                if (newOffset < 0) newOffset = 0;
+                if (newOffset > _scrollController.position.maxScrollExtent) newOffset = _scrollController.position.maxScrollExtent;
+                _scrollController.jumpTo(newOffset);
+              }
+            } else if (_isSelecting) {
+              // ❗ 그 외 영역에서 시작된 터치는 드래그 선택 수행
               _handleDragUpdate(event.localPosition.dy);
               _handleAutoScroll(event.localPosition.dy);
             }
           } : null,
           onPointerUp: _isEditMode ? (_) {
-            setState(() { _isSelecting = false; });
+            setState(() { 
+              _isSelecting = false; 
+              _isScrollingArea = false;
+            });
             _scrollTimer?.cancel();
           } : null,
-          behavior: HitTestBehavior.translucent, 
+          behavior: HitTestBehavior.opaque, 
           child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
             onReorder: _reorderSubheading, 
             buildDefaultDragHandles: false, // ❗ 기본 핸들 비활성화
@@ -1661,7 +1676,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               );
             }).toList()) : ListView.builder(
             controller: _scrollController, 
-            physics: _isEditMode ? const NeverScrollableScrollPhysics() : const AlwaysScrollableScrollPhysics(), // ❗ 선택모드일 때 기본 스크롤 비활성화 (제스처 충돌 방지)
+            padding: EdgeInsets.zero, // ❗ 패딩 제거하여 좌표 계산 정확도 향상
+            physics: _isEditMode ? const NeverScrollableScrollPhysics() : const AlwaysScrollableScrollPhysics(), 
             itemCount: _displayItems.length, 
             itemBuilder: (ctx, idx) {
             final item = _displayItems[idx];
