@@ -1540,9 +1540,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            _batchTypeBtn("완료 일괄 변경", () => _showBatchValueSelection("complete")),
             _batchTypeBtn("공정 일괄 변경", () => _showBatchValueSelection("process")),
             _batchTypeBtn("보완 일괄 변경", () => _showBatchValueSelection("complement")),
-            _batchTypeBtn("완료 일괄 변경", () => _showBatchValueSelection("complete")),
           ],
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))],
