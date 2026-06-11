@@ -359,12 +359,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             ])),
             Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
               _statusBtn("완료", Colors.green, item.complete, () async {
-                if (!item.complete && widget.confirmComplete) {
+                if (widget.confirmComplete) {
+                  bool isChecking = !item.complete;
                   bool? confirm = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
-                      title: const Text("완료 체크 확인"),
-                      content: Text("[${item.itemCode}]\n항목을 완료 처리하시겠습니까?"),
+                      title: Text(isChecking ? "완료 체크 확인" : "완료 체크 해제 확인"),
+                      content: Text("[${item.itemCode}]\n항목을 ${isChecking ? '완료 처리' : '미완료 처리'}하시겠습니까?"),
                       actions: [
                         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
                         TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold))),
