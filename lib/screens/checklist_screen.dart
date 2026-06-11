@@ -30,6 +30,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   String _pdfFolderPath = "";
   String _currentFileName = "파일을 선택하세요";
   bool _autoSave = true;
+  bool _confirmComplete = false; // ❗ 완료 체크 시 확인창 여부
   bool _isLoading = false;
   bool _isSorted = false;
   bool _isSyncing = false;
@@ -162,6 +163,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _excelPath = prefs.getString('excelPath') ?? "";
       _pdfFolderPath = prefs.getString('pdfFolderPath') ?? "";
       _autoSave = prefs.getBool('autoSave') ?? true;
+      _confirmComplete = prefs.getBool('confirmComplete') ?? false;
       _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0;
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
@@ -216,6 +218,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setString('excelPath', _excelPath);
     await prefs.setString('pdfFolderPath', _pdfFolderPath);
     await prefs.setBool('autoSave', _autoSave);
+    await prefs.setBool('confirmComplete', _confirmComplete);
     await prefs.setDouble('scannerZoom', _scannerZoom);
     await prefs.setStringList('processList', _processList);
     await prefs.setString('processColors', jsonEncode(_processColors));
@@ -799,7 +802,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           TextField(controller: userController, decoration: const InputDecoration(labelText: "ID", border: OutlineInputBorder())), 
           const SizedBox(height: 10), 
           TextField(controller: passController, obscureText: obscurePass, decoration: InputDecoration(labelText: "PW", border: const OutlineInputBorder(), suffixIcon: IconButton(icon: Icon(obscurePass ? Icons.visibility : Icons.visibility_off), onPressed: () => setDialogState(() => obscurePass = !obscurePass)))), 
-          const SizedBox(height: 20), 
+          const SizedBox(height: 20),
+          // ❗ 완료 체크 확인 여부 설정 추가
+          CheckboxListTile(
+            title: const Text("완료 체크 시 확인창 표시"),
+            subtitle: const Text("체크 표시 전 한 번 더 물어봅니다."),
+            value: _confirmComplete,
+            contentPadding: EdgeInsets.zero,
+            onChanged: (v) => setDialogState(() => _confirmComplete = v!),
+          ),
+          const SizedBox(height: 10),
           // ❗ 스캐너 줌 설정 UI 추가
           const Align(alignment: Alignment.centerLeft, child: Text("스캐너 기본 배율 (줌)", style: TextStyle(fontWeight: FontWeight.bold))),
           const SizedBox(height: 5),
@@ -1184,7 +1196,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _handleItemClick(ItemModel item) async {
     _forgetFocus(); if (_autoSave) _manualSave(silent: true); if (_pdfFolderPath.startsWith("smb://")) { setState(() => _isLoading = true); try { String shareWithRest = _pdfFolderPath.replaceFirst("smb://", ""); int firstSlash = shareWithRest.indexOf("/"); String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest; String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : ""; String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf"; await _smbService.downloadFile(share, remoteFilePath, "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf"); } catch (_) {} finally { setState(() => _isLoading = false); } }
-    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
+    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, confirmComplete: _confirmComplete, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
     if (lastItemCode != null) { 
       // ❗ 추적 메모리에 기록
       setState(() {
@@ -2167,7 +2179,21 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           // ❗ 5. 완료 체크
           _buildSelectionZone(
             item: item,
-            child: _cellCheck(item, isDark, _isEditMode ? null : () { 
+            child: _cellCheck(item, isDark, _isEditMode ? null : () async { 
+              if (!item.complete && _confirmComplete) {
+                bool? confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text("완료 체크 확인"),
+                    content: Text("[${item.itemCode}]\n항목을 완료 처리하시겠습니까?"),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
+                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold))),
+                    ],
+                  ),
+                );
+                if (confirm != true) return;
+              }
               setState(() { 
                 item.complete = !item.complete; 
                 if (item.complete) { 
