@@ -14,7 +14,7 @@ class PdfViewerScreen extends StatefulWidget {
   final SmbService smbService;
   final List<String> processList;
   final Map<String, int> processColors; // ❗ 공정별 색상 정보
-  final bool confirmComplete; // ❗ 완료 체크 시 확인창 여부
+  final int completeMode; // ❗ 완료 체크 모드 (0: 클릭, 1: 더블클릭, 2: 확인창)
   final Function(ItemModel, String) onStatusUpdate;
 
   const PdfViewerScreen({
@@ -26,7 +26,7 @@ class PdfViewerScreen extends StatefulWidget {
     required this.smbService,
     required this.processList,
     required this.processColors,
-    required this.confirmComplete,
+    required this.completeMode,
     required this.onStatusUpdate,
   });
 
@@ -260,6 +260,25 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   @override
   void dispose() { _remarksController.dispose(); _searchController.dispose(); _searchFocusNode.dispose(); super.dispose(); }
 
+  Future<void> _showCompleteConfirmDialog(ItemModel item) async {
+    bool isChecking = !item.complete;
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isChecking ? "완료 체크 확인" : "완료 체크 해제 확인"),
+        content: Text("[${item.itemCode}]\n항목을 ${isChecking ? '완료 처리' : '미완료 처리'}하시겠습니까?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      widget.onStatusUpdate(item, 'complete');
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = widget.allItems[_currentIndex];
@@ -358,23 +377,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
               Expanded(child: TextField(controller: _remarksController, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14), decoration: InputDecoration(hintText: "비고...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]), filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100], border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10), suffixIcon: _remarksController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) : null), onChanged: (val) { item.remarks = val; setState(() {}); }, onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); })),
             ])),
             Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-              _statusBtn("완료", Colors.green, item.complete, () async {
-                if (widget.confirmComplete) {
-                  bool isChecking = !item.complete;
-                  bool? confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: Text(isChecking ? "완료 체크 확인" : "완료 체크 해제 확인"),
-                      content: Text("[${item.itemCode}]\n항목을 ${isChecking ? '완료 처리' : '미완료 처리'}하시겠습니까?"),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
-                        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold))),
-                      ],
-                    ),
-                  );
-                  if (confirm != true) return;
+              _statusBtn("완료", Colors.green, item.complete, () {
+                if (widget.completeMode == 0) { // 클릭 (즉시)
+                  widget.onStatusUpdate(item, 'complete'); setState(() {});
+                } else if (widget.completeMode == 2) { // 클릭 (확인창)
+                  _showCompleteConfirmDialog(item);
                 }
-                widget.onStatusUpdate(item, 'complete'); setState(() {}); 
+              }, onDoubleTap: () {
+                if (widget.completeMode == 1) { // 더블클릭 (즉시)
+                  widget.onStatusUpdate(item, 'complete'); setState(() {});
+                }
               }, onLongPress: () => _showCompleteTimeDialog(item)), 
               _statusBtn("공정", Colors.blueGrey, item.process.isNotEmpty, () => _showProcessDialog(item)), 
               _statusBtn("보완", Colors.orange, item.complement.isNotEmpty, () => _showComplementDialog(item))
@@ -391,8 +403,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     );
   }
 
-  Widget _statusBtn(String label, Color color, bool active, VoidCallback onTap, {VoidCallback? onLongPress}) {
+  Widget _statusBtn(String label, Color color, bool active, VoidCallback onTap, {VoidCallback? onLongPress, VoidCallback? onDoubleTap}) {
     final item = widget.allItems[_currentIndex];
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     String subText = "";
     if (label == "보완") subText = item.complement;
     if (label == "공정") {
@@ -405,6 +418,52 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         else if (["용접", "도장", "도금", "인쇄"].contains(subText)) color = Colors.orange;
       }
     }
-    return Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: ElevatedButton(onPressed: onTap, onLongPress: onLongPress, style: ElevatedButton.styleFrom(backgroundColor: active ? color : Colors.grey[400]?.withOpacity(0.5), foregroundColor: active ? Colors.white : Colors.black54, minimumSize: const Size(0, 55), padding: EdgeInsets.zero, elevation: active ? 2 : 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(label, style: TextStyle(fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal, fontSize: subText.isEmpty ? 15 : 12)), if (subText.isNotEmpty) Text(subText, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)]))));
+
+    Color bgColor = active ? color : (isDark ? Colors.grey[800]! : Colors.grey[300]!);
+    Color fgColor = active ? Colors.white : (isDark ? Colors.white70 : Colors.black54);
+
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Material(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(8),
+          elevation: active ? 2 : 0,
+          child: InkWell(
+            onTap: onTap,
+            onDoubleTap: onDoubleTap,
+            onLongPress: onLongPress,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              height: 55,
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    label, 
+                    style: TextStyle(
+                      fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal, 
+                      fontSize: subText.isEmpty ? 15 : 12,
+                      color: fgColor
+                    )
+                  ),
+                  if (subText.isNotEmpty) 
+                    Text(
+                      subText, 
+                      style: TextStyle(
+                        fontSize: 16, 
+                        fontWeight: FontWeight.bold,
+                        color: fgColor
+                      ), 
+                      overflow: TextOverflow.ellipsis
+                    )
+                ]
+              )
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
