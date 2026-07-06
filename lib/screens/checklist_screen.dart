@@ -35,6 +35,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _isSorted = false;
   bool _isSyncing = false;
   double _scannerZoom = 0.0; // ❗ 스캐너 기본 줌 (0.0=1x, 1.0=3x)
+  int _qrScanActionMode = 0; // ❗ QR 인식 시 동작 모드 (0: 리스트 검색, 1: 뷰어 바로보기)
 
   String _currentSortCol = ""; 
   bool _isAscending = true;   
@@ -165,6 +166,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _autoSave = prefs.getBool('autoSave') ?? true;
       _completeMode = prefs.getInt('completeMode') ?? (prefs.getBool('confirmComplete') ?? false ? 2 : 0);
       _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0;
+      _qrScanActionMode = prefs.getInt('qrScanActionMode') ?? 0;
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -220,6 +222,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setBool('autoSave', _autoSave);
     await prefs.setInt('completeMode', _completeMode);
     await prefs.setDouble('scannerZoom', _scannerZoom);
+    await prefs.setInt('qrScanActionMode', _qrScanActionMode);
     await prefs.setStringList('processList', _processList);
     await prefs.setString('processColors', jsonEncode(_processColors));
 
@@ -830,6 +833,33 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 value: 2,
                 groupValue: _completeMode,
                 onChanged: (v) => setDialogState(() => _completeMode = v!),
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 10),
+          // ❗ 리스트 큐알코드 인식 시 동작 설정 추가 (안 A)
+          const Align(alignment: Alignment.centerLeft, child: Text("리스트 큐알코드 인식 시 동작", style: TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(height: 5),
+          Container(
+            decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blueGrey.withOpacity(0.2))),
+            child: Column(children: [
+              RadioListTile<int>(
+                title: const Text("리스트에서 품목 검색 (기존)"),
+                subtitle: const Text("QR 스캔 시 검색창에 코드를 입력하고 리스트 내 위치로 이동합니다.", style: TextStyle(fontSize: 10)),
+                value: 0,
+                groupValue: _qrScanActionMode,
+                onChanged: (v) => setDialogState(() => _qrScanActionMode = v!),
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              RadioListTile<int>(
+                title: const Text("뷰어에서 PDF 바로 보기 (신규)"),
+                subtitle: const Text("QR 스캔 시 리스트 검색을 건너뛰고 해당 품목의 PDF 뷰어를 바로 엽니다.", style: TextStyle(fontSize: 10)),
+                value: 1,
+                groupValue: _qrScanActionMode,
+                onChanged: (v) => setDialogState(() => _qrScanActionMode = v!),
                 dense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8),
               ),
@@ -1863,14 +1893,33 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("스캔: $result → 정제: $cleaned"), duration: const Duration(seconds: 2)));
                 }
 
-                if (_searchQuery.isEmpty) _preSearchScrollOffset = _scrollController.offset;
-                setState(() {
-                  _searchController.text = cleaned;
-                  _searchQuery = cleaned;
-                });
-                _applyFilterAndSort();
-                // ❗ 정제된 항목으로 즉시 이동 및 하이라이트
-                WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(cleaned));
+                if (_qrScanActionMode == 1) {
+                  // 뷰어에서 PDF 바로 보기 모드
+                  ItemModel? target;
+                  for (final item in _originalItems) {
+                    if (!item.isSubheading && item.itemCode == cleaned) {
+                      target = item;
+                      break;
+                    }
+                  }
+                  if (target != null) {
+                    _handleItemClick(target);
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("해당 품목을 리스트에서 찾을 수 없습니다."), duration: Duration(seconds: 2)));
+                    }
+                  }
+                } else {
+                  // 기존: 리스트에서 찾기 모드
+                  if (_searchQuery.isEmpty) _preSearchScrollOffset = _scrollController.offset;
+                  setState(() {
+                    _searchController.text = cleaned;
+                    _searchQuery = cleaned;
+                  });
+                  _applyFilterAndSort();
+                  // ❗ 정제된 항목으로 즉시 이동 및 하이라이트
+                  WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(cleaned));
+                }
               }
             }),
           ])), onChanged: (v) { if (_searchQuery.isEmpty && v.isNotEmpty) _preSearchScrollOffset = _scrollController.offset; setState(() => _searchQuery = v); _applyFilterAndSort(); if (v.isEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); })),
