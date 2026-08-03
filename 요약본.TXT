@@ -7,7 +7,7 @@
    - 타겟 플랫폼: Android (권한: MANAGE_EXTERNAL_STORAGE 필수)
    - 핵심 라이브러리(버전 준수 필수):
      * excel: ^4.0.6 (엑셀 읽기/쓰기)
-     * pdfrx: '>=2.0.0 <2.3.0' (PDF 렌더링 - 엑셀 ^4.0.6과 의존성 완전 호환 및 순정 더블탭 확대/축소 지원)
+     * pdfrx: ^2.4.7 (PDF 렌더링 - dependency_overrides archive: ^4.0.7로 엑셀 ^4.0.6과 병행 사용 및 pdfrx 순정 더블탭 클릭지점 확대/축소 완벽 구현)
      * flutter_launcher_icons: ^0.13.1 (앱 아이콘 자동 생성 및 관리)
      * jcifs-ng: (안드로이드 네이티브 SMB 통신용 - Kotlin에서 구현)
      * shared_preferences, permission_handler, path, file_picker
