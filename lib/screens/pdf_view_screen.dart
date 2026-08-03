@@ -150,7 +150,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
       double renderHeight = page.height * scale * 1.5;
 
       // OOM 방지: 최대 4096px
-      const double maxPx = 4096.0;
+      const double maxPx = 6144.0;
       if (renderWidth > maxPx) {
         final ratio = maxPx / renderWidth;
         renderWidth = maxPx;
