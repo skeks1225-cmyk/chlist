@@ -36,6 +36,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _isSyncing = false;
   double _scannerZoom = 0.0; // ❗ 스캐너 기본 줌 (0.0=1x, 1.0=3x)
   int _qrScanActionMode = 0; // ❗ QR 인식 시 동작 모드 (0: 리스트 검색, 1: 뷰어 바로보기)
+  double _pdfDoubleTapZoom = 3.0; // ❗ PDF 뷰어 더블탭 확대 배율 (기본 3배)
+  double _pdfMaxZoom = 10.0; // ❗ PDF 뷰어 최대 한계 배율 (기본 10배)
 
   String _currentSortCol = ""; 
   bool _isAscending = true;   
@@ -167,6 +169,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _completeMode = prefs.getInt('completeMode') ?? (prefs.getBool('confirmComplete') ?? false ? 2 : 0);
       _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0;
       _qrScanActionMode = prefs.getInt('qrScanActionMode') ?? 0;
+      _pdfDoubleTapZoom = prefs.getDouble('pdfDoubleTapZoom') ?? 3.0;
+      _pdfMaxZoom = prefs.getDouble('pdfMaxZoom') ?? 10.0;
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -223,6 +227,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setInt('completeMode', _completeMode);
     await prefs.setDouble('scannerZoom', _scannerZoom);
     await prefs.setInt('qrScanActionMode', _qrScanActionMode);
+    await prefs.setDouble('pdfDoubleTapZoom', _pdfDoubleTapZoom);
+    await prefs.setDouble('pdfMaxZoom', _pdfMaxZoom);
     await prefs.setStringList('processList', _processList);
     await prefs.setString('processColors', jsonEncode(_processColors));
 
@@ -912,6 +918,64 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ),
             ]),
           ),
+          const SizedBox(height: 15),
+          // ❗ PDF 뷰어 더블탭 확대 배율 설정 UI
+          const Align(alignment: Alignment.centerLeft, child: Text("PDF 뷰어 더블탭 확대 배율", style: TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(height: 5),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            decoration: BoxDecoration(color: Colors.blue.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withOpacity(0.2))),
+            child: Column(children: [
+              Row(children: [
+                const Icon(Icons.zoom_in, size: 20, color: Colors.blue),
+                const SizedBox(width: 10),
+                Expanded(child: Slider(
+                  value: _pdfDoubleTapZoom, min: 2.0, max: 5.0, divisions: 30,
+                  onChanged: (v) => setDialogState(() => _pdfDoubleTapZoom = double.parse(v.toStringAsFixed(1))),
+                )),
+                Text("${_pdfDoubleTapZoom.toStringAsFixed(1)}배", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+              ]),
+              const SizedBox(height: 5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _pdfPresetBtn("2배", 2.0, _pdfDoubleTapZoom, (val) => setDialogState(() => _pdfDoubleTapZoom = val)),
+                  _pdfPresetBtn("3배", 3.0, _pdfDoubleTapZoom, (val) => setDialogState(() => _pdfDoubleTapZoom = val)),
+                  _pdfPresetBtn("4배", 4.0, _pdfDoubleTapZoom, (val) => setDialogState(() => _pdfDoubleTapZoom = val)),
+                  _pdfPresetBtn("5배", 5.0, _pdfDoubleTapZoom, (val) => setDialogState(() => _pdfDoubleTapZoom = val)),
+                ],
+              ),
+            ]),
+          ),
+          const SizedBox(height: 15),
+          // ❗ PDF 뷰어 최대 한계 배율 설정 UI
+          const Align(alignment: Alignment.centerLeft, child: Text("PDF 뷰어 최대 한계 배율", style: TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(height: 5),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            decoration: BoxDecoration(color: Colors.purple.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.purple.withOpacity(0.2))),
+            child: Column(children: [
+              Row(children: [
+                const Icon(Icons.aspect_ratio, size: 20, color: Colors.purple),
+                const SizedBox(width: 10),
+                Expanded(child: Slider(
+                  value: _pdfMaxZoom, min: 3.0, max: 10.0, divisions: 70,
+                  onChanged: (v) => setDialogState(() => _pdfMaxZoom = double.parse(v.toStringAsFixed(1))),
+                )),
+                Text("${_pdfMaxZoom.toStringAsFixed(1)}배", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.purple)),
+              ]),
+              const SizedBox(height: 5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _pdfPresetBtn("3배", 3.0, _pdfMaxZoom, (val) => setDialogState(() => _pdfMaxZoom = val)),
+                  _pdfPresetBtn("5배", 5.0, _pdfMaxZoom, (val) => setDialogState(() => _pdfMaxZoom = val)),
+                  _pdfPresetBtn("8배", 8.0, _pdfMaxZoom, (val) => setDialogState(() => _pdfMaxZoom = val)),
+                  _pdfPresetBtn("10배", 10.0, _pdfMaxZoom, (val) => setDialogState(() => _pdfMaxZoom = val)),
+                ],
+              ),
+            ]),
+          ),
           const SizedBox(height: 20),
           ElevatedButton.icon(onPressed: () async { String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text); if (err == null) { List<String> shares = await _smbService.listShares(); _showError("성공", "✅ 접속 성공!\n\n[공유 목록]\n${shares.join('\n')}"); } else _showError("오류", "접속 실패: $err"); }, icon: const Icon(Icons.check_circle_outline), label: const Text("접속 테스트"))
         ])),
@@ -1267,7 +1331,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _handleItemClick(ItemModel item) async {
     _forgetFocus(); if (_autoSave) _manualSave(silent: true); if (_pdfFolderPath.startsWith("smb://")) { setState(() => _isLoading = true); try { String shareWithRest = _pdfFolderPath.replaceFirst("smb://", ""); int firstSlash = shareWithRest.indexOf("/"); String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest; String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : ""; String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf"; await _smbService.downloadFile(share, remoteFilePath, "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf"); } catch (_) {} finally { setState(() => _isLoading = false); } }
-    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, completeMode: _completeMode, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
+    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, completeMode: _completeMode, doubleTapZoom: _pdfDoubleTapZoom, maxZoom: _pdfMaxZoom, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
     if (lastItemCode != null) { 
       // ❗ 추적 메모리에 기록
       setState(() {
@@ -2374,6 +2438,29 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           label,
           style: TextStyle(
             fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: isSelected ? Colors.white : Colors.black87,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pdfPresetBtn(String label, double value, double currentValue, Function(double) onSelect) {
+    bool isSelected = (currentValue - value).abs() < 0.05;
+    return GestureDetector(
+      onTap: () => onSelect(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isSelected ? Colors.blue : Colors.grey.withOpacity(0.3)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
             fontWeight: FontWeight.bold,
             color: isSelected ? Colors.white : Colors.black87,
           ),

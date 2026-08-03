@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_pdfview/flutter_pdfview.dart'; 
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
@@ -15,6 +15,8 @@ class PdfViewerScreen extends StatefulWidget {
   final List<String> processList;
   final Map<String, int> processColors; // ❗ 공정별 색상 정보
   final int completeMode; // ❗ 완료 체크 모드 (0: 클릭, 1: 더블클릭, 2: 확인창)
+  final double doubleTapZoom; // ❗ 더블탭 확대 배율 (기본 3.0)
+  final double maxZoom; // ❗ 최대 한계 배율 (기본 10.0)
   final Function(ItemModel, String) onStatusUpdate;
 
   const PdfViewerScreen({
@@ -27,6 +29,8 @@ class PdfViewerScreen extends StatefulWidget {
     required this.processList,
     required this.processColors,
     required this.completeMode,
+    this.doubleTapZoom = 3.0,
+    this.maxZoom = 10.0,
     required this.onStatusUpdate,
   });
 
@@ -37,18 +41,21 @@ class PdfViewerScreen extends StatefulWidget {
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
   late int _currentIndex;
   String _currentPdfPath = "";
-  PDFViewController? _pdfViewController;
-  Key _viewerKey = UniqueKey();
+  final PdfViewerController _pdfViewerController = PdfViewerController();
+  late PageController _pageController;
   final TextEditingController _remarksController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   List<ItemModel> _searchResults = [];
   bool _isLoading = false;
+  double _currentZoom = 1.0;
+  Offset? _doubleTapOffset;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: _currentIndex);
     _loadPdf();
     _searchFocusNode.addListener(() {
       if (mounted && !_searchFocusNode.hasFocus) {
@@ -83,13 +90,18 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (mounted) {
       setState(() {
         _currentPdfPath = File(localPath).existsSync() ? localPath : "";
-        _viewerKey = UniqueKey();
+        _currentZoom = 1.0;
         _isLoading = false;
       });
     }
   }
 
-  void _resetFit() { _loadPdf(); }
+  void _resetFit() {
+    try {
+      _pdfViewerController.zoomLevel = 1.0;
+    } catch (_) {}
+    setState(() { _currentZoom = 1.0; });
+  }
 
   void _prev() {
     final currentItem = widget.allItems[_currentIndex];
@@ -103,7 +115,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (prevTargetIdx != -1) {
       final targetItem = widget.filteredItems[prevTargetIdx];
       final newIdx = widget.allItems.indexOf(targetItem);
-      if (newIdx != -1) { setState(() { _currentIndex = newIdx; _loadPdf(); }); }
+      if (newIdx != -1) {
+        setState(() { _currentIndex = newIdx; });
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(_currentIndex);
+        }
+        _loadPdf();
+      }
     }
   }
 
@@ -119,7 +137,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (nextTargetIdx != -1) {
       final targetItem = widget.filteredItems[nextTargetIdx];
       final newIdx = widget.allItems.indexOf(targetItem);
-      if (newIdx != -1) { setState(() { _currentIndex = newIdx; _loadPdf(); }); }
+      if (newIdx != -1) {
+        setState(() { _currentIndex = newIdx; });
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(_currentIndex);
+        }
+        _loadPdf();
+      }
     }
   }
 
@@ -133,6 +157,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     int index = widget.allItems.indexOf(target);
     if (index != -1) {
       setState(() { _currentIndex = index; _searchResults = []; _searchController.clear(); });
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(_currentIndex);
+      }
       _searchFocusNode.unfocus(); _loadPdf();
     }
   }
@@ -258,7 +285,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   @override
-  void dispose() { _remarksController.dispose(); _searchController.dispose(); _searchFocusNode.dispose(); super.dispose(); }
+  void dispose() { 
+    _pageController.dispose();
+    _remarksController.dispose(); 
+    _searchController.dispose(); 
+    _searchFocusNode.dispose(); 
+    super.dispose(); 
+  }
 
   Future<void> _showCompleteConfirmDialog(ItemModel item) async {
     bool isChecking = !item.complete;
@@ -283,7 +316,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   Widget build(BuildContext context) {
     final item = widget.allItems[_currentIndex];
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color viewerBgColor = isDark ? Colors.black : Colors.grey[300]!;
+    final Color viewerBgColor = isDark ? Colors.black : Colors.white;
     bool hasPrev = widget.filteredItems.any((i) => i.realIndex < item.realIndex);
     bool hasNext = widget.filteredItems.any((i) => i.realIndex > item.realIndex);
 
@@ -310,7 +343,49 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         body: Column(children: [
           Expanded(child: LayoutBuilder(builder: (context, constraints) {
             return Stack(children: [
-              _isLoading ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue)) : (_currentPdfPath.isNotEmpty ? Container(color: viewerBgColor, child: PDFView(key: _viewerKey, filePath: _currentPdfPath, enableSwipe: true, autoSpacing: true, pageFling: true, backgroundColor: isDark ? Colors.black : Colors.white, onViewCreated: (PDFViewController pdfViewController) { _pdfViewController = pdfViewController; })) : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
+              _isLoading ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue)) : (_currentPdfPath.isNotEmpty ? Container(
+                color: viewerBgColor, 
+                child: PageView.builder(
+                  controller: _pageController,
+                  physics: _currentZoom <= 1.05 ? const PageScrollPhysics() : const NeverScrollableScrollPhysics(),
+                  onPageChanged: (idx) {
+                    if (idx != _currentIndex) {
+                      setState(() { _currentIndex = idx; });
+                      _loadPdf();
+                    }
+                  },
+                  itemCount: widget.allItems.length,
+                  itemBuilder: (ctx, pageIdx) {
+                    return GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onDoubleTapDown: (details) {
+                        _doubleTapOffset = details.localPosition;
+                      },
+                      onDoubleTap: () {
+                        if (_currentZoom > 1.05) {
+                          _pdfViewerController.zoomLevel = 1.0;
+                          setState(() { _currentZoom = 1.0; });
+                        } else {
+                          _pdfViewerController.zoomLevel = widget.doubleTapZoom;
+                          setState(() { _currentZoom = widget.doubleTapZoom; });
+                        }
+                      },
+                      child: SfPdfViewer.file(
+                        File(_currentPdfPath),
+                        controller: _pdfViewerController,
+                        enableDoubleTapZooming: false, // ❗ 무조건 FIT 원복 및 더블탭 1단계 배율을 위해 수동 컨트롤
+                        maxZoomLevel: widget.maxZoom,
+                        backgroundColor: viewerBgColor,
+                        onZoomLevelChanged: (PdfZoomLevelChangedDetails details) {
+                          setState(() {
+                            _currentZoom = details.newZoomLevel;
+                          });
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ) : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
               Positioned(left: 5, bottom: 5, child: Row(children: [_navArrowBtn(Icons.arrow_back, hasPrev ? _prev : () {}, isDark), _navArrowBtn(Icons.arrow_forward, hasNext ? _next : () {}, isDark)])),
               if (_searchResults.isNotEmpty) Positioned(left: 8, bottom: 2, child: Container(width: MediaQuery.of(context).size.width * 0.45, constraints: BoxConstraints(maxHeight: constraints.maxHeight - 5), decoration: BoxDecoration(color: isDark ? Colors.grey[850] : Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, -2))]), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ListView.separated(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: _searchResults.length, separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]), itemBuilder: (ctx, idx) { final res = _searchResults[idx]; return ListTile(dense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0), title: Text(res.itemCode, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)), trailing: res == item ? const Icon(Icons.check_circle, size: 14, color: Colors.blue) : null, onTap: () => _jumpToItem(res)); }))))
             ]);
