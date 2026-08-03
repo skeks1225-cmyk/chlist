@@ -387,12 +387,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                             _pdfViewerController.zoomLevel = 1.0;
                             setState(() { _currentZoom = 1.0; });
                           } else {
+                            final Offset? tapPos = _doubleTapOffset;
                             _pdfViewerController.zoomLevel = widget.doubleTapZoom;
-                            if (_doubleTapOffset != null) {
-                              final double targetX = _doubleTapOffset!.dx * widget.doubleTapZoom - (constraints.maxWidth / 2);
-                              final double targetY = _doubleTapOffset!.dy * widget.doubleTapZoom - (constraints.maxHeight / 2);
-                              Future.microtask(() {
+                            setState(() { _currentZoom = widget.doubleTapZoom; });
+                            if (tapPos != null) {
+                              // ❗ 줌 렌더링 완료 후 jumpTo (microtask는 너무 이름 → 150ms 딜레이)
+                              Future.delayed(const Duration(milliseconds: 150), () {
+                                if (!mounted) return;
                                 try {
+                                  final double targetX = tapPos.dx * widget.doubleTapZoom - (constraints.maxWidth / 2);
+                                  final double targetY = tapPos.dy * widget.doubleTapZoom - (constraints.maxHeight / 2);
                                   _pdfViewerController.jumpTo(
                                     xOffset: targetX.clamp(0.0, double.infinity),
                                     yOffset: targetY.clamp(0.0, double.infinity),
@@ -400,16 +404,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                 } catch (_) {}
                               });
                             }
-                            setState(() { _currentZoom = widget.doubleTapZoom; });
                           }
                         },
-                        child: Theme(
-                          data: Theme.of(context).copyWith(
-                            scaffoldBackgroundColor: viewerBgColor,
-                            canvasColor: viewerBgColor,
-                            colorScheme: Theme.of(context).colorScheme.copyWith(
-                              surface: viewerBgColor,
-                            ),
+                        child: SfPdfViewerTheme(
+                          data: SfPdfViewerThemeData(
+                            // ❗ SfPdfViewer 자체 테마로 배경색 설정 (Theme.copyWith으로는 불가)
+                            backgroundColor: viewerBgColor,
                           ),
                           child: SfPdfViewer.file(
                             File(_currentPdfPath),
