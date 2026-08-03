@@ -375,8 +375,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         controller: _pdfViewerController,
                         enableDoubleTapZooming: false, // ❗ 무조건 FIT 원복 및 더블탭 1단계 배율을 위해 수동 컨트롤
                         maxZoomLevel: widget.maxZoom,
-                        backgroundColor: viewerBgColor,
-                        onZoomLevelChanged: (PdfZoomLevelChangedDetails details) {
+                        onZoomLevelChanged: (details) {
                           setState(() {
                             _currentZoom = details.newZoomLevel;
                           });
