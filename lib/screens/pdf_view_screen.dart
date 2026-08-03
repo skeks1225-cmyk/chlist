@@ -50,6 +50,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   bool _isLoading = false;
   double _currentZoom = 1.0;
   Offset? _doubleTapOffset;
+  int _pointerCount = 0;
+  bool _isMultiTouch = false;
 
   @override
   void initState() {
@@ -345,44 +347,86 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             return Stack(children: [
               _isLoading ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue)) : (_currentPdfPath.isNotEmpty ? Container(
                 color: viewerBgColor, 
-                child: PageView.builder(
-                  controller: _pageController,
-                  physics: _currentZoom <= 1.05 ? const PageScrollPhysics() : const NeverScrollableScrollPhysics(),
-                  onPageChanged: (idx) {
-                    if (idx != _currentIndex) {
-                      setState(() { _currentIndex = idx; });
-                      _loadPdf();
+                child: Listener(
+                  onPointerDown: (event) {
+                    _pointerCount++;
+                    if (_pointerCount > 1 && !_isMultiTouch) {
+                      setState(() { _isMultiTouch = true; });
                     }
                   },
-                  itemCount: widget.allItems.length,
-                  itemBuilder: (ctx, pageIdx) {
-                    return GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onDoubleTapDown: (details) {
-                        _doubleTapOffset = details.localPosition;
-                      },
-                      onDoubleTap: () {
-                        if (_currentZoom > 1.05) {
-                          _pdfViewerController.zoomLevel = 1.0;
-                          setState(() { _currentZoom = 1.0; });
-                        } else {
-                          _pdfViewerController.zoomLevel = widget.doubleTapZoom;
-                          setState(() { _currentZoom = widget.doubleTapZoom; });
-                        }
-                      },
-                      child: SfPdfViewer.file(
-                        File(_currentPdfPath),
-                        controller: _pdfViewerController,
-                        enableDoubleTapZooming: false, // ❗ 무조건 FIT 원복 및 더블탭 1단계 배율을 위해 수동 컨트롤
-                        maxZoomLevel: widget.maxZoom,
-                        onZoomLevelChanged: (details) {
-                          setState(() {
-                            _currentZoom = details.newZoomLevel;
-                          });
-                        },
-                      ),
-                    );
+                  onPointerUp: (event) {
+                    _pointerCount--;
+                    if (_pointerCount <= 1 && _isMultiTouch) {
+                      setState(() { _isMultiTouch = false; });
+                    }
                   },
+                  onPointerCancel: (event) {
+                    _pointerCount = 0;
+                    if (_isMultiTouch) {
+                      setState(() { _isMultiTouch = false; });
+                    }
+                  },
+                  child: PageView.builder(
+                    controller: _pageController,
+                    physics: (_currentZoom <= 1.05 && !_isMultiTouch) ? const PageScrollPhysics() : const NeverScrollableScrollPhysics(),
+                    onPageChanged: (idx) {
+                      if (idx != _currentIndex) {
+                        setState(() { _currentIndex = idx; });
+                        _loadPdf();
+                      }
+                    },
+                    itemCount: widget.allItems.length,
+                    itemBuilder: (ctx, pageIdx) {
+                      return GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onDoubleTapDown: (details) {
+                          _doubleTapOffset = details.localPosition;
+                        },
+                        onDoubleTap: () {
+                          if (_currentZoom > 1.05) {
+                            _pdfViewerController.zoomLevel = 1.0;
+                            setState(() { _currentZoom = 1.0; });
+                          } else {
+                            _pdfViewerController.zoomLevel = widget.doubleTapZoom;
+                            if (_doubleTapOffset != null) {
+                              final double targetX = _doubleTapOffset!.dx * widget.doubleTapZoom - (constraints.maxWidth / 2);
+                              final double targetY = _doubleTapOffset!.dy * widget.doubleTapZoom - (constraints.maxHeight / 2);
+                              Future.microtask(() {
+                                try {
+                                  _pdfViewerController.jumpTo(
+                                    xOffset: targetX.clamp(0.0, double.infinity),
+                                    yOffset: targetY.clamp(0.0, double.infinity),
+                                  );
+                                } catch (_) {}
+                              });
+                            }
+                            setState(() { _currentZoom = widget.doubleTapZoom; });
+                          }
+                        },
+                        child: Theme(
+                          data: Theme.of(context).copyWith(
+                            scaffoldBackgroundColor: viewerBgColor,
+                            canvasColor: viewerBgColor,
+                            colorScheme: Theme.of(context).colorScheme.copyWith(
+                              surface: viewerBgColor,
+                            ),
+                          ),
+                          child: SfPdfViewer.file(
+                            File(_currentPdfPath),
+                            controller: _pdfViewerController,
+                            enableDoubleTapZooming: false, // ❗ 무조건 FIT 원복 및 더블탭 1단계 배율을 위해 수동 컨트롤
+                            maxZoomLevel: widget.maxZoom,
+                            pageSpacing: 0,
+                            onZoomLevelChanged: (details) {
+                              setState(() {
+                                _currentZoom = details.newZoomLevel;
+                              });
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ) : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
               Positioned(left: 5, bottom: 5, child: Row(children: [_navArrowBtn(Icons.arrow_back, hasPrev ? _prev : () {}, isDark), _navArrowBtn(Icons.arrow_forward, hasNext ? _next : () {}, isDark)])),
