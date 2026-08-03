@@ -81,9 +81,27 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
 
   bool get _isZoomed => _currentScale > 1.05;
 
+  Matrix4 _getInitialMatrix() {
+    if (_viewportConstraints == null || _pdfPageSize == null) return Matrix4.identity();
+    final viewW = _viewportConstraints!.maxWidth;
+    final viewH = _viewportConstraints!.maxHeight;
+    final pageRatio = _pdfPageSize!.width / _pdfPageSize!.height;
+    final viewRatio = viewW / viewH;
+
+    double contentW, contentH;
+    if (pageRatio > viewRatio) {
+      contentW = viewW;
+      contentH = viewW / pageRatio;
+    } else {
+      contentW = viewH * pageRatio;
+      contentH = viewH;
+    }
+    return Matrix4.translationValues((viewW - contentW) / 2, (viewH - contentH) / 2, 0);
+  }
+
   void _clampMatrix() {
     if (_viewportConstraints == null || _pdfPageSize == null || _currentScale <= 1.0) {
-      _matrix = Matrix4.identity();
+      _matrix = _getInitialMatrix();
       return;
     }
 
@@ -94,22 +112,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
 
     double contentW, contentH;
     if (pageRatio > viewRatio) {
-      // 가로형
       contentW = viewW;
       contentH = viewW / pageRatio;
     } else {
-      // 세로형
       contentW = viewH * pageRatio;
       contentH = viewH;
     }
 
     final S = _currentScale;
+    final offsetX = (viewW - contentW * S) / 2;
+    final offsetY = (viewH - contentH * S) / 2;
+
     final tx = _matrix.storage[12];
     final ty = _matrix.storage[13];
 
-    // 콘텐츠 표시 영역 기준 클램핑
-    _matrix.storage[12] = tx.clamp(-(S - 1) * contentW, 0.0);
-    _matrix.storage[13] = ty.clamp(-(S - 1) * contentH, 0.0);
+    // S=1일 때의 Matrix 기준으로 클램핑
+    _matrix.storage[12] = tx.clamp(-(S - 1) * contentW + offsetX, offsetX);
+    _matrix.storage[13] = ty.clamp(-(S - 1) * contentH + offsetY, offsetY);
   }
 
   @override
@@ -131,7 +150,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     setState(() {
       _isLoading = true;
       _currentUiImage = null;
-      _matrix = Matrix4.identity();
+      _matrix = _getInitialMatrix();
       _currentScale = 1.0;
       _renderedAtScale = 1.0;
     });
