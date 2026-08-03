@@ -53,6 +53,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
   // 줌/패닝 상태 (InteractiveViewer 제거 → 직접 Matrix4 관리)
   Matrix4 _matrix = Matrix4.identity();
   double _currentScale = 1.0;
+  BoxConstraints? _viewportConstraints;
 
   // 핀치줌 제스처 시작 시 스냅샷
   Matrix4 _scaleStartMatrix = Matrix4.identity();
@@ -78,6 +79,22 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
   bool _isLoading = false;
 
   bool get _isZoomed => _currentScale > 1.05;
+
+  void _clampMatrix() {
+    if (_viewportConstraints == null || _currentScale <= 1.0) {
+      _matrix = Matrix4.identity();
+      return;
+    }
+    final W = _viewportConstraints!.maxWidth;
+    final H = _viewportConstraints!.maxHeight;
+    final S = _currentScale;
+
+    final tx = _matrix.storage[12];
+    final ty = _matrix.storage[13];
+
+    _matrix.storage[12] = tx.clamp(-(S - 1) * W, 0.0);
+    _matrix.storage[13] = ty.clamp(-(S - 1) * H, 0.0);
+  }
 
   @override
   void initState() {
@@ -205,7 +222,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     if (details.pointerCount >= 2) {
       // ─── 핀치줌 ────────────────────────────────────────────
       _isSwipeGesture = false;
-      final double newScale = (_scaleStartScale * details.scale).clamp(0.5, widget.maxZoom);
+      final double newScale = (_scaleStartScale * details.scale).clamp(1.0, widget.maxZoom);
+      
+      if (newScale <= 1.0) {
+        setState(() {
+          _matrix = Matrix4.identity();
+          _currentScale = 1.0;
+        });
+        return;
+      }
+
       final double scaleDelta = newScale / _scaleStartScale;
       final Offset focalDelta = details.localFocalPoint - _scaleStartFocalPoint;
 
@@ -220,13 +246,17 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
       setState(() {
         _matrix = newMatrix;
         _currentScale = newScale;
+        _clampMatrix();
       });
     } else if (details.pointerCount == 1 && _isZoomed) {
       // ─── 단일 손가락 패닝 (확대 상태) ───────────────────────
       _isSwipeGesture = false;
       final Matrix4 newMatrix = _matrix.clone();
       newMatrix.translate(details.focalPointDelta.dx, details.focalPointDelta.dy);
-      setState(() { _matrix = newMatrix; });
+      setState(() {
+        _matrix = newMatrix;
+        _clampMatrix();
+      });
     }
     // 단일 손가락 + FIT 상태: 스와이프로 처리 (onScaleEnd에서 이전/다음 호출)
   }
@@ -463,6 +493,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
         backgroundColor: bgColor,
         body: Column(children: [
           Expanded(child: LayoutBuilder(builder: (context, constraints) {
+            _viewportConstraints = constraints;
             return Stack(children: [
               // ── PDF 뷰어 영역 ─────────────────────────────────
               Container(
