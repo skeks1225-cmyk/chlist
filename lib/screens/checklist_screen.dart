@@ -37,7 +37,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   double _scannerZoom = 0.0; // ❗ 스캐너 기본 줌 (0.0=1x, 1.0=3x)
   int _qrScanActionMode = 0; // ❗ QR 인식 시 동작 모드 (0: 리스트 검색, 1: 뷰어 바로보기)
   double _pdfDoubleTapZoom = 3.0; // ❗ PDF 뷰어 더블탭 확대 배율 (기본 3배)
-  double _pdfMaxZoom = 10.0; // ❗ PDF 뷰어 최대 한계 배율 (기본 10배)
+  double _pdfMaxZoom = 15.0; // ❗ PDF 뷰어 최대 한계 배율 (기본 15배)
 
   String _currentSortCol = ""; 
   bool _isAscending = true;   
@@ -959,7 +959,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 const Icon(Icons.aspect_ratio, size: 20, color: Colors.purple),
                 const SizedBox(width: 10),
                 Expanded(child: Slider(
-                  value: _pdfMaxZoom, min: 3.0, max: 10.0, divisions: 70,
+                  value: _pdfMaxZoom, min: 3.0, max: 15.0, divisions: 120,
                   onChanged: (v) => setDialogState(() => _pdfMaxZoom = double.parse(v.toStringAsFixed(1))),
                 )),
                 Text("${_pdfMaxZoom.toStringAsFixed(1)}배", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.purple)),
@@ -968,10 +968,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _pdfPresetBtn("3배", 3.0, _pdfMaxZoom, (val) => setDialogState(() => _pdfMaxZoom = val)),
                   _pdfPresetBtn("5배", 5.0, _pdfMaxZoom, (val) => setDialogState(() => _pdfMaxZoom = val)),
                   _pdfPresetBtn("8배", 8.0, _pdfMaxZoom, (val) => setDialogState(() => _pdfMaxZoom = val)),
                   _pdfPresetBtn("10배", 10.0, _pdfMaxZoom, (val) => setDialogState(() => _pdfMaxZoom = val)),
+                  _pdfPresetBtn("15배", 15.0, _pdfMaxZoom, (val) => setDialogState(() => _pdfMaxZoom = val)),
                 ],
               ),
             ]),

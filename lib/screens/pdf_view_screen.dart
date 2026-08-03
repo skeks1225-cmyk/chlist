@@ -44,19 +44,31 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
   late int _currentIndex;
   String _currentPdfPath = "";
 
-  // pdfrx 문서 및 렌더링
+  // pdfrx 렌더링
   PdfDocument? _pdfDoc;
   ui.Image? _currentUiImage;
   bool _isRerendering = false;
   double _renderedAtScale = 1.0;
 
-  // 제스처 컨트롤
-  final TransformationController _transformationController = TransformationController();
-  late PageController _pageController;
+  // 줌/패닝 상태 (InteractiveViewer 제거 → 직접 Matrix4 관리)
+  Matrix4 _matrix = Matrix4.identity();
   double _currentScale = 1.0;
+
+  // 핀치줌 제스처 시작 시 스냅샷
+  Matrix4 _scaleStartMatrix = Matrix4.identity();
+  double _scaleStartScale = 1.0;
+  Offset _scaleStartFocalPoint = Offset.zero;
+
+  // 스와이프 감지용
+  bool _isSwipeGesture = false;
+
+  // 더블탭
   Offset? _doubleTapOffset;
   AnimationController? _zoomAnimController;
   Animation<Matrix4>? _zoomAnimation;
+
+  // PageView
+  late PageController _pageController;
 
   // UI
   final TextEditingController _remarksController = TextEditingController();
@@ -72,18 +84,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: _currentIndex);
-    _transformationController.addListener(_onTransformChanged);
     _loadPdf();
     _searchFocusNode.addListener(() {
       if (mounted && !_searchFocusNode.hasFocus) setState(() => _searchResults = []);
     });
-  }
-
-  void _onTransformChanged() {
-    final scale = _transformationController.value.getMaxScaleOnAxis();
-    if ((scale - _currentScale).abs() > 0.01 && mounted) {
-      setState(() { _currentScale = scale; });
-    }
   }
 
   Future<void> _loadPdf() async {
@@ -91,12 +95,14 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     final String cleanCode = item.itemCode.trim();
     if (!mounted) return;
 
-    setState(() { _isLoading = true; _currentUiImage = null; });
-    _transformationController.value = Matrix4.identity();
-    _currentScale = 1.0;
-    _renderedAtScale = 1.0;
+    setState(() {
+      _isLoading = true;
+      _currentUiImage = null;
+      _matrix = Matrix4.identity();
+      _currentScale = 1.0;
+      _renderedAtScale = 1.0;
+    });
 
-    // 이전 문서 해제
     try { await _pdfDoc?.dispose(); } catch (_) {}
     _pdfDoc = null;
 
@@ -136,49 +142,31 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     }
   }
 
-  /// pdfrx 재렌더링 — 현재 줌 배율에 맞는 해상도로 선명하게 렌더링
+  /// pdfrx 재렌더링 — 현재 배율에 맞는 해상도로 선명하게 렌더링
   Future<void> _renderPage({required double scale}) async {
     if (_pdfDoc == null || _pdfDoc!.pages.isEmpty || _isRerendering) return;
     _isRerendering = true;
-
     try {
-      final page = _pdfDoc!.pages[0]; // 단일 페이지 문서
-
-      // 렌더 해상도: PDF 포인트 × 배율 × 품질계수(1.5)
-      // (화면 DPR은 pdfrx 내부에서 처리되므로 논리 해상도로 계산)
+      final page = _pdfDoc!.pages[0];
       double renderWidth = page.width * scale * 1.5;
       double renderHeight = page.height * scale * 1.5;
-
-      // OOM 방지: 최대 4096px
       const double maxPx = 6144.0;
       if (renderWidth > maxPx) {
-        final ratio = maxPx / renderWidth;
+        renderHeight = renderHeight * (maxPx / renderWidth);
         renderWidth = maxPx;
-        renderHeight = renderHeight * ratio;
       }
       if (renderHeight > maxPx) {
-        final ratio = maxPx / renderHeight;
+        renderWidth = renderWidth * (maxPx / renderHeight);
         renderHeight = maxPx;
-        renderWidth = renderWidth * ratio;
       }
-
-      final pdfImage = await page.render(
-        fullWidth: renderWidth,
-        fullHeight: renderHeight,
-      );
-
+      final pdfImage = await page.render(fullWidth: renderWidth, fullHeight: renderHeight);
       if (pdfImage != null && mounted) {
-        // RGBA 픽셀 → ui.Image 변환
         final completer = Completer<ui.Image>();
         ui.decodeImageFromPixels(
-          pdfImage.pixels,
-          pdfImage.width,
-          pdfImage.height,
-          ui.PixelFormat.rgba8888,
-          (img) => completer.complete(img),
+          pdfImage.pixels, pdfImage.width, pdfImage.height,
+          ui.PixelFormat.rgba8888, (img) => completer.complete(img),
         );
         final uiImage = await completer.future;
-
         if (mounted) {
           setState(() {
             _currentUiImage?.dispose();
@@ -198,7 +186,63 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     }
   }
 
-  /// 더블탭 Matrix4 피벗 확대/FIT 복귀
+  void _maybeRerenderAt(double scale) {
+    if ((scale - _renderedAtScale).abs() / _renderedAtScale > 0.3) {
+      _renderPage(scale: scale);
+    }
+  }
+
+  // ── 핀치줌 제스처 ────────────────────────────────────────────
+  void _onScaleStart(ScaleStartDetails details) {
+    _scaleStartMatrix = _matrix.clone();
+    _scaleStartScale = _currentScale;
+    _scaleStartFocalPoint = details.localFocalPoint;
+    // 단일 손가락 + FIT 상태일 때는 스와이프 감지 모드
+    _isSwipeGesture = details.pointerCount <= 1 && !_isZoomed;
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails details) {
+    if (details.pointerCount >= 2) {
+      // ─── 핀치줌 ────────────────────────────────────────────
+      _isSwipeGesture = false;
+      final double newScale = (_scaleStartScale * details.scale).clamp(0.5, widget.maxZoom);
+      final double scaleDelta = newScale / _scaleStartScale;
+      final Offset focalDelta = details.localFocalPoint - _scaleStartFocalPoint;
+
+      // 핀치 시작 기준 포인트 주변으로 확대 + 핀치 이동량만큼 패닝
+      final Matrix4 delta = Matrix4.identity()
+        ..translate(_scaleStartFocalPoint.dx + focalDelta.dx,
+                    _scaleStartFocalPoint.dy + focalDelta.dy)
+        ..scale(scaleDelta)
+        ..translate(-_scaleStartFocalPoint.dx, -_scaleStartFocalPoint.dy);
+
+      final Matrix4 newMatrix = delta.multiplied(_scaleStartMatrix);
+      setState(() {
+        _matrix = newMatrix;
+        _currentScale = newScale;
+      });
+    } else if (details.pointerCount == 1 && _isZoomed) {
+      // ─── 단일 손가락 패닝 (확대 상태) ───────────────────────
+      _isSwipeGesture = false;
+      final Matrix4 newMatrix = _matrix.clone();
+      newMatrix.translate(details.focalPointDelta.dx, details.focalPointDelta.dy);
+      setState(() { _matrix = newMatrix; });
+    }
+    // 단일 손가락 + FIT 상태: 스와이프로 처리 (onScaleEnd에서 이전/다음 호출)
+  }
+
+  void _onScaleEnd(ScaleEndDetails details) {
+    // ─── 스와이프로 이전/다음 전환 ──────────────────────────
+    if (_isSwipeGesture && !_isZoomed) {
+      final velocityX = details.velocity.pixelsPerSecond.dx;
+      if (velocityX < -300) _next();      // 왼쪽 스와이프 → 다음
+      else if (velocityX > 300) _prev();  // 오른쪽 스와이프 → 이전
+    }
+    // ─── 핀치줌 종료 후 재렌더링 ────────────────────────────
+    _maybeRerenderAt(_currentScale);
+  }
+
+  // ── 더블탭 Matrix4 피벗 확대/FIT 복귀 ───────────────────────
   void _handleDoubleTap() {
     Matrix4 targetMatrix;
     if (_isZoomed) {
@@ -215,22 +259,27 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
 
   void _animateToMatrix(Matrix4 target) {
     _zoomAnimController?.dispose();
-    _zoomAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 220),
-    );
-    _zoomAnimation = Matrix4Tween(
-      begin: _transformationController.value,
-      end: target,
-    ).animate(CurvedAnimation(parent: _zoomAnimController!, curve: Curves.easeOut));
+    _zoomAnimController = AnimationController(vsync: this, duration: const Duration(milliseconds: 220));
+    _zoomAnimation = Matrix4Tween(begin: _matrix, end: target)
+      .animate(CurvedAnimation(parent: _zoomAnimController!, curve: Curves.easeOut));
     _zoomAnimation!.addListener(() {
-      if (mounted) _transformationController.value = _zoomAnimation!.value;
+      if (mounted) setState(() {
+        _matrix = _zoomAnimation!.value;
+        _currentScale = _matrix.getMaxScaleOnAxis();
+      });
+    });
+    // ❗ 애니메이션 완료 후 재렌더링 (더블탭은 onScaleEnd가 호출되지 않으므로 여기서 처리)
+    _zoomAnimController!.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        _maybeRerenderAt(_currentScale);
+      }
     });
     _zoomAnimController!.forward();
   }
 
   void _resetFit() => _animateToMatrix(Matrix4.identity());
 
+  // ── 이전/다음 품목 이동 ───────────────────────────────────────
   void _prev() {
     final currentItem = widget.allItems[_currentIndex];
     int prevTargetIdx = -1;
@@ -238,11 +287,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
       if (widget.filteredItems[i].realIndex < currentItem.realIndex) { prevTargetIdx = i; break; }
     }
     if (prevTargetIdx != -1) {
-      final targetItem = widget.filteredItems[prevTargetIdx];
-      final newIdx = widget.allItems.indexOf(targetItem);
+      final newIdx = widget.allItems.indexOf(widget.filteredItems[prevTargetIdx]);
       if (newIdx != -1) {
         setState(() { _currentIndex = newIdx; });
-        if (_pageController.hasClients) _pageController.jumpToPage(_currentIndex);
+        _pageController.jumpToPage(_currentIndex);
         _loadPdf();
       }
     }
@@ -255,11 +303,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
       if (widget.filteredItems[i].realIndex > currentItem.realIndex) { nextTargetIdx = i; break; }
     }
     if (nextTargetIdx != -1) {
-      final targetItem = widget.filteredItems[nextTargetIdx];
-      final newIdx = widget.allItems.indexOf(targetItem);
+      final newIdx = widget.allItems.indexOf(widget.filteredItems[nextTargetIdx]);
       if (newIdx != -1) {
         setState(() { _currentIndex = newIdx; });
-        if (_pageController.hasClients) _pageController.jumpToPage(_currentIndex);
+        _pageController.jumpToPage(_currentIndex);
         _loadPdf();
       }
     }
@@ -275,12 +322,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     int index = widget.allItems.indexOf(target);
     if (index != -1) {
       setState(() { _currentIndex = index; _searchResults = []; _searchController.clear(); });
-      if (_pageController.hasClients) _pageController.jumpToPage(_currentIndex);
+      _pageController.jumpToPage(_currentIndex);
       _searchFocusNode.unfocus();
       _loadPdf();
     }
   }
 
+  // ── 다이얼로그 ────────────────────────────────────────────────
   void _showCompleteTimeDialog(ItemModel item) {
     String record = item.completeTime.isEmpty ? "기록 없음" : item.completeTime;
     showDialog(context: context, builder: (ctx) => AlertDialog(
@@ -295,8 +343,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
   }
 
   void _showComplementDialog(ItemModel item) {
-    String lastRecord = "마지막 기록: 없음";
-    if (item.complementTime.isNotEmpty) lastRecord = "마지막 기록: ${item.complement}: ${item.complementTime}";
+    String lastRecord = item.complementTime.isNotEmpty ? "마지막 기록: ${item.complement}: ${item.complementTime}" : "마지막 기록: 없음";
     showDialog(context: context, builder: (ctx) => AlertDialog(
       title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -314,8 +361,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
   }
 
   void _showProcessDialog(ItemModel item) {
-    String lastRecord = "마지막 기록: 없음";
-    if (item.processTime.isNotEmpty) lastRecord = "마지막 기록: ${item.process}: ${item.processTime}";
+    String lastRecord = item.processTime.isNotEmpty ? "마지막 기록: ${item.process}: ${item.processTime}" : "마지막 기록: 없음";
     List<String> sortedDisplayList = List.from(widget.processList);
     bool hasFinished = sortedDisplayList.remove("완료");
     if (hasFinished) sortedDisplayList.add("완료");
@@ -331,12 +377,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
           crossAxisCount: 3, childAspectRatio: 1.8, mainAxisSpacing: 8, crossAxisSpacing: 8,
           children: sortedDisplayList.map((p) {
             int? colorVal = widget.processColors[p];
-            Color btnColor;
-            if (colorVal != null) btnColor = Color(colorVal);
-            else if (p == "완료") btnColor = Colors.purple;
-            else if (p == "보류") btnColor = Colors.red;
-            else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnColor = Colors.orange;
-            else btnColor = Colors.blueGrey[700]!;
+            Color btnColor = colorVal != null ? Color(colorVal) :
+              p == "완료" ? Colors.purple : p == "보류" ? Colors.red :
+              ["용접","도장","도금","인쇄"].contains(p) ? Colors.orange : Colors.blueGrey[700]!;
             return ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white, textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
               onPressed: () { setState(() { item.process = p; item.processTime = DateTime.now().toString().substring(0, 16); }); widget.onStatusUpdate(item, 'process'); Navigator.pop(ctx); },
@@ -360,13 +403,14 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
   }
 
   Widget _navArrowBtn(IconData icon, VoidCallback onTap, bool isDark) {
-    return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 55, height: 55, alignment: Alignment.center, child: Icon(icon, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 24)));
+    return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque,
+      child: Container(width: 55, height: 55, alignment: Alignment.center,
+        child: Icon(icon, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 24)));
   }
 
   Future<void> _showCompleteConfirmDialog(ItemModel item) async {
     bool isChecking = !item.complete;
-    bool? confirm = await showDialog<bool>(
-      context: context,
+    bool? confirm = await showDialog<bool>(context: context,
       builder: (ctx) => AlertDialog(
         title: Text(isChecking ? "완료 체크 확인" : "완료 체크 해제 확인"),
         content: Text("[${item.itemCode}]\n항목을 ${isChecking ? '완료 처리' : '미완료 처리'}하시겠습니까?"),
@@ -374,15 +418,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold))),
         ],
-      ),
-    );
+      ));
     if (confirm == true) { widget.onStatusUpdate(item, 'complete'); setState(() {}); }
   }
 
   @override
   void dispose() {
-    _transformationController.removeListener(_onTransformChanged);
-    _transformationController.dispose();
     _zoomAnimController?.dispose();
     _currentUiImage?.dispose();
     try { _pdfDoc?.dispose(); } catch (_) {}
@@ -415,18 +456,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
               Text("(수량: ${item.quantity})", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.yellowAccent)),
             ]),
           ]),
-          backgroundColor: isDark ? Colors.black : Colors.blueGrey[900],
-          foregroundColor: Colors.white,
+          backgroundColor: isDark ? Colors.black : Colors.blueGrey[900], foregroundColor: Colors.white,
           leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context, item.itemCode)),
-          actions: [
-            TextButton(onPressed: _resetFit, child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16))),
-          ],
+          actions: [TextButton(onPressed: _resetFit, child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16)))],
         ),
         backgroundColor: bgColor,
         body: Column(children: [
           Expanded(child: LayoutBuilder(builder: (context, constraints) {
             return Stack(children: [
-              // ── PDF 뷰어 ───────────────────────────────────────
+              // ── PDF 뷰어 영역 ─────────────────────────────────
               Container(
                 color: bgColor,
                 child: _isLoading
@@ -434,9 +472,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
                   : _currentUiImage != null
                     ? PageView.builder(
                         controller: _pageController,
-                        // ❗ FIT 상태: PageView가 단일 손가락 스와이프 처리
-                        // ❗ 확대 상태: NeverScrollable → InteractiveViewer가 패닝 처리
-                        physics: _isZoomed ? const NeverScrollableScrollPhysics() : const PageScrollPhysics(),
+                        // ❗ 항상 NeverScrollable: 스와이프는 onScaleEnd 속도 감지로 처리
+                        //    → InteractiveViewer/ScaleGestureRecognizer 와의 제스처 경쟁 완전 차단
+                        physics: const NeverScrollableScrollPhysics(),
                         onPageChanged: (idx) {
                           if (idx != _currentIndex) {
                             setState(() { _currentIndex = idx; });
@@ -449,22 +487,14 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
                             behavior: HitTestBehavior.translucent,
                             onDoubleTapDown: (details) { _doubleTapOffset = details.localPosition; },
                             onDoubleTap: _handleDoubleTap,
-                            child: InteractiveViewer(
-                              transformationController: _transformationController,
-                              // ❗ FIT: panEnabled=false → 단일 손가락을 PageView에 완전 위임
-                              //    핀치줌은 scaleEnabled=true로 항상 작동
-                              panEnabled: _isZoomed,
-                              scaleEnabled: true,
-                              minScale: 0.8,
-                              maxScale: widget.maxZoom,
-                              boundaryMargin: EdgeInsets.zero,
-                              onInteractionEnd: (details) {
-                                final scale = _transformationController.value.getMaxScaleOnAxis();
-                                // 배율이 30% 이상 바뀌면 해당 배율로 재렌더링 → 선명한 해상도
-                                if ((scale - _renderedAtScale).abs() / _renderedAtScale > 0.3) {
-                                  _renderPage(scale: scale);
-                                }
-                              },
+                            // ❗ onScale 하나로 핀치줌 + 패닝 + 스와이프 감지 통합
+                            //    ScaleGestureRecognizer가 모든 터치를 담당하므로
+                            //    PageView HorizontalDragGestureRecognizer와의 경쟁이 없음
+                            onScaleStart: _onScaleStart,
+                            onScaleUpdate: _onScaleUpdate,
+                            onScaleEnd: _onScaleEnd,
+                            child: Transform(
+                              transform: _matrix,
                               child: Container(
                                 color: bgColor,
                                 alignment: Alignment.center,
@@ -492,7 +522,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
                 _navArrowBtn(Icons.arrow_back, hasPrev ? _prev : () {}, isDark),
                 _navArrowBtn(Icons.arrow_forward, hasNext ? _next : () {}, isDark),
               ])),
-              // ── 검색 자동완성 목록 ───────────────────────────
+              // ── 검색 자동완성 목록 ────────────────────────────
               if (_searchResults.isNotEmpty)
                 Positioned(left: 8, bottom: 2, child: Container(
                   width: MediaQuery.of(context).size.width * 0.45,
@@ -510,8 +540,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
                     itemBuilder: (ctx, idx) {
                       final res = _searchResults[idx];
                       return ListTile(
-                        dense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                        dense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
                         title: Text(res.itemCode, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)),
                         trailing: res == item ? const Icon(Icons.check_circle, size: 14, color: Colors.blue) : null,
                         onTap: () => _jumpToItem(res),
@@ -549,21 +578,20 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
                             final parts = result.split('|');
                             code = parts[0].replaceFirst("CODE:", "");
                             if (parts.length > 1 && parts[1].startsWith("ZOOM:")) {
-                              final double? newZoom = double.tryParse(parts[1].replaceFirst("ZOOM:", ""));
-                              if (newZoom != null) { final p = await SharedPreferences.getInstance(); await p.setDouble('scannerZoom', newZoom); }
+                              final double? z = double.tryParse(parts[1].replaceFirst("ZOOM:", ""));
+                              if (z != null) { final p = await SharedPreferences.getInstance(); await p.setDouble('scannerZoom', z); }
                             }
                           } else if (result.startsWith("ZOOM:")) {
-                            final double? newZoom = double.tryParse(result.replaceFirst("ZOOM:", ""));
-                            if (newZoom != null) { final p = await SharedPreferences.getInstance(); await p.setDouble('scannerZoom', newZoom); }
+                            final double? z = double.tryParse(result.replaceFirst("ZOOM:", ""));
+                            if (z != null) { final p = await SharedPreferences.getInstance(); await p.setDouble('scannerZoom', z); }
                             return;
                           } else { code = result; }
                           if (code == null || code.isEmpty) return;
-                          String cleaned = code.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
-                          cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');
+                          String cleaned = code.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim().replaceAll(RegExp(r'[\x00-\x1F]'), '');
                           if (cleaned.toUpperCase().endsWith('-S')) cleaned = cleaned.substring(0, cleaned.length - 2);
                           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("스캔: $result → 정제: $cleaned"), duration: const Duration(seconds: 2)));
                           final target = widget.allItems.cast<ItemModel?>().firstWhere((it) => it?.itemCode == cleaned, orElse: () => null);
-                          if (target != null) { _jumpToItem(target); }
+                          if (target != null) _jumpToItem(target);
                           else if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("해당 품목을 찾을 수 없습니다."), duration: Duration(seconds: 1)));
                         }
                       }),
@@ -603,17 +631,11 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
               ]),
               const SizedBox(height: 12),
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                ElevatedButton.icon(
-                  onPressed: hasPrev ? _prev : null,
-                  icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)),
-                  style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: hasPrev ? (isDark ? Colors.white : Colors.blueGrey[900]) : Colors.grey),
-                ),
+                ElevatedButton.icon(onPressed: hasPrev ? _prev : null, icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)),
+                  style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: hasPrev ? (isDark ? Colors.white : Colors.blueGrey[900]) : Colors.grey)),
                 Text("${_currentIndex + 1} / ${widget.allItems.length}", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
-                ElevatedButton.icon(
-                  onPressed: hasNext ? _next : null,
-                  icon: const Icon(Icons.arrow_forward), label: const Text("다음", style: TextStyle(fontSize: 15)),
-                  style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: hasNext ? (isDark ? Colors.white : Colors.blueGrey[900]) : Colors.grey),
-                ),
+                ElevatedButton.icon(onPressed: hasNext ? _next : null, icon: const Icon(Icons.arrow_forward), label: const Text("다음", style: TextStyle(fontSize: 15)),
+                  style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: hasNext ? (isDark ? Colors.white : Colors.blueGrey[900]) : Colors.grey)),
               ]),
             ]),
           )),
@@ -634,29 +656,18 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
         if (colorVal != null) color = Color(colorVal);
         else if (subText == "완료") color = Colors.purple;
         else if (subText == "보류") color = Colors.red;
-        else if (["용접", "도장", "도금", "인쇄"].contains(subText)) color = Colors.orange;
+        else if (["용접","도장","도금","인쇄"].contains(subText)) color = Colors.orange;
       }
     }
     Color bgColor = active ? color : (isDark ? Colors.grey[800]! : Colors.grey[300]!);
     Color fgColor = active ? Colors.white : (isDark ? Colors.white70 : Colors.black54);
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Material(
-          color: bgColor, borderRadius: BorderRadius.circular(8), elevation: active ? 2 : 0,
-          child: InkWell(
-            onTap: onTap, onDoubleTap: onDoubleTap, onLongPress: onLongPress,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              height: 55, alignment: Alignment.center,
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text(label, style: TextStyle(fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal, fontSize: subText.isEmpty ? 15 : 12, color: fgColor)),
-                if (subText.isNotEmpty) Text(subText, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: fgColor), overflow: TextOverflow.ellipsis),
-              ]),
-            ),
-          ),
-        ),
-      ),
-    );
+    return Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Material(
+      color: bgColor, borderRadius: BorderRadius.circular(8), elevation: active ? 2 : 0,
+      child: InkWell(onTap: onTap, onDoubleTap: onDoubleTap, onLongPress: onLongPress, borderRadius: BorderRadius.circular(8),
+        child: Container(height: 55, alignment: Alignment.center, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(label, style: TextStyle(fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal, fontSize: subText.isEmpty ? 15 : 12, color: fgColor)),
+          if (subText.isNotEmpty) Text(subText, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: fgColor), overflow: TextOverflow.ellipsis),
+        ]))),
+    )));
   }
 }
