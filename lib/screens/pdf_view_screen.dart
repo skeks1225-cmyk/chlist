@@ -54,6 +54,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
   Matrix4 _matrix = Matrix4.identity();
   double _currentScale = 1.0;
   BoxConstraints? _viewportConstraints;
+  Size? _pdfPageSize;
 
   // 핀치줌 제스처 시작 시 스냅샷
   Matrix4 _scaleStartMatrix = Matrix4.identity();
@@ -81,19 +82,34 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
   bool get _isZoomed => _currentScale > 1.05;
 
   void _clampMatrix() {
-    if (_viewportConstraints == null || _currentScale <= 1.0) {
+    if (_viewportConstraints == null || _pdfPageSize == null || _currentScale <= 1.0) {
       _matrix = Matrix4.identity();
       return;
     }
-    final W = _viewportConstraints!.maxWidth;
-    final H = _viewportConstraints!.maxHeight;
-    final S = _currentScale;
 
+    final viewW = _viewportConstraints!.maxWidth;
+    final viewH = _viewportConstraints!.maxHeight;
+    final pageRatio = _pdfPageSize!.width / _pdfPageSize!.height;
+    final viewRatio = viewW / viewH;
+
+    double contentW, contentH;
+    if (pageRatio > viewRatio) {
+      // 가로형
+      contentW = viewW;
+      contentH = viewW / pageRatio;
+    } else {
+      // 세로형
+      contentW = viewH * pageRatio;
+      contentH = viewH;
+    }
+
+    final S = _currentScale;
     final tx = _matrix.storage[12];
     final ty = _matrix.storage[13];
 
-    _matrix.storage[12] = tx.clamp(-(S - 1) * W, 0.0);
-    _matrix.storage[13] = ty.clamp(-(S - 1) * H, 0.0);
+    // 콘텐츠 표시 영역 기준 클램핑
+    _matrix.storage[12] = tx.clamp(-(S - 1) * contentW, 0.0);
+    _matrix.storage[13] = ty.clamp(-(S - 1) * contentH, 0.0);
   }
 
   @override
@@ -146,6 +162,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
       try {
         _pdfDoc = await PdfDocument.openFile(localPath);
         if (_pdfDoc!.pages.isNotEmpty) {
+          final page = _pdfDoc!.pages[0];
+          _pdfPageSize = Size(page.width, page.height);
           await _renderPage(scale: 1.0);
         } else {
           if (mounted) setState(() { _isLoading = false; });
