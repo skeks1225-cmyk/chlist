@@ -17,8 +17,8 @@ dependencies:
   path: ^1.9.0
   file_picker: ^8.1.7
   mobile_scanner: ^5.1.0
-  # Syncfusion PDF 뷰어 (v2 Embedding 최신 호환 버전)
-  syncfusion_flutter_pdfviewer: ^28.2.3
+  # PDF 뷰어 (네이티브 렌더링, excel archive 충돌 없음)
+  pdfx: ^2.6.0
 
 dev_dependencies:
   intl: ^0.19.0
