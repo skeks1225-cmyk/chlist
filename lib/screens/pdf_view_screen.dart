@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:pdfx/pdfx.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
 import '../widgets/qr_scanner_dialog.dart';
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'dart:async';
 
 class PdfViewerScreen extends StatefulWidget {
   final List<ItemModel> allItems;
@@ -42,20 +43,27 @@ class PdfViewerScreen extends StatefulWidget {
 class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderStateMixin {
   late int _currentIndex;
   String _currentPdfPath = "";
-  Uint8List? _pdfImageBytes;
 
+  // pdfrx 문서 및 렌더링
+  PdfDocument? _pdfDoc;
+  ui.Image? _currentUiImage;
+  bool _isRerendering = false;
+  double _renderedAtScale = 1.0;
+
+  // 제스처 컨트롤
   final TransformationController _transformationController = TransformationController();
   late PageController _pageController;
-  final TextEditingController _remarksController = TextEditingController();
-  final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
-
-  List<ItemModel> _searchResults = [];
-  bool _isLoading = false;
   double _currentScale = 1.0;
   Offset? _doubleTapOffset;
   AnimationController? _zoomAnimController;
   Animation<Matrix4>? _zoomAnimation;
+
+  // UI
+  final TextEditingController _remarksController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  List<ItemModel> _searchResults = [];
+  bool _isLoading = false;
 
   bool get _isZoomed => _currentScale > 1.05;
 
@@ -67,9 +75,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     _transformationController.addListener(_onTransformChanged);
     _loadPdf();
     _searchFocusNode.addListener(() {
-      if (mounted && !_searchFocusNode.hasFocus) {
-        setState(() => _searchResults = []);
-      }
+      if (mounted && !_searchFocusNode.hasFocus) setState(() => _searchResults = []);
     });
   }
 
@@ -84,11 +90,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     final item = widget.allItems[_currentIndex];
     final String cleanCode = item.itemCode.trim();
     if (!mounted) return;
-    setState(() { _isLoading = true; _pdfImageBytes = null; });
 
-    // FIT으로 리셋
+    setState(() { _isLoading = true; _currentUiImage = null; });
     _transformationController.value = Matrix4.identity();
     _currentScale = 1.0;
+    _renderedAtScale = 1.0;
+
+    // 이전 문서 해제
+    try { await _pdfDoc?.dispose(); } catch (_) {}
+    _pdfDoc = null;
 
     String localPath = "";
     if (widget.pdfFolderPath.startsWith("smb://")) {
@@ -107,52 +117,93 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     }
 
     _remarksController.text = item.remarks;
+    _currentPdfPath = localPath;
 
     if (File(localPath).existsSync()) {
       try {
-        final doc = await PdfDocument.openFile(localPath);
-        final page = await doc.getPage(1);
-        // 2x 해상도로 렌더링 (고해상도 디스플레이 대응)
-        final image = await page.render(
-          width: page.width * 2,
-          height: page.height * 2,
-          format: PdfPageImageFormat.jpeg,
-          quality: 90,
-        );
-        await page.close();
-        await doc.close();
-        if (mounted && image != null) {
-          setState(() {
-            _pdfImageBytes = image.bytes;
-            _currentPdfPath = localPath;
-            _isLoading = false;
-          });
-        } else if (mounted) {
-          setState(() { _isLoading = false; });
+        _pdfDoc = await PdfDocument.openFile(localPath);
+        if (_pdfDoc!.pages.isNotEmpty) {
+          await _renderPage(scale: 1.0);
+        } else {
+          if (mounted) setState(() { _isLoading = false; });
         }
       } catch (e) {
-        debugPrint("PDF render error: $e");
+        debugPrint("PDF load error: $e");
         if (mounted) setState(() { _isLoading = false; });
       }
     } else {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _pdfImageBytes = null;
-          _currentPdfPath = "";
-        });
-      }
+      if (mounted) setState(() { _isLoading = false; _currentPdfPath = ""; });
     }
   }
 
-  /// 더블탭 피벗 확대/FIT 복귀 (Matrix4 수학적 정밀 계산)
+  /// pdfrx 재렌더링 — 현재 줌 배율에 맞는 해상도로 선명하게 렌더링
+  Future<void> _renderPage({required double scale}) async {
+    if (_pdfDoc == null || _pdfDoc!.pages.isEmpty || _isRerendering) return;
+    _isRerendering = true;
+
+    try {
+      final page = _pdfDoc!.pages[0]; // 단일 페이지 문서
+
+      // 렌더 해상도: PDF 포인트 × 배율 × 품질계수(1.5)
+      // (화면 DPR은 pdfrx 내부에서 처리되므로 논리 해상도로 계산)
+      double renderWidth = page.width * scale * 1.5;
+      double renderHeight = page.height * scale * 1.5;
+
+      // OOM 방지: 최대 4096px
+      const double maxPx = 4096.0;
+      if (renderWidth > maxPx) {
+        final ratio = maxPx / renderWidth;
+        renderWidth = maxPx;
+        renderHeight = renderHeight * ratio;
+      }
+      if (renderHeight > maxPx) {
+        final ratio = maxPx / renderHeight;
+        renderHeight = maxPx;
+        renderWidth = renderWidth * ratio;
+      }
+
+      final pdfImage = await page.render(
+        fullWidth: renderWidth,
+        fullHeight: renderHeight,
+      );
+
+      if (pdfImage != null && mounted) {
+        // RGBA 픽셀 → ui.Image 변환
+        final completer = Completer<ui.Image>();
+        ui.decodeImageFromPixels(
+          pdfImage.pixels,
+          pdfImage.width,
+          pdfImage.height,
+          ui.PixelFormat.rgba8888,
+          (img) => completer.complete(img),
+        );
+        final uiImage = await completer.future;
+
+        if (mounted) {
+          setState(() {
+            _currentUiImage?.dispose();
+            _currentUiImage = uiImage;
+            _renderedAtScale = scale;
+            _isLoading = false;
+          });
+        }
+      } else if (mounted) {
+        setState(() { _isLoading = false; });
+      }
+    } catch (e) {
+      debugPrint("PDF render error: $e");
+      if (mounted) setState(() { _isLoading = false; });
+    } finally {
+      _isRerendering = false;
+    }
+  }
+
+  /// 더블탭 Matrix4 피벗 확대/FIT 복귀
   void _handleDoubleTap() {
     Matrix4 targetMatrix;
     if (_isZoomed) {
-      // FIT으로 복귀
       targetMatrix = Matrix4.identity();
     } else {
-      // 탭한 위치를 중심으로 doubleTapZoom배 확대
       final tap = _doubleTapOffset ?? Offset.zero;
       final scale = widget.doubleTapZoom;
       targetMatrix = Matrix4.identity()
@@ -178,17 +229,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     _zoomAnimController!.forward();
   }
 
-  void _resetFit() {
-    _animateToMatrix(Matrix4.identity());
-  }
+  void _resetFit() => _animateToMatrix(Matrix4.identity());
 
   void _prev() {
     final currentItem = widget.allItems[_currentIndex];
     int prevTargetIdx = -1;
     for (int i = widget.filteredItems.length - 1; i >= 0; i--) {
-      if (widget.filteredItems[i].realIndex < currentItem.realIndex) {
-        prevTargetIdx = i; break;
-      }
+      if (widget.filteredItems[i].realIndex < currentItem.realIndex) { prevTargetIdx = i; break; }
     }
     if (prevTargetIdx != -1) {
       final targetItem = widget.filteredItems[prevTargetIdx];
@@ -205,9 +252,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     final currentItem = widget.allItems[_currentIndex];
     int nextTargetIdx = -1;
     for (int i = 0; i < widget.filteredItems.length; i++) {
-      if (widget.filteredItems[i].realIndex > currentItem.realIndex) {
-        nextTargetIdx = i; break;
-      }
+      if (widget.filteredItems[i].realIndex > currentItem.realIndex) { nextTargetIdx = i; break; }
     }
     if (nextTargetIdx != -1) {
       final targetItem = widget.filteredItems[nextTargetIdx];
@@ -283,8 +328,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
       content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         GridView.count(
           shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 3, childAspectRatio: 1.8,
-          mainAxisSpacing: 8, crossAxisSpacing: 8,
+          crossAxisCount: 3, childAspectRatio: 1.8, mainAxisSpacing: 8, crossAxisSpacing: 8,
           children: sortedDisplayList.map((p) {
             int? colorVal = widget.processColors[p];
             Color btnColor;
@@ -332,10 +376,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
         ],
       ),
     );
-    if (confirm == true) {
-      widget.onStatusUpdate(item, 'complete');
-      setState(() {});
-    }
+    if (confirm == true) { widget.onStatusUpdate(item, 'complete'); setState(() {}); }
   }
 
   @override
@@ -343,6 +384,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     _transformationController.removeListener(_onTransformChanged);
     _transformationController.dispose();
     _zoomAnimController?.dispose();
+    _currentUiImage?.dispose();
+    try { _pdfDoc?.dispose(); } catch (_) {}
     _pageController.dispose();
     _remarksController.dispose();
     _searchController.dispose();
@@ -383,19 +426,17 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
         body: Column(children: [
           Expanded(child: LayoutBuilder(builder: (context, constraints) {
             return Stack(children: [
-              // ── PDF 뷰어 영역 ──────────────────────────────────
+              // ── PDF 뷰어 ───────────────────────────────────────
               Container(
                 color: bgColor,
                 child: _isLoading
                   ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
-                  : _pdfImageBytes != null
+                  : _currentUiImage != null
                     ? PageView.builder(
                         controller: _pageController,
-                        // ❗ 핀치줌(panEnabled:false) 상태에서 PageView가 단일 손가락만 처리
-                        // ❗ 확대 상태에서는 PageView 스와이프 완전 차단
-                        physics: _isZoomed
-                          ? const NeverScrollableScrollPhysics()
-                          : const PageScrollPhysics(),
+                        // ❗ FIT 상태: PageView가 단일 손가락 스와이프 처리
+                        // ❗ 확대 상태: NeverScrollable → InteractiveViewer가 패닝 처리
+                        physics: _isZoomed ? const NeverScrollableScrollPhysics() : const PageScrollPhysics(),
                         onPageChanged: (idx) {
                           if (idx != _currentIndex) {
                             setState(() { _currentIndex = idx; });
@@ -406,28 +447,32 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
                         itemBuilder: (ctx, pageIdx) {
                           return GestureDetector(
                             behavior: HitTestBehavior.translucent,
-                            onDoubleTapDown: (details) {
-                              _doubleTapOffset = details.localPosition;
-                            },
+                            onDoubleTapDown: (details) { _doubleTapOffset = details.localPosition; },
                             onDoubleTap: _handleDoubleTap,
                             child: InteractiveViewer(
                               transformationController: _transformationController,
-                              // ❗ FIT 상태: panEnabled=false → 단일 손가락 드래그를 PageView에 완전 위임
-                              //    확대 상태: panEnabled=true → InteractiveViewer가 패닝 처리
+                              // ❗ FIT: panEnabled=false → 단일 손가락을 PageView에 완전 위임
+                              //    핀치줌은 scaleEnabled=true로 항상 작동
                               panEnabled: _isZoomed,
-                              scaleEnabled: true, // 핀치줌 항상 활성화
+                              scaleEnabled: true,
                               minScale: 0.8,
                               maxScale: widget.maxZoom,
                               boundaryMargin: EdgeInsets.zero,
+                              onInteractionEnd: (details) {
+                                final scale = _transformationController.value.getMaxScaleOnAxis();
+                                // 배율이 30% 이상 바뀌면 해당 배율로 재렌더링 → 선명한 해상도
+                                if ((scale - _renderedAtScale).abs() / _renderedAtScale > 0.3) {
+                                  _renderPage(scale: scale);
+                                }
+                              },
                               child: Container(
                                 color: bgColor,
                                 alignment: Alignment.center,
-                                child: Image.memory(
-                                  _pdfImageBytes!,
+                                child: RawImage(
+                                  image: _currentUiImage,
                                   fit: BoxFit.contain,
                                   width: constraints.maxWidth,
                                   height: constraints.maxHeight,
-                                  gaplessPlayback: true,
                                 ),
                               ),
                             ),
@@ -442,12 +487,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
                         Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12)),
                       ])),
               ),
-              // ── 화살표 네비게이션 ───────────────────────────────
+              // ── 화살표 네비게이션 ─────────────────────────────
               Positioned(left: 5, bottom: 5, child: Row(children: [
                 _navArrowBtn(Icons.arrow_back, hasPrev ? _prev : () {}, isDark),
                 _navArrowBtn(Icons.arrow_forward, hasNext ? _next : () {}, isDark),
               ])),
-              // ── 검색 자동완성 목록 ─────────────────────────────
+              // ── 검색 자동완성 목록 ───────────────────────────
               if (_searchResults.isNotEmpty)
                 Positioned(left: 8, bottom: 2, child: Container(
                   width: MediaQuery.of(context).size.width * 0.45,
@@ -477,20 +522,17 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
             ]);
           })),
 
-          // ── 하단 패널 ───────────────────────────────────────────
+          // ── 하단 패널 ─────────────────────────────────────────
           SafeArea(child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             color: isDark ? Colors.grey[900] : Colors.white,
             child: Column(children: [
-              // 검색 + 비고 입력
               Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [
                 Expanded(child: TextField(
-                  controller: _searchController,
-                  focusNode: _searchFocusNode,
+                  controller: _searchController, focusNode: _searchFocusNode,
                   style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
                   decoration: InputDecoration(
-                    hintText: "코드 검색...",
-                    hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                    hintText: "코드 검색...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
                     prefixIcon: (_searchFocusNode.hasFocus || _searchController.text.isNotEmpty) ? null : const Icon(Icons.search, size: 18),
                     suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
                       if (_searchController.text.isNotEmpty)
@@ -514,9 +556,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
                             final double? newZoom = double.tryParse(result.replaceFirst("ZOOM:", ""));
                             if (newZoom != null) { final p = await SharedPreferences.getInstance(); await p.setDouble('scannerZoom', newZoom); }
                             return;
-                          } else {
-                            code = result;
-                          }
+                          } else { code = result; }
                           if (code == null || code.isEmpty) return;
                           String cleaned = code.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
                           cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');
@@ -528,8 +568,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
                         }
                       }),
                     ]),
-                    filled: true,
-                    fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                    filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100],
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   ),
@@ -540,10 +579,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
                   controller: _remarksController,
                   style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
                   decoration: InputDecoration(
-                    hintText: "비고...",
-                    hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
-                    filled: true,
-                    fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                    hintText: "비고...", hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                    filled: true, fillColor: isDark ? Colors.black26 : Colors.grey[100],
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                     suffixIcon: _remarksController.text.isNotEmpty
@@ -554,8 +591,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
                   onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); },
                 )),
               ])),
-
-              // 상태 버튼 (완료 / 공정 / 보완)
               Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
                 _statusBtn("완료", Colors.green, item.complete, () {
                   if (widget.completeMode == 0) { widget.onStatusUpdate(item, 'complete'); setState(() {}); }
@@ -567,20 +602,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
                 _statusBtn("보완", Colors.orange, item.complement.isNotEmpty, () => _showComplementDialog(item)),
               ]),
               const SizedBox(height: 12),
-
-              // 이전/다음 네비게이션
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 ElevatedButton.icon(
                   onPressed: hasPrev ? _prev : null,
-                  icon: const Icon(Icons.arrow_back),
-                  label: const Text("이전", style: TextStyle(fontSize: 15)),
+                  icon: const Icon(Icons.arrow_back), label: const Text("이전", style: TextStyle(fontSize: 15)),
                   style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: hasPrev ? (isDark ? Colors.white : Colors.blueGrey[900]) : Colors.grey),
                 ),
                 Text("${_currentIndex + 1} / ${widget.allItems.length}", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
                 ElevatedButton.icon(
                   onPressed: hasNext ? _next : null,
-                  icon: const Icon(Icons.arrow_forward),
-                  label: const Text("다음", style: TextStyle(fontSize: 15)),
+                  icon: const Icon(Icons.arrow_forward), label: const Text("다음", style: TextStyle(fontSize: 15)),
                   style: ElevatedButton.styleFrom(minimumSize: const Size(100, 45), backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], foregroundColor: hasNext ? (isDark ? Colors.white : Colors.blueGrey[900]) : Colors.grey),
                 ),
               ]),

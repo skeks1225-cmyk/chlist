@@ -17,8 +17,8 @@ dependencies:
   path: ^1.9.0
   file_picker: ^8.1.7
   mobile_scanner: ^5.1.0
-  # PDF 뷰어 (네이티브 렌더링, excel archive 충돌 없음)
-  pdfx: ^2.6.0
+  # PDF 뷰어 (벡터 네이티브 렌더링, 줌 배율에 따라 재렌더링 지원)
+  pdfrx: ^2.4.7
 
 dev_dependencies:
   intl: ^0.19.0
