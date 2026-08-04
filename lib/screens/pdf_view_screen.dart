@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-import 'package:shared_preferences/shared_preferences.dart'; 
+import 'package:pdfrx/pdfrx.dart'; 
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
 import '../widgets/qr_scanner_dialog.dart';
 import 'dart:io';
 
 class PdfViewerScreen extends StatefulWidget {
-  final List<ItemModel> allItems; // 전체 품목 (검색용)      
+  final List<ItemModel> allItems; // 전체 품목 (검색용)
   final List<ItemModel> filteredItems; // 필터링된 품목 (이전/다음 이동용)
   final int initialIndex; // allItems에서의 인덱스
   final String pdfFolderPath;
@@ -15,7 +15,6 @@ class PdfViewerScreen extends StatefulWidget {
   final List<String> processList;
   final Map<String, int> processColors; // ❗ 공정별 색상 정보
   final int completeMode; // ❗ 완료 체크 모드 (0: 클릭, 1: 더블클릭, 2: 확인창)
-  final double doubleTapZoom; // ❗ 더블탭 확대 배율 (기본 3.0)
   final Function(ItemModel, String) onStatusUpdate;
 
   const PdfViewerScreen({
@@ -28,7 +27,6 @@ class PdfViewerScreen extends StatefulWidget {
     required this.processList,
     required this.processColors,
     required this.completeMode,
-    this.doubleTapZoom = 3.0,
     required this.onStatusUpdate,
   });
 
@@ -39,21 +37,18 @@ class PdfViewerScreen extends StatefulWidget {
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
   late int _currentIndex;
   String _currentPdfPath = "";
-  final PdfViewerController _pdfViewerController = PdfViewerController();
-  late PageController _pageController;
+  final PdfViewerController _pdfController = PdfViewerController();
+  Key _viewerKey = UniqueKey();
   final TextEditingController _remarksController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   List<ItemModel> _searchResults = [];
   bool _isLoading = false;
-  double _currentZoom = 1.0;
-  Offset? _doubleTapOffset;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
-    _pageController = PageController(initialPage: _currentIndex);
     _loadPdf();
     _searchFocusNode.addListener(() {
       if (mounted && !_searchFocusNode.hasFocus) {
@@ -72,7 +67,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (widget.pdfFolderPath.startsWith("smb://")) {
       try {
         String shareWithRest = widget.pdfFolderPath.replaceFirst("smb://", "");
-        if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);       
+        if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
         int firstSlash = shareWithRest.indexOf("/");
         String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
         String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
@@ -88,18 +83,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (mounted) {
       setState(() {
         _currentPdfPath = File(localPath).existsSync() ? localPath : "";
-        _currentZoom = 1.0;
+        _viewerKey = UniqueKey();
         _isLoading = false;
       });
     }
   }
 
-  void _resetFit() {
-    try {
-      _pdfViewerController.zoomLevel = 1.0;
-    } catch (_) {}
-    setState(() { _currentZoom = 1.0; });
-  }
+  void _resetFit() { _loadPdf(); }
 
   void _prev() {
     final currentItem = widget.allItems[_currentIndex];
@@ -113,13 +103,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (prevTargetIdx != -1) {
       final targetItem = widget.filteredItems[prevTargetIdx];
       final newIdx = widget.allItems.indexOf(targetItem);
-      if (newIdx != -1) {
-        setState(() { _currentIndex = newIdx; });
-        if (_pageController.hasClients) {
-          _pageController.jumpToPage(_currentIndex);
-        }
-        _loadPdf();
-      }
+      if (newIdx != -1) { setState(() { _currentIndex = newIdx; _loadPdf(); }); }
     }
   }
 
@@ -135,13 +119,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (nextTargetIdx != -1) {
       final targetItem = widget.filteredItems[nextTargetIdx];
       final newIdx = widget.allItems.indexOf(targetItem);
-      if (newIdx != -1) {
-        setState(() { _currentIndex = newIdx; });
-        if (_pageController.hasClients) {
-          _pageController.jumpToPage(_currentIndex);
-        }
-        _loadPdf();
-      }
+      if (newIdx != -1) { setState(() { _currentIndex = newIdx; _loadPdf(); }); }
     }
   }
 
@@ -155,9 +133,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     int index = widget.allItems.indexOf(target);
     if (index != -1) {
       setState(() { _currentIndex = index; _searchResults = []; _searchController.clear(); });
-      if (_pageController.hasClients) {
-        _pageController.jumpToPage(_currentIndex);
-      }
       _searchFocusNode.unfocus(); _loadPdf();
     }
   }
@@ -186,30 +161,30 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (item.complementTime.isNotEmpty) {
       lastRecord = "마지막 기록: ${item.complement}: ${item.complementTime}";
     }
-
+    
     showDialog(context: context, builder: (ctx) => AlertDialog(
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)), 
+          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)),
         ],
       ),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        _dialogBtn("부족", Colors.orange, () {
-          item.complement = "부족";
-          item.complete = false;
+        _dialogBtn("부족", Colors.orange, () { 
+          item.complement = "부족"; 
+          item.complete = false; 
           item.complementTime = DateTime.now().toString().substring(0, 16);
         }),
-        _dialogBtn("재작업", Colors.red, () {
-          item.complement = "재작업";
-          item.complete = false;
+        _dialogBtn("재작업", Colors.red, () { 
+          item.complement = "재작업"; 
+          item.complete = false; 
           item.complementTime = DateTime.now().toString().substring(0, 16);
         }),
-        const Divider(),
-        _dialogBtn("지우기", Colors.grey, () {
-          item.complement = "";
+        const Divider(), 
+        _dialogBtn("지우기", Colors.grey, () { 
+          item.complement = ""; 
           item.complementTime = "";
         }),
         _dialogBtn("선택취소", Colors.blueGrey, () {}),
@@ -222,7 +197,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (item.processTime.isNotEmpty) {
       lastRecord = "마지막 기록: ${item.process}: ${item.processTime}";
     }
-
+    
     List<String> sortedDisplayList = List.from(widget.processList);
     bool hasFinished = sortedDisplayList.remove("완료");
     if (hasFinished) sortedDisplayList.add("완료");
@@ -233,7 +208,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         children: [
           const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)), 
+          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)),
         ],
       ),
       content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -254,19 +229,19 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             }
             return ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white, textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-              onPressed: () {
-                setState(() {
-                  item.process = p;
+              onPressed: () { 
+                setState(() { 
+                  item.process = p; 
                   item.processTime = DateTime.now().toString().substring(0, 16);
-                });
-                widget.onStatusUpdate(item, 'process'); Navigator.pop(ctx);
+                }); 
+                widget.onStatusUpdate(item, 'process'); Navigator.pop(ctx); 
               },
               child: Text(p),
             );
           }).toList(),
         ),
-        const Divider(), _dialogBtn("지우기", Colors.grey, () {
-          item.process = "";
+        const Divider(), _dialogBtn("지우기", Colors.grey, () { 
+          item.process = ""; 
           item.processTime = "";
         }),
         _dialogBtn("선택취소", Colors.blueGrey, () {}),
@@ -279,17 +254,11 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   Widget _navArrowBtn(IconData icon, VoidCallback onTap, bool isDark) {
-    return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 55, height: 55, alignment: Alignment.center, child: Icon(icon, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 24)));       
+    return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 55, height: 55, alignment: Alignment.center, child: Icon(icon, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 24)));
   }
 
   @override
-  void dispose() {
-    _pageController.dispose();
-    _remarksController.dispose();
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    super.dispose();
-  }
+  void dispose() { _remarksController.dispose(); _searchController.dispose(); _searchFocusNode.dispose(); super.dispose(); }
 
   Future<void> _showCompleteConfirmDialog(ItemModel item) async {
     bool isChecking = !item.complete;
@@ -297,7 +266,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(isChecking ? "완료 체크 확인" : "완료 체크 해제 확인"),
-        content: Text("[${item.itemCode}]\n항목을 ${isChecking ? '완료 처리' : '미완료 처리'}하시겠습니까?"),        
+        content: Text("[${item.itemCode}]\n항목을 ${isChecking ? '완료 처리' : '미완료 처리'}하시겠습니까?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold))),
@@ -314,13 +283,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   Widget build(BuildContext context) {
     final item = widget.allItems[_currentIndex];
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color viewerBgColor = isDark ? Colors.black : Colors.white;
+    final Color viewerBgColor = isDark ? Colors.black : Colors.grey[300]!;
     bool hasPrev = widget.filteredItems.any((i) => i.realIndex < item.realIndex);
     bool hasNext = widget.filteredItems.any((i) => i.realIndex > item.realIndex);
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) { if (didPop) return; Navigator.pop(context, item.itemCode); },       
+      onPopInvokedWithResult: (didPop, result) { if (didPop) return; Navigator.pop(context, item.itemCode); },
       child: Scaffold(
         appBar: AppBar(
           title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -341,41 +310,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         body: Column(children: [
           Expanded(child: LayoutBuilder(builder: (context, constraints) {
             return Stack(children: [
-              _isLoading ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue)) : (_currentPdfPath.isNotEmpty ? Container(
-                color: viewerBgColor,
-                child: PageView.builder(
-                  controller: _pageController,
-                  physics: _currentZoom <= 1.05 ? const PageScrollPhysics() : const NeverScrollableScrollPhysics(),  
-                  onPageChanged: (idx) {
-                    if (idx != _currentIndex) {
-                      setState(() { _currentIndex = idx; });
-                      _loadPdf();
-                    }
-                  },
-                  itemCount: widget.allItems.length,
-                  itemBuilder: (ctx, pageIdx) {
-                    return GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onScaleStart: (details) {
-                        if (details.pointerCount >= 2) {
-                          setState(() { _currentZoom = 2.0; });
-                        }
-                      },
-                      child: SfPdfViewer.file(
-                        File(_currentPdfPath),
-                        controller: _pdfViewerController,
-                        enableDoubleTapZooming: true, 
-                        maxZoomLevel: 20.0,
-                        onZoomLevelChanged: (details) {
-                          setState(() {
-                            _currentZoom = details.newZoomLevel;
-                          });
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ) : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
+              _isLoading ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue)) : (_currentPdfPath.isNotEmpty ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor))) : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
               Positioned(left: 5, bottom: 5, child: Row(children: [_navArrowBtn(Icons.arrow_back, hasPrev ? _prev : () {}, isDark), _navArrowBtn(Icons.arrow_forward, hasNext ? _next : () {}, isDark)])),
               if (_searchResults.isNotEmpty) Positioned(left: 8, bottom: 2, child: Container(width: MediaQuery.of(context).size.width * 0.45, constraints: BoxConstraints(maxHeight: constraints.maxHeight - 5), decoration: BoxDecoration(color: isDark ? Colors.grey[850] : Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, -2))]), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ListView.separated(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: _searchResults.length, separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]), itemBuilder: (ctx, idx) { final res = _searchResults[idx]; return ListTile(dense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0), title: Text(res.itemCode, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)), trailing: res == item ? const Icon(Icons.check_circle, size: 14, color: Colors.blue) : null, onTap: () => _jumpToItem(res)); }))))
             ]);
@@ -388,13 +323,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   _searchFocusNode.unfocus();
                   final prefs = await SharedPreferences.getInstance();
                   final double currentZoom = prefs.getDouble('scannerZoom') ?? 0.0;
-
+                  
                   if (!context.mounted) return;
                   final String? result = await Navigator.push<String>(
-                    context,
+                    context, 
                     MaterialPageRoute(builder: (_) => QrScannerDialog(initialZoom: currentZoom))
                   );
-
+                  
                   if (result != null && result.isNotEmpty) {
                     String? code;
                     if (result.startsWith("CODE:")) {
@@ -452,9 +387,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 if (widget.completeMode == 1) { // 더블클릭 (즉시)
                   widget.onStatusUpdate(item, 'complete'); setState(() {});
                 }
-              }, onLongPress: () => _showCompleteTimeDialog(item)),
-              _statusBtn("공정", Colors.blueGrey, item.process.isNotEmpty, () => _showProcessDialog(item)),
-              _statusBtn("보완", Colors.orange, item.complement.isNotEmpty, () => _showComplementDialog(item))       
+              }, onLongPress: () => _showCompleteTimeDialog(item)), 
+              _statusBtn("공정", Colors.blueGrey, item.process.isNotEmpty, () => _showProcessDialog(item)), 
+              _statusBtn("보완", Colors.orange, item.complement.isNotEmpty, () => _showComplementDialog(item))
             ]),
             const SizedBox(height: 12),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -506,21 +441,21 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    label,
+                    label, 
                     style: TextStyle(
-                      fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal, 
                       fontSize: subText.isEmpty ? 15 : 12,
                       color: fgColor
                     )
                   ),
-                  if (subText.isNotEmpty)
+                  if (subText.isNotEmpty) 
                     Text(
-                      subText,
+                      subText, 
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 16, 
                         fontWeight: FontWeight.bold,
                         color: fgColor
-                      ),
+                      ), 
                       overflow: TextOverflow.ellipsis
                     )
                 ]
