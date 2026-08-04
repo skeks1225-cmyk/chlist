@@ -356,22 +356,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   itemBuilder: (ctx, pageIdx) {
                     return GestureDetector(
                       behavior: HitTestBehavior.translucent,
-                      onDoubleTapDown: (details) {
-                        _doubleTapOffset = details.localPosition;
-                      },
-                      onDoubleTap: () {
-                        if (_currentZoom > 1.05) {
-                          _pdfViewerController.zoomLevel = 1.0;
-                          setState(() { _currentZoom = 1.0; });
-                        } else {
-                          _pdfViewerController.zoomLevel = widget.doubleTapZoom;
-                          setState(() { _currentZoom = widget.doubleTapZoom; });
+                      onScaleStart: (details) {
+                        if (details.pointerCount >= 2) {
+                          setState(() { _currentZoom = 2.0; });
                         }
                       },
                       child: SfPdfViewer.file(
                         File(_currentPdfPath),
                         controller: _pdfViewerController,
-                        enableDoubleTapZooming: false, // ❗ 무조건 FIT 원복 및 더블탭 1단계 배율을 위해 수동 컨트롤  
+                        enableDoubleTapZooming: true, 
                         maxZoomLevel: 20.0,
                         onZoomLevelChanged: (details) {
                           setState(() {
