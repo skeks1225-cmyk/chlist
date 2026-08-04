@@ -82,7 +82,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
   bool get _isZoomed => _currentScale > 1.05;
 
   void _clampMatrix() {
-    if (_viewportConstraints == null || _pdfPageSize == null || _currentScale <= 1.0) {
+    if (_viewportConstraints == null || _pdfPageSize == null) {
       _matrix = Matrix4.identity();
       return;
     }
@@ -105,12 +105,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> with TickerProviderSt
     final tx = _matrix.storage[12];
     final ty = _matrix.storage[13];
 
-    // 콘텐츠 중심(0,0) 기준 클램핑 (줌 배율에 따라 뷰포트를 벗어나지 않게 제한)
-    final maxX = (contentW * S - viewW) / 2;
-    final maxY = (contentH * S - viewH) / 2;
+    // 1. 가로축 (X) 클램핑 및 중앙 정렬 보정
+    if (S * contentW > viewW) {
+      final minTx = viewW - (viewW + contentW) * S / 2;
+      final maxTx = (contentW - viewW) * S / 2;
+      _matrix.storage[12] = tx.clamp(minTx, maxTx);
+    } else {
+      _matrix.storage[12] = (1 - S) * viewW / 2;
+    }
 
-    _matrix.storage[12] = tx.clamp(-maxX, maxX);
-    _matrix.storage[13] = ty.clamp(-maxY, maxY);
+    // 2. 세로축 (Y) 클램핑 및 중앙 정렬 보정
+    if (S * contentH > viewH) {
+      final minTy = viewH - (viewH + contentH) * S / 2;
+      final maxTy = (contentH - viewH) * S / 2;
+      _matrix.storage[13] = ty.clamp(minTy, maxTy);
+    } else {
+      _matrix.storage[13] = (1 - S) * viewH / 2;
+    }
   }
 
   @override
