@@ -18,6 +18,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
       
+      - name: Create local.properties
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+      
       - name: Build Native APK
         run: |
           cd android
