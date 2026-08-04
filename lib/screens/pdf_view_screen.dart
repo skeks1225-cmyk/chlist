@@ -418,7 +418,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       }
                     } else if (result.startsWith("ZOOM:")) {
                       final double? newZoom = double.tryParse(result.replaceFirst("ZOOM:", ""));
-                      if (newIdx != null) {
+                      if (newZoom != null) {
                         final prefsSave = await SharedPreferences.getInstance();
                         await prefsSave.setDouble('scannerZoom', newZoom);
                       }
