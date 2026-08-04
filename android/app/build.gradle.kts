@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -10,10 +11,6 @@ android {
 
     buildFeatures {
         compose = true
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
     }
 
     defaultConfig {
@@ -54,7 +51,6 @@ android {
 
     packaging {
         resources {
-            // ❗ 중복 파일만 처리하고, 인증서(*.RSA, *.SF)는 절대 건드리지 않음
             pickFirst("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
             excludes += "META-INF/NOTICE"
             excludes += "META-INF/LICENSE"
