@@ -1,12 +1,11 @@
 plugins {
     id("com.android.application")
-    id("kotlin-android")
-    id("dev.flutter.flutter-gradle-plugin")
+    id("org.jetbrains.kotlin.android")
 }
 
 android {
     namespace = "org.example.checksheet"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 34
     ndkVersion = "28.2.13676358"
 
     buildFeatures {
@@ -14,15 +13,15 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1" // Compatible with current Kotlin
+        kotlinCompilerExtensionVersion = "1.5.1"
     }
 
     defaultConfig {
         applicationId = "org.example.checksheet"
         minSdk = 24
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0.0"
         
         proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
@@ -62,10 +61,6 @@ android {
             excludes += "META-INF/DEPENDENCIES"
         }
     }
-}
-
-flutter {
-    source = "../.."
 }
 
 dependencies {
