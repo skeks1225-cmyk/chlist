@@ -16,7 +16,6 @@ class PdfViewerScreen extends StatefulWidget {
   final Map<String, int> processColors; // ❗ 공정별 색상 정보
   final int completeMode; // ❗ 완료 체크 모드 (0: 클릭, 1: 더블클릭, 2: 확인창)
   final double doubleTapZoom; // ❗ 더블탭 확대 배율 (기본 3.0)
-  final double maxZoom; // ❗ 최대 한계 배율 (기본 10.0)
   final Function(ItemModel, String) onStatusUpdate;
 
   const PdfViewerScreen({
@@ -30,7 +29,6 @@ class PdfViewerScreen extends StatefulWidget {
     required this.processColors,
     required this.completeMode,
     this.doubleTapZoom = 3.0,
-    this.maxZoom = 10.0,
     required this.onStatusUpdate,
   });
 
@@ -374,7 +372,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         File(_currentPdfPath),
                         controller: _pdfViewerController,
                         enableDoubleTapZooming: false, // ❗ 무조건 FIT 원복 및 더블탭 1단계 배율을 위해 수동 컨트롤  
-                        maxZoomLevel: widget.maxZoom,
+                        maxZoomLevel: 20.0,
                         onZoomLevelChanged: (details) {
                           setState(() {
                             _currentZoom = details.newZoomLevel;
