@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pdfrx/pdfrx.dart'; 
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
@@ -37,7 +37,7 @@ class PdfViewerScreen extends StatefulWidget {
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
   late int _currentIndex;
   String _currentPdfPath = "";
-  final PdfViewerController _pdfController = PdfViewerController();
+  MethodChannel? _nativeChannel;
   Key _viewerKey = UniqueKey();
   final TextEditingController _remarksController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
@@ -89,7 +89,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
   }
 
-  void _resetFit() { _loadPdf(); }
+  void _resetFit() {
+    _nativeChannel?.invokeMethod('resetFit');
+  }
 
   void _prev() {
     final currentItem = widget.allItems[_currentIndex];
@@ -310,7 +312,35 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         body: Column(children: [
           Expanded(child: LayoutBuilder(builder: (context, constraints) {
             return Stack(children: [
-              _isLoading ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue)) : (_currentPdfPath.isNotEmpty ? Container(color: viewerBgColor, child: PdfViewer.file(_currentPdfPath, key: _viewerKey, controller: _pdfController, params: PdfViewerParams(maxScale: 15.0, backgroundColor: viewerBgColor))) : Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 50), const SizedBox(height: 10), Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)), const SizedBox(height: 5), Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12))]))),
+              _isLoading
+                  ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
+                  : (_currentPdfPath.isNotEmpty
+                      ? Container(
+                          color: viewerBgColor,
+                          child: AndroidView(
+                            viewType: 'pdf-viewer-view',
+                            key: _viewerKey,
+                            creationParams: <String, dynamic>{
+                              'pdfPath': _currentPdfPath,
+                            },
+                            creationParamsCodec: const StandardMessageCodec(),
+                            onPlatformViewCreated: (int id) {
+                              _nativeChannel = MethodChannel('org.example.checksheet/pdf_viewer_$id');
+                            },
+                          ),
+                        )
+                      : Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.red, size: 50),
+                              const SizedBox(height: 10),
+                              Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)),
+                              const SizedBox(height: 5),
+                              Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12)),
+                            ],
+                          ),
+                        )),
               Positioned(left: 5, bottom: 5, child: Row(children: [_navArrowBtn(Icons.arrow_back, hasPrev ? _prev : () {}, isDark), _navArrowBtn(Icons.arrow_forward, hasNext ? _next : () {}, isDark)])),
               if (_searchResults.isNotEmpty) Positioned(left: 8, bottom: 2, child: Container(width: MediaQuery.of(context).size.width * 0.45, constraints: BoxConstraints(maxHeight: constraints.maxHeight - 5), decoration: BoxDecoration(color: isDark ? Colors.grey[850] : Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, -2))]), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ListView.separated(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: _searchResults.length, separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]), itemBuilder: (ctx, idx) { final res = _searchResults[idx]; return ListTile(dense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0), title: Text(res.itemCode, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)), trailing: res == item ? const Icon(Icons.check_circle, size: 14, color: Colors.blue) : null, onTap: () => _jumpToItem(res)); }))))
             ]);

@@ -14,6 +14,12 @@ class MainActivity: FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         smbHandler = SmbHandler(this)
 
+        // ❗ PDF 네이티브 플랫폼 뷰 등록
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            "pdf-viewer-view",
+            PdfViewFactory(flutterEngine.dartExecutor.binaryMessenger)
+        )
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             // ❗ 모든 호출에서 공통적으로 IP, User, Pass 추출
             val ip = call.argument<String>("ip")
