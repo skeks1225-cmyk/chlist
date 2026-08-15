@@ -30,10 +30,19 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            val keystorePath = System.getenv("KEYSTORE_PATH")
+            if (keystorePath != null && File(keystorePath).exists()) {
+                storeFile = File(keystorePath)
+                storePassword = System.getenv("STORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            } else {
+                // 로컬 환경에서는 debug.keystore로 fallback
+                storeFile = file("debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
         getByName("debug") {
             storeFile = file("debug.keystore")

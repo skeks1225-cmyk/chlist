@@ -326,11 +326,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                 GestureDetector(
                                   behavior: HitTestBehavior.translucent,
                                   onDoubleTap: () {
-                                    final currentZoom = _pdfController.zoomRatio;
+                                    final currentZoom = _pdfController.currentZoom;
+                                    final center = Offset(size.width / 2, size.height / 2);
                                     if (currentZoom > 1.1) {
-                                      _pdfController.setZoomRatio(1.0);
+                                      _pdfController.setZoom(center, 1.0);
                                     } else {
-                                      _pdfController.setZoomRatio(3.0);
+                                      _pdfController.setZoom(center, 3.0);
                                     }
                                   },
                                 )
