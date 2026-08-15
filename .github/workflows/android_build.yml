@@ -23,7 +23,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.27.4
+          flutter-version: 3.29.2
           channel: stable
 
       # Secrets에 KEYSTORE_BASE64가 있으면 복원, 없으면 최초 1회 생성
