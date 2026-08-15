@@ -44,6 +44,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   List<ItemModel> _searchResults = [];
   bool _isLoading = false;
+  double? _fitZoomLevel;      // PDF 로드 시 실제 FIT 배율 저장
+  Offset? _doubleTapPosition; // 더블탭 위치 저장 (확대 중심점)
+
 
   @override
   void initState() {
@@ -85,6 +88,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         _currentPdfPath = File(localPath).existsSync() ? localPath : "";
         _viewerKey = UniqueKey();
         _isLoading = false;
+        _fitZoomLevel = null; // 새 PDF 로드 시 FIT 배율 초기화
       });
     }
   }
@@ -322,16 +326,37 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                             params: PdfViewerParams(
                               maxScale: 15.0,
                               backgroundColor: viewerBgColor,
+                              // PDF 로드 시 실제 FIT 배율을 캡처
+                              calculateInitialZoom: (doc, ctrl, fitScale, coverScale) {
+                                _fitZoomLevel = fitScale;
+                                return fitScale;
+                              },
                               viewerOverlayBuilder: (context, size, handleLinkTap) => [
                                 GestureDetector(
                                   behavior: HitTestBehavior.translucent,
+                                  // 더블탭 위치 기록 (확대 시 중심점으로 사용)
+                                  onDoubleTapDown: (details) {
+                                    _doubleTapPosition = details.localPosition;
+                                  },
                                   onDoubleTap: () {
                                     final currentZoom = _pdfController.currentZoom;
-                                    final center = Offset(size.width / 2, size.height / 2);
-                                    if (currentZoom > 1.1) {
-                                      _pdfController.setZoom(center, 1.0);
+                                    final fitZoom = _fitZoomLevel;
+                                    // FIT 배율 기준으로 확대/축소 판단 (5% 여유)
+                                    final isZoomed = fitZoom != null
+                                        ? currentZoom > fitZoom * 1.05
+                                        : currentZoom > 1.05;
+                                    if (isZoomed) {
+                                      // 확대 상태 → FIT 버튼과 동일하게 현재 페이지의 FIT 상태로 복귀
+                                      final pageNum = _pdfController.currentPageNumber ?? 1;
+                                      _pdfController.goToPage(
+                                        pageNumber: pageNum,
+                                        zoom: fitZoom ?? 1.0,
+                                      );
                                     } else {
-                                      _pdfController.setZoom(center, 3.0);
+                                      // FIT 상태 → 탭한 위치를 중심으로 3배 확대
+                                      final tapPos = _doubleTapPosition
+                                          ?? Offset(size.width / 2, size.height / 2);
+                                      _pdfController.setZoom(tapPos, 3.0);
                                     }
                                   },
                                 )
