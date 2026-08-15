@@ -346,12 +346,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                         ? currentZoom > fitZoom * 1.05
                                         : currentZoom > 1.05;
                                     if (isZoomed) {
-                                      // 확대 상태 → FIT 버튼과 동일하게 현재 페이지의 FIT 상태로 복귀
-                                      final pageNum = _pdfController.currentPageNumber ?? 1;
-                                      _pdfController.goToPage(
-                                        pageNumber: pageNum,
-                                        zoom: fitZoom ?? 1.0,
-                                      );
+                                      // 확대 상태 → FIT 버튼과 동일하게 동작
+                                      _resetFit();
                                     } else {
                                       // FIT 상태 → 탭한 위치를 중심으로 3배 확대
                                       final tapPos = _doubleTapPosition
