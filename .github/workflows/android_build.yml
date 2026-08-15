@@ -62,9 +62,9 @@ jobs:
       - name: Build APK (Release)
         env:
           KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'checksheet' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'checksheet1234' }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'checksheet1234' }}
         run: |
           flutter clean
           flutter pub get
