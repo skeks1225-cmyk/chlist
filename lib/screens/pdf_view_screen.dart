@@ -340,16 +340,19 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                   },
                                   onDoubleTap: () {
                                     final currentZoom = _pdfController.currentZoom;
-                                    final fitZoom = _fitZoomLevel;
+                                    final fitZoom = _fitZoomLevel ?? 1.0;
+                                    
                                     // FIT 배율 기준으로 확대/축소 판단 (5% 여유)
-                                    final isZoomed = fitZoom != null
-                                        ? currentZoom > fitZoom * 1.05
-                                        : currentZoom > 1.05;
+                                    final isZoomed = currentZoom > fitZoom * 1.05;
+                                    
                                     if (isZoomed) {
-                                      // 확대 상태 → FIT 버튼과 동일하게 동작
-                                      _resetFit();
+                                      // 확대 상태 → 화면 중앙을 중심으로 FIT 배율로 부드럽게 축소
+                                      final center = Offset(size.width / 2, size.height / 2);
+                                      _pdfController.setZoom(center, fitZoom);
                                     } else {
+                                      debugPrint("DoubleTap - Action: Zoom In (3x)");
                                       // FIT 상태 → 탭한 위치를 중심으로 3배 확대
+                                      // setZoom(Offset position, double zoom)은 지정한 position을 화면 중심으로 하여 확대합니다.
                                       final tapPos = _doubleTapPosition
                                           ?? Offset(size.width / 2, size.height / 2);
                                       _pdfController.setZoom(tapPos, 3.0);
