@@ -357,8 +357,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                     final isZoomed = currentZoom > fitZoom * 1.1;
                                     
                                     final localCenter = Offset(size.width / 2, size.height / 2);
-                                    final globalCenter = _pdfController.localToGlobal(localCenter);
-                                    final docCenter = _pdfController.globalToDocument(globalCenter);
+                                    final globalCenter = _pdfController.localToGlobal(localCenter) ?? Offset.zero;
+                                    final docCenter = _pdfController.globalToDocument(globalCenter) ?? Offset.zero;
                                     
                                     if (isZoomed) {
                                       // 확대 상태 → 화면 중앙을 중심으로 FIT 배율로 부드럽게 축소
@@ -366,7 +366,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                     } else {
                                       debugPrint("DoubleTap - Action: Zoom In (3x)");
                                       final tapPos = _doubleTapPosition ?? globalCenter;
-                                      final docTapPos = _pdfController.globalToDocument(tapPos);
+                                      final docTapPos = _pdfController.globalToDocument(tapPos) ?? Offset.zero;
                                       _pdfController.setZoom(docTapPos, 3.0);
                                     }
                                   },
