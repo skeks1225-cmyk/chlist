@@ -93,7 +93,18 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
   }
 
-  void _resetFit() { _loadPdf(); }
+  void _resetFit() {
+    if (!_isLoading && _currentPdfPath.isNotEmpty) {
+      final fitZoom = _fitZoomLevel ?? _pdfController.alternativeFitScale ?? 1.0;
+      final mediaQuery = MediaQuery.of(context);
+      final localCenter = Offset(mediaQuery.size.width / 2, mediaQuery.size.height / 2);
+      final globalCenter = _pdfController.localToGlobal(localCenter) ?? Offset.zero;
+      final docCenter = _pdfController.globalToDocument(globalCenter) ?? Offset.zero;
+      _pdfController.setZoom(docCenter, fitZoom);
+    } else {
+      _loadPdf();
+    }
+  }
 
   void _prev() {
     final currentItem = widget.allItems[_currentIndex];
@@ -336,26 +347,27 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                   behavior: HitTestBehavior.translucent,
                                   // 더블탭 위치 기록 (확대 시 중심점으로 사용)
                                   onDoubleTapDown: (details) {
-                                    _doubleTapPosition = details.localPosition;
+                                    _doubleTapPosition = details.globalPosition;
                                   },
                                   onDoubleTap: () {
                                     final currentZoom = _pdfController.currentZoom;
                                     final fitZoom = _fitZoomLevel ?? 1.0;
                                     
-                                    // FIT 배율 기준으로 확대/축소 판단 (5% 여유)
-                                    final isZoomed = currentZoom > fitZoom * 1.05;
+                                    // FIT 배율 기준으로 확대/축소 판단 (10% 여유)
+                                    final isZoomed = currentZoom > fitZoom * 1.1;
+                                    
+                                    final localCenter = Offset(size.width / 2, size.height / 2);
+                                    final globalCenter = _pdfController.localToGlobal(localCenter);
+                                    final docCenter = _pdfController.globalToDocument(globalCenter);
                                     
                                     if (isZoomed) {
                                       // 확대 상태 → 화면 중앙을 중심으로 FIT 배율로 부드럽게 축소
-                                      final center = Offset(size.width / 2, size.height / 2);
-                                      _pdfController.setZoom(center, fitZoom);
+                                      _pdfController.setZoom(docCenter, fitZoom);
                                     } else {
                                       debugPrint("DoubleTap - Action: Zoom In (3x)");
-                                      // FIT 상태 → 탭한 위치를 중심으로 3배 확대
-                                      // setZoom(Offset position, double zoom)은 지정한 position을 화면 중심으로 하여 확대합니다.
-                                      final tapPos = _doubleTapPosition
-                                          ?? Offset(size.width / 2, size.height / 2);
-                                      _pdfController.setZoom(tapPos, 3.0);
+                                      final tapPos = _doubleTapPosition ?? globalCenter;
+                                      final docTapPos = _pdfController.globalToDocument(tapPos);
+                                      _pdfController.setZoom(docTapPos, 3.0);
                                     }
                                   },
                                 )
