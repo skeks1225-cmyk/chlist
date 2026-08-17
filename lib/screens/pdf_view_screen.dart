@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; 
 import 'package:pdfrx/pdfrx.dart'; 
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/item_model.dart';
@@ -15,6 +16,8 @@ class PdfViewerScreen extends StatefulWidget {
   final List<String> processList;
   final Map<String, int> processColors; // ❗ 공정별 색상 정보
   final int completeMode; // ❗ 완료 체크 모드 (0: 클릭, 1: 더블클릭, 2: 확인창)
+  final double swipeSensitivity; // ❗ 슬라이드 감도 (0.05 ~ 0.50)
+  final bool swipeVibration;      // ❗ 슬라이드 시 진동 여부
   final Function(ItemModel, String) onStatusUpdate;
 
   const PdfViewerScreen({
@@ -27,6 +30,8 @@ class PdfViewerScreen extends StatefulWidget {
     required this.processList,
     required this.processColors,
     required this.completeMode,
+    required this.swipeSensitivity,
+    required this.swipeVibration,
     required this.onStatusUpdate,
   });
 
@@ -46,6 +51,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   bool _isLoading = false;
   double? _fitZoomLevel;      // PDF 로드 시 실제 FIT 배율 저장
   Offset? _doubleTapPosition; // 더블탭 위치 저장 (확대 중심점)
+
+  // ❗ 슬라이드 제스처 관련 변수
+  double _swipeStartX = 0;
+  double _swipeStartY = 0;
+  int _pointerCount = 0;
+  bool _isSwipeActionTriggered = false;
 
 
   @override
@@ -330,48 +341,85 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   : (_currentPdfPath.isNotEmpty
                       ? Container(
                           color: viewerBgColor,
-                          child: PdfViewer.file(
-                            _currentPdfPath,
-                            key: _viewerKey,
-                            controller: _pdfController,
-                            params: PdfViewerParams(
-                              maxScale: 15.0,
-                              backgroundColor: viewerBgColor,
-                              // PDF 로드 시 실제 FIT 배율을 캡처
-                              calculateInitialZoom: (doc, ctrl, fitScale, coverScale) {
-                                _fitZoomLevel = fitScale;
-                                return fitScale;
-                              },
-                              viewerOverlayBuilder: (context, size, handleLinkTap) => [
-                                GestureDetector(
-                                  behavior: HitTestBehavior.translucent,
-                                  // 더블탭 위치 기록 (확대 시 중심점으로 사용)
-                                  onDoubleTapDown: (details) {
-                                    _doubleTapPosition = details.globalPosition;
-                                  },
-                                  onDoubleTap: () {
-                                    final currentZoom = _pdfController.currentZoom;
-                                    final fitZoom = _fitZoomLevel ?? 1.0;
-                                    
-                                    // FIT 배율 기준으로 확대/축소 판단 (10% 여유)
-                                    final isZoomed = currentZoom > fitZoom * 1.1;
-                                    
-                                    final localCenter = Offset(size.width / 2, size.height / 2);
-                                    final globalCenter = _pdfController.localToGlobal(localCenter) ?? Offset.zero;
-                                    final docCenter = _pdfController.globalToDocument(globalCenter) ?? Offset.zero;
-                                    
-                                    if (isZoomed) {
-                                      // 확대 상태 → 화면 중앙을 중심으로 FIT 배율로 부드럽게 축소
-                                      _pdfController.setZoom(docCenter, fitZoom);
-                                    } else {
-                                      debugPrint("DoubleTap - Action: Zoom In (3x)");
-                                      final tapPos = _doubleTapPosition ?? globalCenter;
-                                      final docTapPos = _pdfController.globalToDocument(tapPos) ?? Offset.zero;
-                                      _pdfController.setZoom(docTapPos, 3.0);
-                                    }
-                                  },
-                                )
-                              ],
+                          child: Listener(
+                            onPointerDown: (details) {
+                              _pointerCount++;
+                              if (_pointerCount == 1) {
+                                _swipeStartX = details.localPosition.dx;
+                                _swipeStartY = details.localPosition.dy;
+                                _isSwipeActionTriggered = false;
+                              }
+                            },
+                            onPointerMove: (details) {
+                              if (_pointerCount != 1 || _isSwipeActionTriggered) return;
+                              
+                              final currentZoom = _pdfController.currentZoom;
+                              final fitZoom = _fitZoomLevel ?? 1.0;
+                              // FIT 상태일 때만 슬라이드 허용 (1.1배 마진)
+                              if (currentZoom > fitZoom * 1.1) return;
+
+                              final dx = details.localPosition.dx - _swipeStartX;
+                              final dy = details.localPosition.dy - _swipeStartY;
+                              final threshold = constraints.maxWidth * widget.swipeSensitivity;
+
+                              // 가로축 이동이 감도 이상이고 세로축보다 확실히 클 때 (각도 판정)
+                              if (dx.abs() > threshold && dx.abs() > dy.abs() * 1.5) {
+                                _isSwipeActionTriggered = true;
+                                if (dx > 0) {
+                                  _prev(); // 오른쪽으로 밀기 -> 이전 파일
+                                } else {
+                                  _next(); // 왼쪽으로 밀기 -> 다음 파일
+                                }
+                                if (widget.swipeVibration) {
+                                  HapticFeedback.mediumImpact();
+                                }
+                              }
+                            },
+                            onPointerUp: (details) => _pointerCount = (_pointerCount - 1).clamp(0, 10),
+                            onPointerCancel: (details) => _pointerCount = (_pointerCount - 1).clamp(0, 10),
+                            child: PdfViewer.file(
+                              _currentPdfPath,
+                              key: _viewerKey,
+                              controller: _pdfController,
+                              params: PdfViewerParams(
+                                maxScale: 15.0,
+                                backgroundColor: viewerBgColor,
+                                // PDF 로드 시 실제 FIT 배율을 캡처
+                                calculateInitialZoom: (doc, ctrl, fitScale, coverScale) {
+                                  _fitZoomLevel = fitScale;
+                                  return fitScale;
+                                },
+                                viewerOverlayBuilder: (context, size, handleLinkTap) => [
+                                  GestureDetector(
+                                    behavior: HitTestBehavior.translucent,
+                                    // 더블탭 위치 기록 (확대 시 중심점으로 사용)
+                                    onDoubleTapDown: (details) {
+                                      _doubleTapPosition = details.globalPosition;
+                                    },
+                                    onDoubleTap: () {
+                                      final currentZoom = _pdfController.currentZoom;
+                                      final fitZoom = _fitZoomLevel ?? 1.0;
+                                      
+                                      // FIT 배율 기준으로 확대/축소 판단 (10% 여유)
+                                      final isZoomed = currentZoom > fitZoom * 1.1;
+                                      
+                                      final localCenter = Offset(size.width / 2, size.height / 2);
+                                      final globalCenter = _pdfController.localToGlobal(localCenter) ?? Offset.zero;
+                                      final docCenter = _pdfController.globalToDocument(globalCenter) ?? Offset.zero;
+                                      
+                                      if (isZoomed) {
+                                        // 확대 상태 → 화면 중앙을 중심으로 FIT 배율로 부드럽게 축소
+                                        _pdfController.setZoom(docCenter, fitZoom);
+                                      } else {
+                                        debugPrint("DoubleTap - Action: Zoom In (3x)");
+                                        final tapPos = _doubleTapPosition ?? globalCenter;
+                                        final docTapPos = _pdfController.globalToDocument(tapPos) ?? Offset.zero;
+                                        _pdfController.setZoom(docTapPos, 3.0);
+                                      }
+                                    },
+                                  )
+                                ],
+                              ),
                             ),
                           ),
                         )

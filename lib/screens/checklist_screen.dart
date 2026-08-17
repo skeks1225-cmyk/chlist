@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/item_model.dart';
@@ -36,6 +35,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   bool _isSyncing = false;
   double _scannerZoom = 0.0; // ❗ 스캐너 기본 줌 (0.0=1x, 1.0=3x)
   int _qrScanActionMode = 0; // ❗ QR 인식 시 동작 모드 (0: 리스트 검색, 1: 뷰어 바로보기)
+  double _swipeSensitivity = 0.2; // ❗ 슬라이드 감도 (기본 20%)
+  bool _swipeVibration = true;    // ❗ 슬라이드 시 진동 피드백 여부
 
   String _currentSortCol = ""; 
   bool _isAscending = true;   
@@ -167,6 +168,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _completeMode = prefs.getInt('completeMode') ?? (prefs.getBool('confirmComplete') ?? false ? 2 : 0);
       _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0;
       _qrScanActionMode = prefs.getInt('qrScanActionMode') ?? 0;
+      _swipeSensitivity = prefs.getDouble('swipeSensitivity') ?? 0.2;
+      _swipeVibration = prefs.getBool('swipeVibration') ?? true;
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -223,6 +226,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setInt('completeMode', _completeMode);
     await prefs.setDouble('scannerZoom', _scannerZoom);
     await prefs.setInt('qrScanActionMode', _qrScanActionMode);
+    await prefs.setDouble('swipeSensitivity', _swipeSensitivity);
+    await prefs.setBool('swipeVibration', _swipeVibration);
     await prefs.setStringList('processList', _processList);
     await prefs.setString('processColors', jsonEncode(_processColors));
 
@@ -912,6 +917,31 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ),
             ]),
           ),
+          const SizedBox(height: 10),
+          // ❗ 슬라이드 감도 설정 추가
+          Align(alignment: Alignment.centerLeft, child: Text("슬라이드 파일 전환 감도 (${(_swipeSensitivity * 100).toInt()}%)", style: const TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(height: 5),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blueGrey.withOpacity(0.2))),
+            child: Column(children: [
+              Row(children: [
+                const Icon(Icons.swipe, size: 20, color: Colors.blue),
+                const SizedBox(width: 10),
+                Expanded(child: Slider(
+                  value: _swipeSensitivity, min: 0.05, max: 0.50, 
+                  onChanged: (v) => setDialogState(() => _swipeSensitivity = v),
+                )),
+              ]),
+              SwitchListTile(
+                title: const Text("슬라이드 시 진동 피드백", style: TextStyle(fontSize: 14)),
+                value: _swipeVibration,
+                onChanged: (v) => setDialogState(() => _swipeVibration = v),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ]),
+          ),
           const SizedBox(height: 20),
           ElevatedButton.icon(onPressed: () async { String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text); if (err == null) { List<String> shares = await _smbService.listShares(); _showError("성공", "✅ 접속 성공!\n\n[공유 목록]\n${shares.join('\n')}"); } else _showError("오류", "접속 실패: $err"); }, icon: const Icon(Icons.check_circle_outline), label: const Text("접속 테스트"))
         ])),
@@ -1267,7 +1297,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _handleItemClick(ItemModel item) async {
     _forgetFocus(); if (_autoSave) _manualSave(silent: true); if (_pdfFolderPath.startsWith("smb://")) { setState(() => _isLoading = true); try { String shareWithRest = _pdfFolderPath.replaceFirst("smb://", ""); int firstSlash = shareWithRest.indexOf("/"); String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest; String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : ""; String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf"; await _smbService.downloadFile(share, remoteFilePath, "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf"); } catch (_) {} finally { setState(() => _isLoading = false); } }
-    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, completeMode: _completeMode, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
+    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, completeMode: _completeMode, swipeSensitivity: _swipeSensitivity, swipeVibration: _swipeVibration, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
     if (lastItemCode != null) { 
       // ❗ 추적 메모리에 기록
       setState(() {
