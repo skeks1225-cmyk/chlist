@@ -1876,17 +1876,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               // ❗ 실행 전 항상 저장소에서 최신 줌 값 로드 (동기화 근본 해결)
               final prefs = await SharedPreferences.getInstance();
               _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0;
-              
+
               if (!mounted) return;
               // ❗ Navigator.push를 사용하여 전체 화면으로 전환
               final String? result = await Navigator.push<String>(
                 context, 
                 MaterialPageRoute(builder: (_) => QrScannerDialog(initialZoom: _scannerZoom))
               );
-              
+
               if (result != null && result.isNotEmpty) {
                 String? code;
-                
+
                 // ❗ 새로운 반환 형식 대응 (CODE:xxx|ZOOM:0.x 또는 ZOOM:0.x)
                 if (result.startsWith("CODE:")) {
                   final parts = result.split('|');
@@ -1914,30 +1914,48 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 String cleaned = code.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
                 // 제어 문자 및 보이지 않는 문자 제거 (ASCII 0-31)
                 cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');
-                
+
                 if (cleaned.toUpperCase().endsWith('-S')) {
                   cleaned = cleaned.substring(0, cleaned.length - 2);
-                }
-                
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("스캔: $result → 정제: $cleaned"), duration: const Duration(seconds: 2)));
                 }
 
                 if (_qrScanActionMode == 1) {
                   // 뷰어에서 PDF 바로 보기 모드
                   ItemModel? target;
-                  for (final item in _originalItems) {
-                    if (!item.isSubheading && item.itemCode == cleaned) {
-                      target = item;
-                      break;
+                  List<ItemModel> matches = [];
+
+                  // 1. 완벽 일치 우선 검색
+                  target = _originalItems.firstWhere((i) => !i.isSubheading && i.itemCode == cleaned, orElse: () => ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "", quantity: "", isSubheading: false));
+
+                  if (target.realIndex != -1) {
+                    _handleItemClick(target);
+                    return;
+                  }
+
+                  // 2. 일치 항목이 없으면 스마트 폴백 매칭 (-## 제거)
+                  if (cleaned.contains(RegExp(r'-[0-9]{2}$'))) {
+                    String strippedCode = cleaned.substring(0, cleaned.lastIndexOf('-'));
+                    matches = _originalItems.where((i) => !i.isSubheading && i.itemCode.startsWith(strippedCode)).toList();
+
+                    if (matches.isNotEmpty) {
+                      // 매칭 결과가 있다면 첫번째 항목으로 연결
+                      _handleItemClick(matches.first);
+
+                      // 3. 중복이나 유사 항목 안내 알림
+                      if (mounted) {
+                        String msg = "연결된 품목: ${matches.first.itemCode}";
+                        if (matches.length > 1) {
+                          msg += "\n\n기타 발견 항목: ${matches.sublist(1).map((m) => m.itemCode).join(', ')}";
+                        }
+                        showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("코드 인식 알림"), content: Text("인식한 코드: $cleaned\n\n$msg\n\n리스트에 유사한 항목이 있어 혼동될 수 있으니 확인 바랍니다."), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
+                      }
+                      return;
                     }
                   }
-                  if (target != null) {
-                    _handleItemClick(target);
-                  } else {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("해당 품목을 리스트에서 찾을 수 없습니다."), duration: Duration(seconds: 2)));
-                    }
+
+                  // 4. 최종 실패 알림
+                  if (mounted) {
+                    showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("인식 실패"), content: Text("일치하는 품목을 찾을 수 없습니다.\n인식된 코드: '$cleaned'"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
                   }
                 } else {
                   // 기존: 리스트에서 찾기 모드
