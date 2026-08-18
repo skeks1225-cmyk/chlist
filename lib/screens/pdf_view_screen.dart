@@ -197,236 +197,240 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           actions: [TextButton(onPressed: _resetFit, child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16)))],
         ),
         backgroundColor: isDark ? Colors.black : Colors.grey[200],
-        body: Column(children: [
-          Expanded(child: LayoutBuilder(builder: (context, constraints) {
-            return Stack(children: [
-              _isLoading
-                  ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
-                  : (_currentPdfPath.isNotEmpty
-                      ? Container(
-                          color: viewerBgColor,
-                          child: Listener(
-                            onPointerDown: (details) {
-                              _pointerCount++;
-                              if (_pointerCount == 1) {
-                                _swipeStartX = details.localPosition.dx;
-                                _swipeStartY = details.localPosition.dy;
-                                _isSwipeActionTriggered = false;
-                              }
-                            },
-                            onPointerMove: (details) {
-                              if (_pointerCount != 1 || _isSwipeActionTriggered) return;
-                              
-                              final currentZoom = _pdfController.currentZoom;
-                              final fitZoom = _fitZoomLevel ?? 1.0;
-                              // FIT 상태일 때만 슬라이드 허용 (1.1배 마진)
-                              if (currentZoom > fitZoom * 1.1) return;
-
-                              final dx = details.localPosition.dx - _swipeStartX;
-                              final dy = details.localPosition.dy - _swipeStartY;
-                              final threshold = constraints.maxWidth * widget.swipeSensitivity;
-
-                              // 가로축 이동이 감도 이상이고 세로축보다 확실히 클 때 (각도 판정)
-                              if (dx.abs() > threshold && dx.abs() > dy.abs() * 1.5) {
-                                _isSwipeActionTriggered = true;
-                                if (dx > 0) {
-                                  _prev(); // 오른쪽으로 밀기 -> 이전 파일
-                                } else {
-                                  _next(); // 왼쪽으로 밀기 -> 다음 파일
-                                }
-                              }
-                            },
-                            onPointerUp: (details) => _pointerCount = (_pointerCount - 1).clamp(0, 10),
-                            onPointerCancel: (details) => _pointerCount = (_pointerCount - 1).clamp(0, 10),
-                            child: PdfViewer.file(
-                              _currentPdfPath,
-                              key: _viewerKey,
-                              controller: _pdfController,
-                              params: PdfViewerParams(
-                                maxScale: 15.0,
-                                backgroundColor: viewerBgColor,
-                                // PDF 로드 시 실제 FIT 배율을 캡처
-                                calculateInitialZoom: (doc, ctrl, fitScale, coverScale) {
-                                  _fitZoomLevel = fitScale;
-                                  return fitScale;
+        body: Column(
+          children: [
+            Expanded(
+              child: LayoutBuilder(builder: (context, constraints) {
+                return Stack(children: [
+                  _isLoading
+                      ? Center(child: CircularProgressIndicator(color: isDark ? Colors.white : Colors.blue))
+                      : (_currentPdfPath.isNotEmpty
+                          ? Container(
+                              color: viewerBgColor,
+                              child: Listener(
+                                onPointerDown: (details) {
+                                  _pointerCount++;
+                                  if (_pointerCount == 1) {
+                                    _swipeStartX = details.localPosition.dx;
+                                    _swipeStartY = details.localPosition.dy;
+                                    _isSwipeActionTriggered = false;
+                                  }
                                 },
-                                viewerOverlayBuilder: (context, size, handleLinkTap) => [
-                                  GestureDetector(
-                                    behavior: HitTestBehavior.translucent,
-                                    // 더블탭 위치 기록 (확대 시 중심점으로 사용)
-                                    onDoubleTapDown: (details) {
-                                      _doubleTapPosition = details.globalPosition;
+                                onPointerMove: (details) {
+                                  if (_pointerCount != 1 || _isSwipeActionTriggered) return;
+                                  
+                                  final currentZoom = _pdfController.currentZoom;
+                                  final fitZoom = _fitZoomLevel ?? 1.0;
+                                  // FIT 상태일 때만 슬라이드 허용 (1.1배 마진)
+                                  if (currentZoom > fitZoom * 1.1) return;
+
+                                  final dx = details.localPosition.dx - _swipeStartX;
+                                  final dy = details.localPosition.dy - _swipeStartY;
+                                  final threshold = constraints.maxWidth * widget.swipeSensitivity;
+
+                                  // 가로축 이동이 감도 이상이고 세로축보다 확실히 클 때 (각도 판정)
+                                  if (dx.abs() > threshold && dx.abs() > dy.abs() * 1.5) {
+                                    _isSwipeActionTriggered = true;
+                                    if (dx > 0) {
+                                      _prev(); // 오른쪽으로 밀기 -> 이전 파일
+                                    } else {
+                                      _next(); // 왼쪽으로 밀기 -> 다음 파일
+                                    }
+                                  }
+                                },
+                                onPointerUp: (details) => _pointerCount = (_pointerCount - 1).clamp(0, 10),
+                                onPointerCancel: (details) => _pointerCount = (_pointerCount - 1).clamp(0, 10),
+                                child: PdfViewer.file(
+                                  _currentPdfPath,
+                                  key: _viewerKey,
+                                  controller: _pdfController,
+                                  params: PdfViewerParams(
+                                    maxScale: 15.0,
+                                    backgroundColor: viewerBgColor,
+                                    // PDF 로드 시 실제 FIT 배율을 캡처
+                                    calculateInitialZoom: (doc, ctrl, fitScale, coverScale) {
+                                      _fitZoomLevel = fitScale;
+                                      return fitScale;
                                     },
-                                    onDoubleTap: () {
-                                      final currentZoom = _pdfController.currentZoom;
-                                      final fitZoom = _fitZoomLevel ?? 1.0;
-                                      
-                                      // FIT 배율 기준으로 확대/축소 판단 (10% 여유)
-                                      final isZoomed = currentZoom > fitZoom * 1.1;
-                                      
-                                      final localCenter = Offset(size.width / 2, size.height / 2);
-                                      final globalCenter = _pdfController.localToGlobal(localCenter) ?? Offset.zero;
-                                      final docCenter = _pdfController.globalToDocument(globalCenter) ?? Offset.zero;
-                                      
-                                      if (isZoomed) {
-                                        // 확대 상태 → 화면 중앙을 중심으로 FIT 배율로 부드럽게 축소
-                                        _pdfController.setZoom(docCenter, fitZoom);
-                                      } else {
-                                        debugPrint("DoubleTap - Action: Zoom In (3x)");
-                                        final tapPos = _doubleTapPosition ?? globalCenter;
-                                        final docTapPos = _pdfController.globalToDocument(tapPos) ?? Offset.zero;
-                                        _pdfController.setZoom(docTapPos, 3.0);
-                                      }
-                                    },
-                                  )
+                                    viewerOverlayBuilder: (context, size, handleLinkTap) => [
+                                      GestureDetector(
+                                        behavior: HitTestBehavior.translucent,
+                                        // 더블탭 위치 기록 (확대 시 중심점으로 사용)
+                                        onDoubleTapDown: (details) {
+                                          _doubleTapPosition = details.globalPosition;
+                                        },
+                                        onDoubleTap: () {
+                                          final currentZoom = _pdfController.currentZoom;
+                                          final fitZoom = _fitZoomLevel ?? 1.0;
+                                          
+                                          // FIT 배율 기준으로 확대/축소 판단 (10% 여유)
+                                          final isZoomed = currentZoom > fitZoom * 1.1;
+                                          
+                                          final localCenter = Offset(size.width / 2, size.height / 2);
+                                          final globalCenter = _pdfController.localToGlobal(localCenter) ?? Offset.zero;
+                                          final docCenter = _pdfController.globalToDocument(globalCenter) ?? Offset.zero;
+                                          
+                                          if (isZoomed) {
+                                            // 확대 상태 → 화면 중앙을 중심으로 FIT 배율로 부드럽게 축소
+                                            _pdfController.setZoom(docCenter, fitZoom);
+                                          } else {
+                                            debugPrint("DoubleTap - Action: Zoom In (3x)");
+                                            final tapPos = _doubleTapPosition ?? globalCenter;
+                                            final docTapPos = _pdfController.globalToDocument(tapPos) ?? Offset.zero;
+                                            _pdfController.setZoom(docTapPos, 3.0);
+                                          }
+                                        },
+                                      )
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.error_outline, color: Colors.red, size: 50),
+                                  const SizedBox(height: 10),
+                                  Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)),
+                                  const SizedBox(height: 5),
+                                  Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12)),
                                 ],
                               ),
-                            ),
-                          ),
-                        )
-                      : Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                            )),
+                  Positioned(left: 5, bottom: 5, child: Row(children: [_navArrowBtn(Icons.arrow_back, hasPrev ? _prev : () {}, isDark), _navArrowBtn(Icons.arrow_forward, hasNext ? _next : () {}, isDark)])),
+                  if (_searchResults.isNotEmpty) Positioned(left: 8, bottom: 2, child: Container(width: MediaQuery.of(context).size.width * 0.45, constraints: BoxConstraints(maxHeight: constraints.maxHeight - 5), decoration: BoxDecoration(color: isDark ? Colors.grey[850] : Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, -2))]), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ListView.separated(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: _searchResults.length, separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]), itemBuilder: (ctx, idx) { final res = _searchResults[idx]; return ListTile(dense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0), title: Text(res.itemCode, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)), trailing: res == item ? const Icon(Icons.check_circle, size: 14, color: Colors.blue) : null, onTap: () => _jumpToItem(res)); }))))
+                ]);
+              }),
+            ),
+            SafeArea(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                color: isDark ? Colors.grey[900] : Colors.white,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        focusNode: _searchFocusNode,
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: "코드 검색...",
+                          hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                          prefixIcon: (_searchFocusNode.hasFocus || _searchController.text.isNotEmpty) ? null : const Icon(Icons.search, size: 18),
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.error_outline, color: Colors.red, size: 50),
-                              const SizedBox(height: 10),
-                              Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)),
-                              const SizedBox(height: 5),
-                              Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12)),
-                            ],
-                          ),
-                        )),
-              Positioned(left: 5, bottom: 5, child: Row(children: [_navArrowBtn(Icons.arrow_back, hasPrev ? _prev : () {}, isDark), _navArrowBtn(Icons.arrow_forward, hasNext ? _next : () {}, isDark)])),
-              if (_searchResults.isNotEmpty) Positioned(left: 8, bottom: 2, child: Container(width: MediaQuery.of(context).size.width * 0.45, constraints: BoxConstraints(maxHeight: constraints.maxHeight - 5), decoration: BoxDecoration(color: isDark ? Colors.grey[850] : Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, -2))]), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ListView.separated(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: _searchResults.length, separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]), itemBuilder: (ctx, idx) { final res = _searchResults[idx]; return ListTile(dense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0), title: Text(res.itemCode, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)), trailing: res == item ? const Icon(Icons.check_circle, size: 14, color: Colors.blue) : null, onTap: () => _jumpToItem(res)); }))))
-            ]);
-          })),
-          SafeArea(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-              color: isDark ? Colors.grey[900] : Colors.white,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: "코드 검색...",
-                        hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
-                        prefixIcon: (_searchFocusNode.hasFocus || _searchController.text.isNotEmpty) ? null : const Icon(Icons.search, size: 18),
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_searchController.text.isNotEmpty)
-                              IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchResults = []; }); }),
-                            IconButton(
-                              icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue),
-                              onPressed: () async {
-                                _searchFocusNode.unfocus();
-                                final prefs = await SharedPreferences.getInstance();
-                                final double currentZoom = prefs.getDouble('scannerZoom') ?? 0.0;
-                                
-                                if (!mounted) return;
-                                final String? result = await Navigator.push<String>(
-                                  context, 
-                                  MaterialPageRoute(builder: (_) => QrScannerDialog(initialZoom: currentZoom))
-                                );
-
-                                if (result != null && result.isNotEmpty) {
-                                  String? code;
-                                  // QR 결과 파싱 로직
-                                  if (result.startsWith("CODE:")) {
-                                    final parts = result.split('|');
-                                    code = parts[0].replaceFirst("CODE:", "");
-                                  } else if (result.startsWith("ZOOM:")) {
-                                    return;
-                                  } else {
-                                    code = result;
-                                  }
-
-                                  if (code == null || code.isEmpty) return;
-                                  String cleaned = code.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
-                                  cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');
-                                  if (cleaned.toUpperCase().endsWith('-S')) {
-                                    cleaned = cleaned.substring(0, cleaned.length - 2);
-                                  }
-
-                                  // 1. 완벽 일치 우선 검색
-                                  List<ItemModel> matches = [];
-                                  ItemModel? target = widget.allItems.firstWhere(
-                                    (i) => i.itemCode == cleaned,
-                                    orElse: () => ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "", quantity: "", isSubheading: false)
+                              if (_searchController.text.isNotEmpty)
+                                IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchResults = []; }); }),
+                              IconButton(
+                                icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue),
+                                onPressed: () async {
+                                  _searchFocusNode.unfocus();
+                                  final prefs = await SharedPreferences.getInstance();
+                                  final double currentZoom = prefs.getDouble('scannerZoom') ?? 0.0;
+                                  
+                                  if (!mounted) return;
+                                  final String? result = await Navigator.push<String>(
+                                    context, 
+                                    MaterialPageRoute(builder: (_) => QrScannerDialog(initialZoom: currentZoom))
                                   );
 
-                                  if (target.realIndex != -1) {
-                                    matches = [target];
-                                  } else if (cleaned.contains(RegExp(r'-[0-9]{2}$'))) {
-                                    // 2. 일치 항목이 없으면 스마트 폴백 매칭 (-## 제거)
-                                    String strippedCode = cleaned.substring(0, cleaned.lastIndexOf('-'));
-                                    matches = widget.allItems.where((i) => i.itemCode.startsWith(strippedCode)).toList();
-                                  }
+                                  if (result != null && result.isNotEmpty) {
+                                    String? code;
+                                    // QR 결과 파싱 로직
+                                    if (result.startsWith("CODE:")) {
+                                      final parts = result.split('|');
+                                      code = parts[0].replaceFirst("CODE:", "");
+                                    } else if (result.startsWith("ZOOM:")) {
+                                      return;
+                                    } else {
+                                      code = result;
+                                    }
 
-                                  if (matches.isNotEmpty) {
-                                    _jumpToItem(matches.first);
+                                    if (code == null || code.isEmpty) return;
+                                    String cleaned = code.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
+                                    cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');
+                                    if (cleaned.toUpperCase().endsWith('-S')) {
+                                      cleaned = cleaned.substring(0, cleaned.length - 2);
+                                    }
 
-                                    if (matches.length == 1) {
-                                      // 단일 항목 폴백 매칭 성공 시 토스트 알림
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("품목 ${matches.first.itemCode}(으)로 연결되었습니다."), duration: const Duration(seconds: 2)));
+                                    // 1. 완벽 일치 우선 검색
+                                    List<ItemModel> matches = [];
+                                    ItemModel? target = widget.allItems.firstWhere(
+                                      (i) => i.itemCode == cleaned,
+                                      orElse: () => ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "", quantity: "", isSubheading: false)
+                                    );
+
+                                    if (target.realIndex != -1) {
+                                      matches = [target];
+                                    } else if (cleaned.contains(RegExp(r'-[0-9]{2}$'))) {
+                                      // 2. 일치 항목이 없으면 스마트 폴백 매칭 (-## 제거)
+                                      String strippedCode = cleaned.substring(0, cleaned.lastIndexOf('-'));
+                                      matches = widget.allItems.where((i) => i.itemCode.startsWith(strippedCode)).toList();
+                                    }
+
+                                    if (matches.isNotEmpty) {
+                                      _jumpToItem(matches.first);
+
+                                      if (matches.length == 1) {
+                                        // 단일 항목 폴백 매칭 성공 시 토스트 알림
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("품목 ${matches.first.itemCode}(으)로 연결되었습니다."), duration: const Duration(seconds: 2)));
+                                        }
+                                      } else {
+                                        // 3. 중복이나 유사 항목 안내 알림 (중복일 때만 알림창)
+                                        if (mounted) {
+                                          String msg = "연결된 품목: ${matches.first.itemCode}";
+                                          msg += "\n\n기타 발견 항목: ${matches.sublist(1).map((m) => m.itemCode).join(', ')}";
+                                          showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("코드 인식 알림"), content: Text("인식한 코드: $cleaned\n\n$msg\n\n리스트에 유사한 항목이 있어 혼동될 수 있으니 확인 바랍니다."), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
+                                        }
                                       }
                                     } else {
-                                      // 3. 중복이나 유사 항목 안내 알림 (중복일 때만 알림창)
+                                      // 4. 최종 실패 알림
                                       if (mounted) {
-                                        String msg = "연결된 품목: ${matches.first.itemCode}";
-                                        msg += "\n\n기타 발견 항목: ${matches.sublist(1).map((m) => m.itemCode).join(', ')}";
-                                        showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("코드 인식 알림"), content: Text("인식한 코드: $cleaned\n\n$msg\n\n리스트에 유사한 항목이 있어 혼동될 수 있으니 확인 바랍니다."), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
+                                        showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("인식 실패"), content: Text("일치하는 품목을 찾을 수 없습니다.\n인식된 코드: '$cleaned'"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
                                       }
                                     }
-                                  } else {
-                                    // 4. 최종 실패 알림
-                                    if (mounted) {
-                                      showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("인식 실패"), content: Text("일치하는 품목을 찾을 수 없습니다.\n인식된 코드: '$cleaned'"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
-                                    }
                                   }
-                                }
-                              },
-                            ),
-                          ],
+                                },
+                              ),
+                            ],
+                          ),
+                          filled: true,
+                          fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                         ),
-                        filled: true,
-                        fillColor: isDark ? Colors.black26 : Colors.grey[100],
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        onChanged: _onSearchChanged,
                       ),
-                      onChanged: _onSearchChanged,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _remarksController,
-                      style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: "비고...",
-                        hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
-                        filled: true,
-                        fillColor: isDark ? Colors.black26 : Colors.grey[100],
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                        suffixIcon: _remarksController.text.isNotEmpty 
-                          ? IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) 
-                          : null
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _remarksController,
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: "비고...",
+                          hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                          filled: true,
+                          fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          suffixIcon: _remarksController.text.isNotEmpty 
+                            ? IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) 
+                            : null
+                        ),
+                        onChanged: (val) { item.remarks = val; setState(() {}); },
+                        onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); },
                       ),
-                      onChanged: (val) { item.remarks = val; setState(() {}); },
-                      onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); },
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
