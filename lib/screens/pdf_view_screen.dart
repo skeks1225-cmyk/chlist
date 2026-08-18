@@ -160,7 +160,121 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
   }
 
-  Widget _dialogBtn(String label, Color color, VoidCallback onSelected) { return Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), onPressed: () { setState(onSelected); widget.onStatusUpdate(widget.allItems[_currentIndex], 'update'); Navigator.pop(context); }, child: Text(label))); }
+  void _showCompleteTimeDialog(ItemModel item) {
+    String record = item.completeTime.isEmpty ? "기록 없음" : item.completeTime;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FittedBox(fit: BoxFit.scaleDown, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))),
+            const SizedBox(height: 8),
+            const Text("완료 입력 시간", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text("입력시간 : $record", style: const TextStyle(fontSize: 16)),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))],
+      ),
+    );
+  }
+
+  void _showComplementDialog(ItemModel item) {
+    String lastRecord = "마지막 기록: 없음";
+    if (item.complementTime.isNotEmpty) {
+      lastRecord = "마지막 기록: ${item.complement}: ${item.complementTime}";
+    }
+
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)),
+        ],
+      ),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        _dialogBtn("부족", Colors.orange, () {
+          item.complement = "부족";
+          item.complete = false;
+          item.complementTime = DateTime.now().toString().substring(0, 16);
+        }),
+        _dialogBtn("재작업", Colors.red, () {
+          item.complement = "재작업";
+          item.complete = false;
+          item.complementTime = DateTime.now().toString().substring(0, 16);
+        }),
+        const Divider(),
+        _dialogBtn("지우기", Colors.grey, () {
+          item.complement = "";
+          item.complementTime = "";
+        }),
+        _dialogBtn("선택취소", Colors.blueGrey, () {}),
+      ]),
+    ));
+  }
+
+  void _showProcessDialog(ItemModel item) {
+    String lastRecord = "마지막 기록: 없음";
+    if (item.processTime.isNotEmpty) {
+      lastRecord = "마지막 기록: ${item.process}: ${item.processTime}";
+    }
+
+    List<String> sortedDisplayList = List.from(widget.processList);
+    bool hasFinished = sortedDisplayList.remove("완료");
+    if (hasFinished) sortedDisplayList.add("완료");
+
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)),
+        ],
+      ),
+      content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        GridView.count(
+          shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 3, childAspectRatio: 1.8,
+          mainAxisSpacing: 8, crossAxisSpacing: 8,
+          children: sortedDisplayList.map((p) {
+            int? colorVal = widget.processColors[p];
+            Color btnColor;
+            if (colorVal != null) {
+              btnColor = Color(colorVal);
+            } else {
+              if (p == "완료") btnColor = Colors.purple;
+              else if (p == "보류") btnColor = Colors.red;
+              else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnColor = Colors.orange;
+              else btnColor = Colors.blueGrey[700]!;
+            }
+            return ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white, textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              onPressed: () {
+                setState(() {
+                  item.process = p;
+                  item.processTime = DateTime.now().toString().substring(0, 16);
+                });
+                widget.onStatusUpdate(item, 'process'); Navigator.pop(ctx);
+              },
+              child: Text(p),
+            );
+          }).toList(),
+        ),
+        const Divider(), _dialogBtn("지우기", Colors.grey, () {
+          item.process = "";
+          item.processTime = "";
+        }),
+        _dialogBtn("선택취소", Colors.blueGrey, () {}),
+      ]))),
+    ));
+  }
+
+  Widget _dialogBtn(String label, Color color, VoidCallback onSelected) {
+    return Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), onPressed: () { setState(onSelected); widget.onStatusUpdate(widget.allItems[_currentIndex], 'update'); Navigator.pop(context); }, child: Text(label)));
+  }
 
   Widget _navArrowBtn(IconData icon, VoidCallback onTap, bool isDark) {
     return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 55, height: 55, alignment: Alignment.center, child: Icon(icon, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 24)));
@@ -168,6 +282,89 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   @override
   void dispose() { _remarksController.dispose(); _searchController.dispose(); _searchFocusNode.dispose(); super.dispose(); }
+
+  Future<void> _showCompleteConfirmDialog(ItemModel item) async {
+    bool isChecking = !item.complete;
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isChecking ? "완료 체크 확인" : "완료 체크 해제 확인"),
+        content: Text("[${item.itemCode}]\n항목을 ${isChecking ? '완료 처리' : '미완료 처리'}하시겠습니까?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      widget.onStatusUpdate(item, 'complete');
+      setState(() {});
+    }
+  }
+
+  Widget _statusBtn(String label, Color color, bool active, VoidCallback onTap, {VoidCallback? onLongPress, VoidCallback? onDoubleTap}) {
+    final item = widget.allItems[_currentIndex];
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    String subText = "";
+    if (label == "보완") subText = item.complement;
+    if (label == "공정") {
+      subText = item.process;
+      if (active) {
+        int? colorVal = widget.processColors[subText];
+        if (colorVal != null) color = Color(colorVal);
+        else if (subText == "완료") color = Colors.purple;
+        else if (subText == "보류") color = Colors.red;
+        else if (["용접", "도장", "도금", "인쇄"].contains(subText)) color = Colors.orange;
+      }
+    }
+
+    Color bgColor = active ? color : (isDark ? Colors.grey[800]! : Colors.grey[300]!);
+    Color fgColor = active ? Colors.white : (isDark ? Colors.white70 : Colors.black54);
+
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Material(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(8),
+          elevation: active ? 2 : 0,
+          child: InkWell(
+            onTap: onTap,
+            onDoubleTap: onDoubleTap,
+            onLongPress: onLongPress,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              height: 55,
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    label, 
+                    style: TextStyle(
+                      fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal, 
+                      fontSize: subText.isEmpty ? 15 : 12,
+                      color: fgColor
+                    )
+                  ),
+                  if (subText.isNotEmpty) 
+                    Text(
+                      subText, 
+                      style: TextStyle(
+                        fontSize: 16, 
+                        fontWeight: FontWeight.bold,
+                        color: fgColor
+                      ), 
+                      overflow: TextOverflow.ellipsis
+                    )
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -307,123 +504,180 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                 color: isDark ? Colors.grey[900] : Colors.white,
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        focusNode: _searchFocusNode,
-                        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: "코드 검색...",
-                          hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
-                          prefixIcon: (_searchFocusNode.hasFocus || _searchController.text.isNotEmpty) ? null : const Icon(Icons.search, size: 18),
-                          suffixIcon: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (_searchController.text.isNotEmpty)
-                                IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchResults = []; }); }),
-                              IconButton(
-                                icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue),
-                                onPressed: () async {
-                                  _searchFocusNode.unfocus();
-                                  final prefs = await SharedPreferences.getInstance();
-                                  final double currentZoom = prefs.getDouble('scannerZoom') ?? 0.0;
-                                  
-                                  if (!mounted) return;
-                                  final String? result = await Navigator.push<String>(
-                                    context, 
-                                    MaterialPageRoute(builder: (_) => QrScannerDialog(initialZoom: currentZoom))
-                                  );
+                    // 줄 1: 검색 및 비고 TextField
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            focusNode: _searchFocusNode,
+                            style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
+                            decoration: InputDecoration(
+                              hintText: "코드 검색...",
+                              hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                              prefixIcon: (_searchFocusNode.hasFocus || _searchController.text.isNotEmpty) ? null : const Icon(Icons.search, size: 18),
+                              suffixIcon: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_searchController.text.isNotEmpty)
+                                    IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() { _searchController.clear(); _searchResults = []; }); }),
+                                  IconButton(
+                                    icon: const Icon(Icons.qr_code_scanner, size: 22, color: Colors.blue),
+                                    onPressed: () async {
+                                      _searchFocusNode.unfocus();
+                                      final prefs = await SharedPreferences.getInstance();
+                                      final double currentZoom = prefs.getDouble('scannerZoom') ?? 0.0;
+                                      
+                                      if (!mounted) return;
+                                      final String? result = await Navigator.push<String>(
+                                        context, 
+                                        MaterialPageRoute(builder: (_) => QrScannerDialog(initialZoom: currentZoom))
+                                      );
 
-                                  if (result != null && result.isNotEmpty) {
-                                    String? code;
-                                    // QR 결과 파싱 로직
-                                    if (result.startsWith("CODE:")) {
-                                      final parts = result.split('|');
-                                      code = parts[0].replaceFirst("CODE:", "");
-                                    } else if (result.startsWith("ZOOM:")) {
-                                      return;
-                                    } else {
-                                      code = result;
-                                    }
-
-                                    if (code == null || code.isEmpty) return;
-                                    String cleaned = code.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
-                                    cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');
-                                    if (cleaned.toUpperCase().endsWith('-S')) {
-                                      cleaned = cleaned.substring(0, cleaned.length - 2);
-                                    }
-
-                                    // 1. 완벽 일치 우선 검색
-                                    List<ItemModel> matches = [];
-                                    ItemModel? target = widget.allItems.firstWhere(
-                                      (i) => i.itemCode == cleaned,
-                                      orElse: () => ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "", quantity: "", isSubheading: false)
-                                    );
-
-                                    if (target.realIndex != -1) {
-                                      matches = [target];
-                                    } else if (cleaned.contains(RegExp(r'-[0-9]{2}$'))) {
-                                      // 2. 일치 항목이 없으면 스마트 폴백 매칭 (-## 제거)
-                                      String strippedCode = cleaned.substring(0, cleaned.lastIndexOf('-'));
-                                      matches = widget.allItems.where((i) => i.itemCode.startsWith(strippedCode)).toList();
-                                    }
-
-                                    if (matches.isNotEmpty) {
-                                      _jumpToItem(matches.first);
-
-                                      if (matches.length == 1) {
-                                        // 단일 항목 폴백 매칭 성공 시 토스트 알림
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("품목 ${matches.first.itemCode}(으)로 연결되었습니다."), duration: const Duration(seconds: 2)));
+                                      if (result != null && result.isNotEmpty) {
+                                        String? code;
+                                        // QR 결과 파싱 로직
+                                        if (result.startsWith("CODE:")) {
+                                          final parts = result.split('|');
+                                          code = parts[0].replaceFirst("CODE:", "");
+                                        } else if (result.startsWith("ZOOM:")) {
+                                          return;
+                                        } else {
+                                          code = result;
                                         }
-                                      } else {
-                                        // 3. 중복이나 유사 항목 안내 알림 (중복일 때만 알림창)
-                                        if (mounted) {
-                                          String msg = "연결된 품목: ${matches.first.itemCode}";
-                                          msg += "\n\n기타 발견 항목: ${matches.sublist(1).map((m) => m.itemCode).join(', ')}";
-                                          showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("코드 인식 알림"), content: Text("인식한 코드: $cleaned\n\n$msg\n\n리스트에 유사한 항목이 있어 혼동될 수 있으니 확인 바랍니다."), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
+
+                                        if (code == null || code.isEmpty) return;
+                                        String cleaned = code.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
+                                        cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');
+                                        if (cleaned.toUpperCase().endsWith('-S')) {
+                                          cleaned = cleaned.substring(0, cleaned.length - 2);
+                                        }
+
+                                        // 1. 완벽 일치 우선 검색
+                                        List<ItemModel> matches = [];
+                                        ItemModel? target = widget.allItems.firstWhere(
+                                          (i) => i.itemCode == cleaned,
+                                          orElse: () => ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "", quantity: "", isSubheading: false)
+                                        );
+
+                                        if (target.realIndex != -1) {
+                                          matches = [target];
+                                        } else if (cleaned.contains(RegExp(r'-[0-9]{2}$'))) {
+                                          // 2. 일치 항목이 없으면 스마트 폴백 매칭 (-## 제거)
+                                          String strippedCode = cleaned.substring(0, cleaned.lastIndexOf('-'));
+                                          matches = widget.allItems.where((i) => i.itemCode.startsWith(strippedCode)).toList();
+                                        }
+
+                                        if (matches.isNotEmpty) {
+                                          _jumpToItem(matches.first);
+
+                                          if (matches.length == 1) {
+                                            // 단일 항목 폴백 매칭 성공 시 토스트 알림
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("품목 ${matches.first.itemCode}(으)로 연결되었습니다."), duration: const Duration(seconds: 2)));
+                                            }
+                                          } else {
+                                            // 3. 중복이나 유사 항목 안내 알림 (중복일 때만 알림창)
+                                            if (mounted) {
+                                              String msg = "연결된 품목: ${matches.first.itemCode}";
+                                              msg += "\n\n기타 발견 항목: ${matches.sublist(1).map((m) => m.itemCode).join(', ')}";
+                                              showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("코드 인식 알림"), content: Text("인식한 코드: $cleaned\n\n$msg\n\n리스트에 유사한 항목이 있어 혼동될 수 있으니 확인 바랍니다."), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
+                                            }
+                                          }
+                                        } else {
+                                          // 4. 최종 실패 알림
+                                          if (mounted) {
+                                            showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("인식 실패"), content: Text("일치하는 품목을 찾을 수 없습니다.\n인식된 코드: '$cleaned'"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
+                                          }
                                         }
                                       }
-                                    } else {
-                                      // 4. 최종 실패 알림
-                                      if (mounted) {
-                                        showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("인식 실패"), content: Text("일치하는 품목을 찾을 수 없습니다.\n인식된 코드: '$cleaned'"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
-                                      }
-                                    }
-                                  }
-                                },
+                                    },
+                                  ),
+                                ],
                               ),
-                            ],
+                              filled: true,
+                              fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                            onChanged: _onSearchChanged,
                           ),
-                          filled: true,
-                          fillColor: isDark ? Colors.black26 : Colors.grey[100],
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                         ),
-                        onChanged: _onSearchChanged,
-                      ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _remarksController,
+                            style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
+                            decoration: InputDecoration(
+                              hintText: "비고...",
+                              hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                              filled: true,
+                              fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              suffixIcon: _remarksController.text.isNotEmpty 
+                                ? IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) 
+                                : null
+                            ),
+                            onChanged: (val) { item.remarks = val; setState(() {}); },
+                            onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); },
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _remarksController,
-                        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: "비고...",
-                          hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
-                          filled: true,
-                          fillColor: isDark ? Colors.black26 : Colors.grey[100],
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                          suffixIcon: _remarksController.text.isNotEmpty 
-                            ? IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) 
-                            : null
+                    const SizedBox(height: 12),
+                    // 줄 2: 완료, 공정, 보완 상태 버튼들
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _statusBtn("완료", Colors.green, item.complete, () {
+                          if (widget.completeMode == 0) { // 클릭 (즉시)
+                            widget.onStatusUpdate(item, 'complete'); setState(() {});
+                          } else if (widget.completeMode == 2) { // 클릭 (확인창)
+                            _showCompleteConfirmDialog(item);
+                          }
+                        }, onDoubleTap: () {
+                          if (widget.completeMode == 1) { // 더블클릭 (즉시)
+                            widget.onStatusUpdate(item, 'complete'); setState(() {});
+                          }
+                        }, onLongPress: () => _showCompleteTimeDialog(item)),
+                        _statusBtn("공정", Colors.blueGrey, item.process.isNotEmpty, () => _showProcessDialog(item)),
+                        _statusBtn("보완", Colors.orange, item.complement.isNotEmpty, () => _showComplementDialog(item))
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // 줄 3: 이전, 다음, 페이지 수 내비게이션
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: hasPrev ? _prev : null, 
+                          icon: const Icon(Icons.arrow_back), 
+                          label: const Text("이전", style: TextStyle(fontSize: 15)), 
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(100, 45), 
+                            backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], 
+                            foregroundColor: hasPrev ? (isDark ? Colors.white : Colors.blueGrey[900]) : Colors.grey
+                          )
                         ),
-                        onChanged: (val) { item.remarks = val; setState(() {}); },
-                        onSubmitted: (val) { item.remarks = val; widget.onStatusUpdate(item, 'remarks'); },
-                      ),
+                        Text(
+                          "${_currentIndex + 1} / ${widget.filteredItems.length}", 
+                          style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: hasNext ? _next : null, 
+                          icon: const Icon(Icons.arrow_forward), 
+                          label: const Text("다음", style: TextStyle(fontSize: 15)), 
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(100, 45), 
+                            backgroundColor: isDark ? Colors.grey[800] : Colors.blueGrey[50], 
+                            foregroundColor: hasNext ? (isDark ? Colors.white : Colors.blueGrey[900]) : Colors.grey
+                          )
+                        ),
+                      ],
                     ),
                   ],
                 ),
