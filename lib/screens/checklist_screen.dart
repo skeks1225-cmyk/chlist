@@ -36,7 +36,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   double _scannerZoom = 0.0; // ❗ 스캐너 기본 줌 (0.0=1x, 1.0=3x)
   int _qrScanActionMode = 0; // ❗ QR 인식 시 동작 모드 (0: 리스트 검색, 1: 뷰어 바로보기)
   double _swipeSensitivity = 0.2; // ❗ 슬라이드 감도 (기본 20%)
-  bool _swipeVibration = true;    // ❗ 슬라이드 시 진동 피드백 여부
 
   String _currentSortCol = ""; 
   bool _isAscending = true;   
@@ -169,7 +168,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0;
       _qrScanActionMode = prefs.getInt('qrScanActionMode') ?? 0;
       _swipeSensitivity = prefs.getDouble('swipeSensitivity') ?? 0.2;
-      _swipeVibration = prefs.getBool('swipeVibration') ?? true;
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -227,7 +225,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setDouble('scannerZoom', _scannerZoom);
     await prefs.setInt('qrScanActionMode', _qrScanActionMode);
     await prefs.setDouble('swipeSensitivity', _swipeSensitivity);
-    await prefs.setBool('swipeVibration', _swipeVibration);
     await prefs.setStringList('processList', _processList);
     await prefs.setString('processColors', jsonEncode(_processColors));
 
@@ -933,13 +930,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   onChanged: (v) => setDialogState(() => _swipeSensitivity = v),
                 )),
               ]),
-              SwitchListTile(
-                title: const Text("슬라이드 시 진동 피드백", style: TextStyle(fontSize: 14)),
-                value: _swipeVibration,
-                onChanged: (v) => setDialogState(() => _swipeVibration = v),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-              ),
             ]),
           ),
           const SizedBox(height: 20),
@@ -1295,9 +1285,49 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
   Widget _topBtn(String label, VoidCallback? onTap, {Color? bgColor}) { return Expanded(child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(backgroundColor: bgColor ?? Colors.blueGrey[700], foregroundColor: Colors.white, minimumSize: const Size(0, 45), padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: FittedBox(child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))))); }
 
+  Future<void> _processQrCode(String cleaned) async {
+    List<ItemModel> matches = [];
+
+    ItemModel? target = _originalItems.firstWhere((i) => !i.isSubheading && i.itemCode == cleaned, orElse: () => ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "", quantity: "", isSubheading: false));
+    
+    if (target.realIndex != -1) {
+      matches = [target];
+    } else if (cleaned.contains(RegExp(r'-[0-9]{2}$'))) {
+      String strippedCode = cleaned.substring(0, cleaned.lastIndexOf('-'));
+      matches = _originalItems.where((i) => !i.isSubheading && i.itemCode.startsWith(strippedCode)).toList();
+    }
+
+    if (matches.isNotEmpty) {
+      if (_qrScanActionMode == 1) {
+        _handleItemClick(matches.first);
+      } else {
+        setState(() {
+          _searchController.text = matches.first.itemCode;
+          _searchQuery = matches.first.itemCode;
+        });
+        _applyFilterAndSort();
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(matches.first.itemCode));
+      }
+
+      if (matches.length == 1) {
+        _showSnackBar("품목 ${matches.first.itemCode}(으)로 연결되었습니다.");
+      } else {
+        String msg = "연결된 품목: ${matches.first.itemCode}";
+        msg += "\n\n기타 발견 항목: ${matches.sublist(1).map((m) => m.itemCode).join(', ')}";
+        if (mounted) {
+          showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("코드 인식 알림"), content: Text("인식한 코드: $cleaned\n\n$msg\n\n리스트에 유사한 항목이 있어 혼동될 수 있으니 확인 바랍니다."), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
+        }
+      }
+    } else {
+      if (mounted) {
+        showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("인식 실패"), content: Text("일치하는 품목을 찾을 수 없습니다.\n인식된 코드: '$cleaned'"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
+      }
+    }
+  }
+
   Future<void> _handleItemClick(ItemModel item) async {
     _forgetFocus(); if (_autoSave) _manualSave(silent: true); if (_pdfFolderPath.startsWith("smb://")) { setState(() => _isLoading = true); try { String shareWithRest = _pdfFolderPath.replaceFirst("smb://", ""); int firstSlash = shareWithRest.indexOf("/"); String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest; String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : ""; String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf"; await _smbService.downloadFile(share, remoteFilePath, "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf"); } catch (_) {} finally { setState(() => _isLoading = false); } }
-    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, completeMode: _completeMode, swipeSensitivity: _swipeSensitivity, swipeVibration: _swipeVibration, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
+    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, completeMode: _completeMode, swipeSensitivity: _swipeSensitivity, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
     if (lastItemCode != null) { 
       // ❗ 추적 메모리에 기록
       setState(() {
@@ -1921,52 +1951,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
                 if (_qrScanActionMode == 1) {
                   // 뷰어에서 PDF 바로 보기 모드
-                  ItemModel? target;
-                  List<ItemModel> matches = [];
-
-                  // 1. 완벽 일치 우선 검색
-                  target = _originalItems.firstWhere((i) => !i.isSubheading && i.itemCode == cleaned, orElse: () => ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "", quantity: "", isSubheading: false));
-
-                  if (target.realIndex != -1) {
-                    _handleItemClick(target);
-                    return;
-                  }
-
-                  // 2. 일치 항목이 없으면 스마트 폴백 매칭 (-## 제거)
-                  if (cleaned.contains(RegExp(r'-[0-9]{2}$'))) {
-                    String strippedCode = cleaned.substring(0, cleaned.lastIndexOf('-'));
-                    matches = _originalItems.where((i) => !i.isSubheading && i.itemCode.startsWith(strippedCode)).toList();
-
-                    if (matches.isNotEmpty) {
-                      // 매칭 결과가 있다면 첫번째 항목으로 연결
-                      _handleItemClick(matches.first);
-
-                      // 3. 중복이나 유사 항목 안내 알림
-                      if (mounted) {
-                        String msg = "연결된 품목: ${matches.first.itemCode}";
-                        if (matches.length > 1) {
-                          msg += "\n\n기타 발견 항목: ${matches.sublist(1).map((m) => m.itemCode).join(', ')}";
-                        }
-                        showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("코드 인식 알림"), content: Text("인식한 코드: $cleaned\n\n$msg\n\n리스트에 유사한 항목이 있어 혼동될 수 있으니 확인 바랍니다."), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
-                      }
-                      return;
-                    }
-                  }
-
-                  // 4. 최종 실패 알림
-                  if (mounted) {
-                    showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("인식 실패"), content: Text("일치하는 품목을 찾을 수 없습니다.\n인식된 코드: '$cleaned'"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
-                  }
+                  await _processQrCode(cleaned);
                 } else {
-                  // 기존: 리스트에서 찾기 모드
-                  if (_searchQuery.isEmpty) _preSearchScrollOffset = _scrollController.offset;
-                  setState(() {
-                    _searchController.text = cleaned;
-                    _searchQuery = cleaned;
-                  });
-                  _applyFilterAndSort();
-                  // ❗ 정제된 항목으로 즉시 이동 및 하이라이트
-                  WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(cleaned));
+                  // 리스트에서 찾기 모드
+                  await _processQrCode(cleaned);
                 }
               }
             }),
