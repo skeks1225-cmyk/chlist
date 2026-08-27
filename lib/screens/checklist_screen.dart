@@ -1670,6 +1670,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     });
   }
 
+  void _selectSubItems() {
+    setState(() {
+      _selectedIndices.clear();
+      for (var item in _displayItems) {
+        if (!item.isSubheading && item.realIndex != -1 && item.displayNo.contains('-')) {
+          _selectedIndices.add(item.realIndex);
+        }
+      }
+    });
+  }
+
   void _showBatchInputDialog() {
     if (_selectedIndices.isEmpty) {
       _showSnackBar("선택된 항목이 없습니다.");
@@ -1858,6 +1869,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           TextButton(onPressed: () => setState(() => _isReorderMode = false), child: const Text("완료", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
         ] : _isEditMode ? [
           TextButton(onPressed: _selectAllVisible, child: const Text("전체선택", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+          TextButton(onPressed: _selectSubItems, child: const Text("하위선택", style: TextStyle(color: Colors.lightGreenAccent, fontWeight: FontWeight.bold))),
           TextButton(onPressed: _deselectAll, child: const Text("전체해제", style: TextStyle(color: Colors.white))),
           TextButton(onPressed: _showBatchInputDialog, child: const Text("일괄입력", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
           const VerticalDivider(color: Colors.white24, indent: 15, endIndent: 15),
