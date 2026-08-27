@@ -1983,52 +1983,80 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           TextButton(onPressed: () { setState(() { _originalItems = List.from(_preReorderItems); _isReorderMode = false; }); _applyFilterAndSort(); }, child: const Text("취소", style: TextStyle(color: Colors.white))),
           TextButton(onPressed: () => setState(() => _isReorderMode = false), child: const Text("완료", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
         ] : _isEditMode ? [
-          TextButton(
-            onPressed: _selectAllVisible, 
-            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4), minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            child: const FittedBox(child: Text("전체\n선택", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
-          ),
-          TextButton(
-            onPressed: _selectSubItems, 
-            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4), minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            child: const FittedBox(child: Text("하위\n선택", textAlign: TextAlign.center, style: TextStyle(color: Colors.lightGreenAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
-          ),
-          TextButton(
-            onPressed: _deselectAll, 
-            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4), minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            child: const FittedBox(child: Text("전체\n해제", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 11, height: 1.2)))
-          ),
-          TextButton(
-            onPressed: _showBatchInputDialog, 
-            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4), minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            child: const FittedBox(child: Text("일괄\n입력", textAlign: TextAlign.center, style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
-          ),
-          const VerticalDivider(color: Colors.white24, indent: 15, endIndent: 15, width: 8),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                if (_selectedIndices.isEmpty) {
-                  _showSnackBar("선택된 항목이 없습니다.");
-                  return;
-                }
-                _isSelectionFiltered = true;
-                _isEditMode = false; // ❗ 모드 자동 종료
-              });
-              _applyFilterAndSort(); // ❗ 시스템 필터 로직을 통해 부분제목 포함하여 다시 그림
-            }, 
-            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4), minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            child: const FittedBox(child: Text("선택\n필터", textAlign: TextAlign.center, style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
-          ),
-          TextButton(
-            onPressed: _deleteSelectedRows, 
-            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4), minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            child: FittedBox(child: Text("삭제\n(${_selectedIndices.length})", textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
-          ),
-          TextButton(
-            onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); _applyFilterAndSort(); }), 
-            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4), minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            child: const FittedBox(child: Text("취소", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 11, height: 1.2)))
-          ),
+          // ❗ 가로 폭 전체를 자동으로 균등 분배하는 Row 구조 적용
+          SizedBox(
+            width: MediaQuery.of(context).size.width,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: _selectAllVisible, 
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      child: const FittedBox(child: Text("전체\n선택", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: _selectSubItems, 
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      child: const FittedBox(child: Text("하위\n선택", textAlign: TextAlign.center, style: TextStyle(color: Colors.lightGreenAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: _deselectAll, 
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      child: const FittedBox(child: Text("전체\n해제", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 11, height: 1.2)))
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: _showBatchInputDialog, 
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      child: const FittedBox(child: Text("일괄\n입력", textAlign: TextAlign.center, style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
+                    ),
+                  ),
+                  const SizedBox(
+                    height: 25,
+                    child: VerticalDivider(color: Colors.white24, width: 6, thickness: 1),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () {
+                        setState(() {
+                          if (_selectedIndices.isEmpty) {
+                            _showSnackBar("선택된 항목이 없습니다.");
+                            return;
+                          }
+                          _isSelectionFiltered = true;
+                          _isEditMode = false;
+                        });
+                        _applyFilterAndSort();
+                      }, 
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      child: const FittedBox(child: Text("선택\n필터", textAlign: TextAlign.center, style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: _deleteSelectedRows, 
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      child: FittedBox(child: Text("삭제\n(${_selectedIndices.length})", textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); _applyFilterAndSort(); }), 
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      child: const FittedBox(child: Text("취소", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 11, height: 1.2)))
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
         ] : [
           if (_isSorted || _selectedSections.isNotEmpty || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _quantitySearchQuery.isNotEmpty || _isSubheadingViewMode || _noFilterMode != 0 || _searchQuery.isNotEmpty || _columnFilters.values.any((s) => s.isNotEmpty) || _isSelectionFiltered) 
             TextButton(onPressed: _resetSort, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
