@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/item_model.dart';
 
 class ExcelService {
-  final List<String> _fixedHeader = ['no', '품목코드', '수량', '완료', '공정', '보완', '비고', '완료시간', '공정시간', '보완시간'];
+  final List<String> _fixedHeader = ['no', '품목코드', '수량', '완료', '공정', '보완', '비고', '완료시간', '공정시간', '보완시간', '포장', '포장시간'];
 
   Future<List<ItemModel>> loadExcel(String path) async {
     try {
@@ -59,6 +59,8 @@ class ExcelService {
           completeTime: _getSafe(row, 7),
           processTime: _getSafe(row, 8),
           complementTime: _getSafe(row, 9),
+          packed: _getSafe(row, 10).toUpperCase() == "V",  // ❗ 포장 (기존 파일은 빈값 → false)
+          packedTime: _getSafe(row, 11),                   // ❗ 포장시간 (기존 파일은 빈값)
           isSubheading: isSub,
           subheadingTitle: isSub ? "" : currentSubheadingTitle, // ❗ 부분제목 저장
         ));
@@ -101,6 +103,8 @@ class ExcelService {
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: r), TextCellValue(item.completeTime));
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: r), TextCellValue(item.processTime));
         sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: r), TextCellValue(item.complementTime));
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: r), TextCellValue(item.packed ? "V" : "")); // ❗ 포장
+        sheet.updateCell(CellIndex.indexByColumnRow(columnIndex: 11, rowIndex: r), TextCellValue(item.packedTime));        // ❗ 포장시간
       }
 
       var fileBytes = excel.save();

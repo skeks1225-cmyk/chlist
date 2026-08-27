@@ -71,6 +71,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   ItemModel? _temporaryVisibleItem; 
 
   bool _isEditMode = false;
+  bool _isPackingMode = false; // ❗ 포장모드 여부
   bool _isSelectionFiltered = false; // ❗ 선택 필터 활성화 여부
   final Set<int> _selectedIndices = {}; 
   bool _isSelecting = false; // ❗ 드래그 선택 중인지 여부
@@ -408,6 +409,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         }).toList();
       }
 
+      // ❗ 포장모드: '-'가 붙은 하위 항목 숨김
+      if (_isPackingMode) {
+        sectionItems = sectionItems.where((item) => !item.displayNo.contains('-')).toList();
+      }
+
       if (_temporaryVisibleItem != null && !_temporaryVisibleItem!.isSubheading) {
         String targetHeader = "ROOT";
         String? tempCurrent;
@@ -477,6 +483,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _searchController.clear();
       _isSelectionFiltered = false;
       _selectedIndices.clear();
+      _isPackingMode = false; // ❗ 필터 리셋 시 포장모드도 해제
     });
     _applyFilterAndSort();
   }
@@ -1052,7 +1059,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _showCompleteTimeDialog(ItemModel item) {
     _forgetFocus();
-    String record = item.completeTime.isEmpty ? "기록 없음" : item.completeTime;
+    String record = _isPackingMode
+        ? (item.packedTime.isEmpty ? "기록 없음" : item.packedTime)
+        : (item.completeTime.isEmpty ? "기록 없음" : item.completeTime);
+    String titleText = _isPackingMode ? "포장 입력 시간" : "완료 입력 시간";
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1061,7 +1071,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           children: [
             FittedBox(fit: BoxFit.scaleDown, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))),
             const SizedBox(height: 8),
-            const Text("완료 입력 시간", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(titleText, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text("입력시간 : $record", style: const TextStyle(fontSize: 16)),
@@ -1075,7 +1085,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     if (filtered.isEmpty) return;
 
     String colName = "";
-    if (col == 'complete') colName = "완료";
+    if (col == 'complete') colName = _isPackingMode ? "포장" : "완료";
     else if (col == 'process') colName = "공정";
     else if (col == 'complement') colName = "보완";
 
@@ -1091,10 +1101,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               setState(() {
                 for (var item in filtered) {
                   if (col == 'complete') {
-                    item.complete = false;
-                    item.completeTime = "";
-                    item.complement = "";
-                    item.complementTime = "";
+                    if (_isPackingMode) {
+                      item.packed = false;
+                      item.packedTime = "";
+                    } else {
+                      item.complete = false;
+                      item.completeTime = "";
+                      item.complement = "";
+                      item.complementTime = "";
+                    }
                   } else if (col == 'process') {
                     item.process = "";
                     item.processTime = "";
@@ -1242,26 +1257,27 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     if (_originalItems.isEmpty) return const SizedBox.shrink();
     final dataItems = _originalItems.where((i) => !i.isSubheading);
     int total = dataItems.length;
-    int completed = dataItems.where((i) => i.complete).length;
+    int completed = _isPackingMode ? dataItems.where((i) => i.packed).length : dataItems.where((i) => i.complete).length;
     int shortage = dataItems.where((i) => i.complement == "부족").length;
     int rework = dataItems.where((i) => i.complement == "재작업").length;
 
     final fItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1);
     int fTotal = fItems.length;
-    int fComp = fItems.where((i) => i.complete).length;
+    int fComp = _isPackingMode ? fItems.where((i) => i.packed).length : fItems.where((i) => i.complete).length;
     int fShortage = fItems.where((i) => i.complement == "부족").length;
     int fRework = fItems.where((i) => i.complement == "재작업").length;
 
     bool isFiltered = total != fTotal || _showUnfinishedOnly || _columnFilters.values.any((s) => s.isNotEmpty) || _searchQuery.isNotEmpty;
 
-    String totalStr = "전체 $total / 완료 $completed";
+    String checkLabel = _isPackingMode ? "포장" : "완료";
+    String totalStr = "전체 $total / $checkLabel $completed";
     if (shortage > 0) totalStr += " / 부족 $shortage";
     if (rework > 0) totalStr += " / 재작업 $rework";
     totalStr += " / ${(total > 0 ? (completed / total * 100) : 0).toStringAsFixed(1)}%";
 
     String filterStr = "";
     if (isFiltered) {
-      filterStr = "필터 $fTotal / 완료 $fComp";
+      filterStr = "필터 $fTotal / $checkLabel $fComp";
       if (fShortage > 0) filterStr += " / 부족 $fShortage";
       if (fRework > 0) filterStr += " / 재작업 $fRework";
       filterStr += " / ${(fTotal > 0 ? (fComp / fTotal * 100) : 0).toStringAsFixed(1)}%";
@@ -1283,7 +1299,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       ),
     );
   }
-  Widget _topBtn(String label, VoidCallback? onTap, {Color? bgColor}) { return Expanded(child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(backgroundColor: bgColor ?? Colors.blueGrey[700], foregroundColor: Colors.white, minimumSize: const Size(0, 45), padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: FittedBox(child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))))); }
+  Widget _topBtn(String label, VoidCallback? onTap, {Color? bgColor}) { return Expanded(child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(backgroundColor: bgColor ?? Colors.blueGrey[700], foregroundColor: Colors.white, minimumSize: const Size(0, 52), padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: FittedBox(child: Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, height: 1.3))))); }
 
   Future<void> _processQrCode(String cleaned) async {
     List<ItemModel> matches = [];
@@ -1622,6 +1638,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             i.complementTime = "";
             i.process = ""; 
             i.processTime = "";
+            i.packed = false;
+            i.packedTime = "";
           }
           if (remarks) i.remarks = "";
         }
@@ -1637,6 +1655,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               _originalItems[i].complementTime = "";
               _originalItems[i].process = ""; 
               _originalItems[i].processTime = "";
+              _originalItems[i].packed = false;
+              _originalItems[i].packedTime = "";
             }
             if (remarks) _originalItems[i].remarks = "";
           }
@@ -1694,7 +1714,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _batchTypeBtn("완료 일괄 변경", () => _showBatchValueSelection("complete")),
+            _batchTypeBtn(_isPackingMode ? "포장 일괄 변경" : "완료 일괄 변경", () => _showBatchValueSelection("complete")),
             _batchTypeBtn("공정 일괄 변경", () => _showBatchValueSelection("process")),
             _batchTypeBtn("보완 일괄 변경", () => _showBatchValueSelection("complement")),
           ],
@@ -1763,10 +1783,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         _batchValueBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
       ];
     } else if (type == "complete") {
-      title = "완료 여부 일괄 변경";
+      title = _isPackingMode ? "포장 여부 일괄 변경" : "완료 여부 일괄 변경";
       options = [
-        _batchValueBtn("완료 처리", Colors.green, () => _applyBatchInput(type, true)),
-        _batchValueBtn("미완료 처리 (체크해제)", Colors.blueGrey, () => _applyBatchInput(type, false)),
+        _batchValueBtn(_isPackingMode ? "포장 완료 처리" : "완료 처리", _isPackingMode ? Colors.cyan : Colors.green, () => _applyBatchInput(type, true)),
+        _batchValueBtn(_isPackingMode ? "미포장 처리 (체크해제)" : "미완료 처리 (체크해제)", Colors.blueGrey, () => _applyBatchInput(type, false)),
       ];
     }
 
@@ -1805,7 +1825,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     bool hasData = targets.any((i) {
       if (type == "process") return i.process.isNotEmpty;
       if (type == "complement") return i.complement.isNotEmpty;
-      if (type == "complete") return i.complete;
+      if (type == "complete") return _isPackingMode ? i.packed : i.complete;
       return false;
     });
 
@@ -1839,11 +1859,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           }
         } else if (type == "complete") {
           bool val = value as bool;
-          item.complete = val;
-          item.completeTime = val ? now : "";
-          if (val) {
-            item.complement = "";
-            item.complementTime = "";
+          if (_isPackingMode) {
+            item.packed = val;
+            item.packedTime = val ? now : "";
+          } else {
+            item.complete = val;
+            item.completeTime = val ? now : "";
+            if (val) {
+              item.complement = "";
+              item.complementTime = "";
+            }
           }
         }
       }
@@ -1896,8 +1921,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       ),
       body: SafeArea(child: Column(children: [
         if (!_isEditMode && !_isReorderMode) Padding(padding: const EdgeInsets.all(8.0), child: Row(children: [
-          _topBtn("설정", _openSettings), const SizedBox(width: 4), _topBtn("엑셀선택", () => _pickSource('file')), const SizedBox(width: 4), _topBtn("PDF폴더", () => _pickSource('dir')), const SizedBox(width: 4),
-          _topBtn("부분제목", () { 
+          _topBtn("설정", _openSettings), const SizedBox(width: 4), _topBtn("엑셀\n선택", () => _pickSource('file')), const SizedBox(width: 4), _topBtn("PDF\n선택", () => _pickSource('dir')), const SizedBox(width: 4),
+          _topBtn(_isPackingMode ? "완료\n모드" : "포장\n모드", () {
+            setState(() => _isPackingMode = !_isPackingMode);
+            _applyFilterAndSort();
+          }, bgColor: _isPackingMode ? Colors.cyan[700] : Colors.lightBlue[700]), const SizedBox(width: 4),
+          _topBtn("부분\n제목", () { 
             setState(() { 
               if (_isSubheadingViewMode) {
                 _selectedSections.clear(); // ❗ 모드 해제 시 필터 초기화
@@ -1906,8 +1935,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             }); 
             _applyFilterAndSort(); 
           }, bgColor: _isSubheadingViewMode ? Colors.blue : Colors.indigo[800]), const SizedBox(width: 4),
-          _topBtn("선택모드", () => setState(() => _isEditMode = true), bgColor: Colors.orange[800]), const SizedBox(width: 4),
-          if (_pdfFolderPath.startsWith("smb://")) ...[_topBtn("PDF동기화", _isSyncing ? null : _syncAllPdfs, bgColor: Colors.deepOrange[900]), const SizedBox(width: 4)],
+          _topBtn("선택\n모드", () => setState(() => _isEditMode = true), bgColor: Colors.orange[800]), const SizedBox(width: 4),
+          if (_pdfFolderPath.startsWith("smb://")) ...[_topBtn("PDF\n동기화", _isSyncing ? null : _syncAllPdfs, bgColor: Colors.deepOrange[900]), const SizedBox(width: 4)],
           _topBtn("리셋", _showResetConfirm, bgColor: Colors.red[700]), const SizedBox(width: 4), _topBtn("저장", () { _forgetFocus(); _manualSave(); }, bgColor: Colors.green[700]),
         ])),
         if (!_isReorderMode) Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: Row(children: [
@@ -2019,7 +2048,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 for (int j = startIdx + 1; j < _originalItems.length; j++) {
                   if (_originalItems[j].isSubheading) break;
                   totalItems++;
-                  if (_originalItems[j].complete) completedItems++;
+                  if (_isPackingMode) {
+                    if (_originalItems[j].packed) completedItems++;
+                  } else {
+                    if (_originalItems[j].complete) completedItems++;
+                  }
                 }
               }
               double percent = totalItems > 0 ? (completedItems / totalItems * 100) : 0;
@@ -2117,7 +2150,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                                 Icon(Icons.check_circle_outline, size: 12, color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[600])),
                                 const SizedBox(width: 3),
                                 Text(
-                                  "완료 $completedItems개 (${percent.toStringAsFixed(1)}%)",
+                                  "${_isPackingMode ? '포장' : '완료'} $completedItems개 (${percent.toStringAsFixed(1)}%)",
                                   style: TextStyle(
                                     fontSize: 11, 
                                     color: isAllDone ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.grey[400] : Colors.grey[700]),
@@ -2251,29 +2284,45 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
-  Widget _buildHeader(bool isDark) { return Container(color: isDark ? Colors.grey[900] : Colors.grey[800], height: 40, child: Row(children: [if (_isEditMode) const SizedBox(width: 35), _headerBtn("No", "no", 35), Expanded(flex: 5, child: _headerBtn("품목코드", "itemCode", null)), _headerBtn("수량", "quantity", 40), _headerBtn("완료", "complete", 50), _headerBtn("공정", "process", 50), _headerBtn("보완", "complement", 50), Expanded(flex: 3, child: _headerBtn("비고", "remarks", null))])); }
+  Widget _buildHeader(bool isDark) { return Container(color: isDark ? Colors.grey[900] : Colors.grey[800], height: 40, child: Row(children: [if (_isEditMode) const SizedBox(width: 35), _headerBtn("No", "no", 35), Expanded(flex: 5, child: _headerBtn("품목코드", "itemCode", null)), _headerBtn("수량", "quantity", 40), _headerBtn(_isPackingMode ? "포장" : "완료", "complete", 50), _headerBtn("공정", "process", 50), _headerBtn("보완", "complement", 50), Expanded(flex: 3, child: _headerBtn("비고", "remarks", null))])); }
   Widget _headerBtn(String label, String? colKey, double? width) { bool isTarget = colKey != null && _currentSortCol == colKey; bool isNoFilt = colKey == 'no' && _noFilterMode != 0; String dLabel = (colKey == 'no' && _noFilterMode == 2) ? "-No" : label; bool isFiltActive = false; if (colKey != null && ['complete', 'complement', 'process', 'quantity'].contains(colKey)) isFiltActive = _columnFilters[colKey]!.isNotEmpty || (colKey == 'quantity' && _quantitySearchQuery.isNotEmpty); else if (colKey == 'remarks') isFiltActive = _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty; return InkWell(onTap: colKey == null ? null : () => _sortBy(colKey), child: Container(width: width, alignment: Alignment.center, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Flexible(child: Text(dLabel, style: TextStyle(color: (isNoFilt || isFiltActive) ? Colors.yellow : Colors.white, fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis)), if (isTarget) Icon(_isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: Colors.yellow, size: 18)]))); }
   void _toggleComplete(ItemModel item) {
     setState(() {
-      item.complete = !item.complete;
-      if (item.complete) {
-        item.completeTime = DateTime.now().toString().substring(0, 16);
-        item.complement = "";
-        item.complementTime = "";
+      if (_isPackingMode) {
+        item.packed = !item.packed;
+        if (item.packed) {
+          item.packedTime = DateTime.now().toString().substring(0, 16);
+        } else {
+          item.packedTime = "";
+        }
       } else {
-        item.completeTime = "";
+        item.complete = !item.complete;
+        if (item.complete) {
+          item.completeTime = DateTime.now().toString().substring(0, 16);
+          item.complement = "";
+          item.complementTime = "";
+        } else {
+          item.completeTime = "";
+        }
       }
     });
     if (_autoSave) _manualSave(silent: true);
   }
 
   Future<void> _showCompleteConfirmDialog(ItemModel item) async {
-    bool isChecking = !item.complete;
+    bool isChecking = _isPackingMode ? !item.packed : !item.complete;
+    String titleText = _isPackingMode
+        ? (isChecking ? "포장 체크 확인" : "포장 체크 해제 확인")
+        : (isChecking ? "완료 체크 확인" : "완료 체크 해제 확인");
+    String contentText = _isPackingMode
+        ? "[${item.itemCode}]\n항목을 ${isChecking ? '포장 완료 처리' : '미포장 처리'}하시겠습니까?"
+        : "[${item.itemCode}]\n항목을 ${isChecking ? '완료 처리' : '미완료 처리'}하시겠습니까?";
+
     bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(isChecking ? "완료 체크 확인" : "완료 체크 해제 확인"),
-        content: Text("[${item.itemCode}]\n항목을 ${isChecking ? '완료 처리' : '미완료 처리'}하시겠습니까?"),
+        title: Text(titleText),
+        content: Text(contentText),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold))),
@@ -2291,7 +2340,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     
     return Container(
       decoration: BoxDecoration(
-        color: isSel ? Colors.blue.withOpacity(0.1) : (item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null),
+        color: isSel 
+            ? Colors.blue.withOpacity(0.1) 
+            : (_isPackingMode 
+                ? (item.packed ? (isDark ? Colors.cyan.withOpacity(0.2) : Colors.cyan[50]) : null)
+                : (item.complete ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green[50]) : null)),
         border: isHigh ? Border.all(color: Colors.blue, width: 2) : Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!))
       ),
       height: 45,
@@ -2398,7 +2451,21 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       )
     );
   }
-  Widget _cellCheck(ItemModel item, bool isDark, {VoidCallback? onTap, VoidCallback? onDoubleTap}) { return InkWell(onTap: onTap, onDoubleTap: onDoubleTap, onLongPress: _isEditMode ? null : () => _showCompleteTimeDialog(item), child: Container(width: 50, alignment: Alignment.center, color: item.complete ? Colors.green.withOpacity(0.3) : null, child: item.complete ? const Icon(Icons.check, size: 20, color: Colors.green) : null)); }
+  Widget _cellCheck(ItemModel item, bool isDark, {VoidCallback? onTap, VoidCallback? onDoubleTap}) {
+    final bool isChecked = _isPackingMode ? item.packed : item.complete;
+    final Color activeColor = _isPackingMode ? Colors.cyan : Colors.green;
+    return InkWell(
+      onTap: onTap,
+      onDoubleTap: onDoubleTap,
+      onLongPress: _isEditMode ? null : () => _showCompleteTimeDialog(item),
+      child: Container(
+        width: 50,
+        alignment: Alignment.center,
+        color: isChecked ? activeColor.withOpacity(0.3) : null,
+        child: isChecked ? Icon(Icons.check, size: 20, color: activeColor) : null,
+      ),
+    );
+  }
   Widget _cellComplement(String txt, bool isDark, VoidCallback? onTap) { if (txt.isEmpty) return InkWell(onTap: onTap, child: const SizedBox(width: 50)); Color baseColor = (txt == "부족") ? Colors.orange : Colors.red; return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 50, decoration: BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))))); }
   Widget _cellProcess(String txt, bool isDark, VoidCallback? onTap) { int? colorVal = txt.isNotEmpty ? _processColors[txt] : null; Color baseColor; if (colorVal != null) { baseColor = Color(colorVal); } else { if (txt == "완료") baseColor = Colors.purple; else if (txt == "보류") baseColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(txt)) baseColor = Colors.orange; else baseColor = Colors.blueGrey; } return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 50, decoration: txt.isEmpty ? const BoxDecoration(color: Colors.transparent) : BoxDecoration(color: baseColor.withOpacity(0.15), border: Border(left: BorderSide(color: baseColor, width: 4))), alignment: Alignment.center, child: txt.isNotEmpty ? FittedBox(child: Text(txt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))) : null)); }
   void _showError(String t, String m) { showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(t), content: Text(m), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))])); }

@@ -11,6 +11,8 @@ class ItemModel {
   String processTime;      // ❗ 공정 기록 시간
   String complementTime;   // ❗ 보완 기록 시간
   String completeTime;     // ❗ 완료 기록 시간
+  bool packed;             // ❗ 포장 완료 여부
+  String packedTime;       // ❗ 포장 기록 시간
   bool isSubheading;
   String subheadingTitle; // ❗ 해당 항목이 속한 부분제목
 
@@ -27,6 +29,8 @@ class ItemModel {
     this.processTime = "",
     this.complementTime = "",
     this.completeTime = "",
+    this.packed = false,
+    this.packedTime = "",
     this.isSubheading = false,
     this.subheadingTitle = "",
   }) {
@@ -41,6 +45,7 @@ class ItemModel {
     if (this.processTime.toLowerCase() == "null") this.processTime = "";
     if (this.complementTime.toLowerCase() == "null") this.complementTime = "";
     if (this.completeTime.toLowerCase() == "null") this.completeTime = "";
+    if (this.packedTime.toLowerCase() == "null") this.packedTime = "";
     if (this.subheadingTitle.toLowerCase() == "null") this.subheadingTitle = "";
   }
 }
