@@ -248,6 +248,63 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setStringList('filter_selectedSections', _selectedSections.toList());
   }
 
+  // ❗ 설정 백업 내보내기 (안 2)
+  Future<void> _exportSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final Map<String, dynamic> settingsMap = {};
+      final keys = prefs.getKeys();
+      for (String key in keys) {
+        settingsMap[key] = prefs.get(key);
+      }
+      final jsonString = jsonEncode(settingsMap);
+      final file = File("$_baseDownloadPath/CheckSheet/app_settings.json");
+      if (!file.parent.existsSync()) {
+        file.parent.createSync(recursive: true);
+      }
+      await file.writeAsString(jsonString, flush: true);
+      _showSnackBar("설정이 백업 파일로 내보내졌습니다.");
+    } catch (e) {
+      _showError("백업 실패", "설정을 내보내는 중 오류가 발생했습니다: $e");
+    }
+  }
+
+  // ❗ 설정 복구 불러오기 (안 2)
+  Future<void> _importSettings() async {
+    try {
+      final file = File("$_baseDownloadPath/CheckSheet/app_settings.json");
+      if (!await file.exists()) {
+        _showError("오류", "백업 파일이 존재하지 않습니다.\n경로: /Download/CheckSheet/app_settings.json");
+        return;
+      }
+      final jsonString = await file.readAsString();
+      final Map<String, dynamic> settingsMap = jsonDecode(jsonString);
+      final prefs = await SharedPreferences.getInstance();
+      
+      // 기존 설정 완전히 클리어 후 복원
+      await prefs.clear();
+      
+      for (String key in settingsMap.keys) {
+        final val = settingsMap[key];
+        if (val is String) {
+          await prefs.setString(key, val);
+        } else if (val is bool) {
+          await prefs.setBool(key, val);
+        } else if (val is int) {
+          await prefs.setInt(key, val);
+        } else if (val is double) {
+          await prefs.setDouble(key, val);
+        } else if (val is List) {
+          await prefs.setStringList(key, val.map((e) => e.toString()).toList());
+        }
+      }
+      _showSnackBar("설정이 복구되었습니다. 리스트를 다시 불러옵니다.");
+      await _loadSettings();
+    } catch (e) {
+      _showError("복구 실패", "설정을 복구하는 중 오류가 발생했습니다: $e");
+    }
+  }
+
   Future<void> _loadExcelData(String path, {bool keepFilters = false}) async {
     setState(() => _isLoading = true);
     try {
@@ -940,7 +997,40 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             ]),
           ),
           const SizedBox(height: 20),
-          ElevatedButton.icon(onPressed: () async { String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text); if (err == null) { List<String> shares = await _smbService.listShares(); _showError("성공", "✅ 접속 성공!\n\n[공유 목록]\n${shares.join('\n')}"); } else _showError("오류", "접속 실패: $err"); }, icon: const Icon(Icons.check_circle_outline), label: const Text("접속 테스트"))
+          ElevatedButton.icon(onPressed: () async { String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text); if (err == null) { List<String> shares = await _smbService.listShares(); _showError("성공", "✅ 접속 성공!\n\n[공유 목록]\n${shares.join('\n')}"); } else _showError("오류", "접속 실패: $err"); }, icon: const Icon(Icons.check_circle_outline), label: const Text("접속 테스트")),
+          const SizedBox(height: 15),
+          const Divider(),
+          const SizedBox(height: 5),
+          const Align(alignment: Alignment.centerLeft, child: Text("설정 백업 및 복구 (Download/CheckSheet/app_settings.json)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey))),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[600], foregroundColor: Colors.white),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _exportSettings();
+                  },
+                  icon: const Icon(Icons.upload, size: 16),
+                  label: const Text("설정 내보내기", style: TextStyle(fontSize: 12)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[800], foregroundColor: Colors.white),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _importSettings();
+                  },
+                  icon: const Icon(Icons.download, size: 16),
+                  label: const Text("설정 불러오기", style: TextStyle(fontSize: 12)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
         ])),
         Column(children: [
           Expanded(child: ReorderableListView(
@@ -1893,10 +1983,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           TextButton(onPressed: () { setState(() { _originalItems = List.from(_preReorderItems); _isReorderMode = false; }); _applyFilterAndSort(); }, child: const Text("취소", style: TextStyle(color: Colors.white))),
           TextButton(onPressed: () => setState(() => _isReorderMode = false), child: const Text("완료", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
         ] : _isEditMode ? [
-          TextButton(onPressed: _selectAllVisible, child: const Text("전체선택", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-          TextButton(onPressed: _selectSubItems, child: const Text("하위선택", style: TextStyle(color: Colors.lightGreenAccent, fontWeight: FontWeight.bold))),
-          TextButton(onPressed: _deselectAll, child: const Text("전체해제", style: TextStyle(color: Colors.white))),
-          TextButton(onPressed: _showBatchInputDialog, child: const Text("일괄입력", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
+          TextButton(
+            onPressed: _selectAllVisible, 
+            child: const FittedBox(child: Text("전체\n선택", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
+          ),
+          TextButton(
+            onPressed: _selectSubItems, 
+            child: const FittedBox(child: Text("하위\n선택", textAlign: TextAlign.center, style: TextStyle(color: Colors.lightGreenAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
+          ),
+          TextButton(
+            onPressed: _deselectAll, 
+            child: const FittedBox(child: Text("전체\n해제", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 11, height: 1.2)))
+          ),
+          TextButton(
+            onPressed: _showBatchInputDialog, 
+            child: const FittedBox(child: Text("일괄\n입력", textAlign: TextAlign.center, style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
+          ),
           const VerticalDivider(color: Colors.white24, indent: 15, endIndent: 15),
           TextButton(onPressed: () {
             setState(() {
@@ -1908,9 +2010,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               _isEditMode = false; // ❗ 모드 자동 종료
             });
             _applyFilterAndSort(); // ❗ 시스템 필터 로직을 통해 부분제목 포함하여 다시 그림
-          }, child: const Text("선택필터", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
-          TextButton(onPressed: _deleteSelectedRows, child: Text("삭제(${_selectedIndices.length})", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
-          TextButton(onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); _applyFilterAndSort(); }), child: const Text("취소", style: TextStyle(color: Colors.white))),
+          }, child: const FittedBox(child: Text("선택\n필터", textAlign: TextAlign.center, style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))),
+          TextButton(
+            onPressed: _deleteSelectedRows, 
+            child: FittedBox(child: Text("삭제\n(${_selectedIndices.length})", textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
+          ),
+          TextButton(
+            onPressed: () => setState(() { _isEditMode = false; _selectedIndices.clear(); _applyFilterAndSort(); }), 
+            child: const FittedBox(child: Text("취소", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 11, height: 1.2)))
+          ),
         ] : [
           if (_isSorted || _selectedSections.isNotEmpty || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _quantitySearchQuery.isNotEmpty || _isSubheadingViewMode || _noFilterMode != 0 || _searchQuery.isNotEmpty || _columnFilters.values.any((s) => s.isNotEmpty) || _isSelectionFiltered) 
             TextButton(onPressed: _resetSort, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
