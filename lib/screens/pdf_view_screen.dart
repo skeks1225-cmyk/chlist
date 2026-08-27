@@ -379,7 +379,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       onPopInvokedWithResult: (didPop, result) { if (didPop) return; Navigator.pop(context, item.itemCode); },
       child: Scaffold(
         appBar: AppBar(
-          toolbarHeight: item.subheadingTitle.isNotEmpty ? 80 : kToolbarHeight,
           title: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             if (item.subheadingTitle.isNotEmpty) ...[
               // ❗ 부분제목 3번째 언더바 기준 두 줄 분리 (메인 UI와 동일)
@@ -396,13 +395,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 ]);
               }),
             ],
-            Row(
-              children: [
-                Text(item.itemCode, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(width: 8),
-                Text("(수량: ${item.quantity})", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.yellowAccent)),
-              ],
-            )
           ]),
           backgroundColor: isDark ? Colors.black : Colors.blueGrey[900], foregroundColor: Colors.white,
           leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context, item.itemCode)),
@@ -678,9 +670,43 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                             foregroundColor: hasPrev ? (isDark ? Colors.white : Colors.blueGrey[900]) : Colors.grey
                           )
                         ),
-                        Text(
-                          "${_currentIndex + 1} / ${widget.filteredItems.length}", 
-                          style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      item.itemCode,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    "(수량: ${item.quantity})",
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark ? Colors.yellowAccent : Colors.orange[800],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                "${_currentIndex + 1} / ${widget.filteredItems.length}", 
+                                style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 14, fontWeight: FontWeight.bold)
+                              ),
+                            ],
+                          ),
                         ),
                         ElevatedButton.icon(
                           onPressed: hasNext ? _next : null, 
