@@ -446,7 +446,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       }
 
       if (_showUnfinishedOnly) {
-        sectionItems = sectionItems.where((item) => !item.complete).toList();
+        sectionItems = sectionItems.where((item) => _isPackingMode ? !item.packed : !item.complete).toList();
       }
 
       if (_isSelectionFiltered) {
@@ -1345,13 +1345,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Widget _buildSummaryWidget(bool isDark) {
     if (_originalItems.isEmpty) return const SizedBox.shrink();
-    final dataItems = _originalItems.where((i) => !i.isSubheading);
+    // ❗ 포장모드인 경우에는 displayNo에 하이픈(-)이 포함된 하위 항목을 통계 모수에서 완전 제외
+    final dataItems = _originalItems.where((i) => !i.isSubheading && (!_isPackingMode || !i.displayNo.contains('-')));
     int total = dataItems.length;
     int completed = _isPackingMode ? dataItems.where((i) => i.packed).length : dataItems.where((i) => i.complete).length;
     int shortage = dataItems.where((i) => i.complement == "부족").length;
     int rework = dataItems.where((i) => i.complement == "재작업").length;
 
-    final fItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1);
+    // ❗ 필터된 목록도 동일하게 하이픈(-) 항목 제외
+    final fItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1 && (!_isPackingMode || !i.displayNo.contains('-')));
     int fTotal = fItems.length;
     int fComp = _isPackingMode ? fItems.where((i) => i.packed).length : fItems.where((i) => i.complete).length;
     int fShortage = fItems.where((i) => i.complement == "부족").length;
@@ -2193,6 +2195,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               if (startIdx != -1) {
                 for (int j = startIdx + 1; j < _originalItems.length; j++) {
                   if (_originalItems[j].isSubheading) break;
+                  
+                  // ❗ 포장모드인 경우 displayNo에 '-'가 붙은 하위 항목은 모수 및 완료 통계에서 완전히 제외
+                  if (_isPackingMode && _originalItems[j].displayNo.contains('-')) {
+                    continue;
+                  }
+                  
                   totalItems++;
                   if (_isPackingMode) {
                     if (_originalItems[j].packed) completedItems++;
@@ -2228,7 +2236,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), 
                   alignment: Alignment.centerLeft, 
                   decoration: BoxDecoration(
-                    color: isAllDone ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green[100]) : (_selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300])),
+                    color: isAllDone 
+                      ? (_isPackingMode
+                        ? (isDark ? Colors.cyan.withOpacity(0.2) : Colors.cyan[100]) // ❗ 포장모드 100% 완료 시 하늘색
+                        : (isDark ? Colors.green.withOpacity(0.15) : Colors.green[100])) // ❗ 완료모드 100% 완료 시 녹색
+                      : (_selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300])),
                     border: Border(bottom: BorderSide(color: isDark ? Colors.white24 : Colors.grey[400]!, width: 0.5)),
                   ),
                   child: Row(children: [
