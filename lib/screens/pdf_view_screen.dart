@@ -379,8 +379,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       onPopInvokedWithResult: (didPop, result) { if (didPop) return; Navigator.pop(context, item.itemCode); },
       child: Scaffold(
         appBar: AppBar(
-          title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            if (item.subheadingTitle.isNotEmpty) Text(item.subheadingTitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.white70), overflow: TextOverflow.ellipsis),
+          toolbarHeight: item.subheadingTitle.isNotEmpty ? 80 : kToolbarHeight,
+          title: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            if (item.subheadingTitle.isNotEmpty) ...[
+              // ❗ 부분제목 3번째 언더바 기준 두 줄 분리 (메인 UI와 동일)
+              Builder(builder: (_) {
+                final parts = item.subheadingTitle.split('_');
+                final line1 = parts.length > 3 ? parts.sublist(0, 3).join('_') : item.subheadingTitle;
+                final line2 = parts.length > 3 ? parts.sublist(3).join('_') : "";
+                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(line1, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue), overflow: TextOverflow.ellipsis),
+                  if (line2.isNotEmpty) Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Text(line2, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue), overflow: TextOverflow.ellipsis),
+                  ),
+                ]);
+              }),
+            ],
             Row(
               children: [
                 Text(item.itemCode, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
