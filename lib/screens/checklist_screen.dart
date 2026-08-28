@@ -937,6 +937,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final ipController = TextEditingController(text: prefs.getString('smbIp')); final userController = TextEditingController(text: prefs.getString('smbUser')); final passController = TextEditingController(text: prefs.getString('smbPass'));
     final newProcessController = TextEditingController(); bool obscurePass = true; 
     final List<Color> palette = [Colors.blueGrey, Colors.blue, Colors.indigo, Colors.teal, Colors.green, Colors.lightGreen, Colors.lime, Colors.yellow, Colors.amber, Colors.orange, Colors.deepOrange, Colors.red, Colors.pink, Colors.purple, Colors.deepPurple];
+    int? _newProcessColor;
     showDialog(context: context, builder: (ctx) => DefaultTabController(length: 2, child: StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
       title: const TabBar(labelColor: Colors.blue, unselectedLabelColor: Colors.grey, tabs: [Tab(icon: Icon(Icons.dns), text: "연결 설정"), Tab(icon: Icon(Icons.settings_suggest), text: "공정 관리")]),
       content: SizedBox(width: double.maxFinite, height: 450, child: TabBarView(children: [
@@ -1183,18 +1184,206 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               if (newProcessController.text.isNotEmpty) {
                 setDialogState(() { 
                   // ❗ 신규 공정은 항상 '완료' 바로 위에 추가
+                  final String newProc = newProcessController.text;
                   int insertIdx = _processList.indexOf("완료");
-                  if (insertIdx != -1) _processList.insert(insertIdx, newProcessController.text);
-                  else _processList.add(newProcessController.text);
+                  if (insertIdx != -1) _processList.insert(insertIdx, newProc);
+                  else _processList.add(newProc);
+                  if (_newProcessColor != null) {
+                    _processColors[newProc] = _newProcessColor!;
+                  }
                   newProcessController.clear(); 
+                  _newProcessColor = null;
                 });
               }
             }), 
-            IconButton(icon: const Icon(Icons.color_lens_outlined, color: Colors.orange, size: 30), onPressed: () { setDialogState(() => _processColors.clear()); })
+            IconButton(
+              icon: Icon(Icons.color_lens_outlined, color: _newProcessColor != null ? Color(_newProcessColor!) : Colors.orange, size: 30), 
+              onPressed: () { 
+                showDialog(
+                  context: context, 
+                  builder: (pCtx) => StatefulBuilder(
+                    builder: (context, setPickerState) => AlertDialog(
+                      title: const Text("추가할 공정 색상 선택"), 
+                      content: Wrap(
+                        spacing: 8, runSpacing: 8, 
+                        children: palette.map((c) => GestureDetector(
+                          onTap: () { 
+                            setDialogState(() {
+                              _newProcessColor = c.value;
+                            });
+                            Navigator.pop(pCtx); 
+                          }, 
+                          child: Container(
+                            width: 40, 
+                            height: 40, 
+                            decoration: BoxDecoration(
+                              color: c, 
+                              shape: BoxShape.circle, 
+                              border: Border.all(color: Colors.white, width: 2)
+                            )
+                          )
+                        )).toList()
+                      )
+                    )
+                  )
+                );
+              }
+            )
           ]),
         ]),
       ])),
       actions: [
+        TextButton(
+          onPressed: () {
+            // 편집 팝업 열기
+            showDialog(
+              context: context,
+              builder: (editCtx) {
+                List<String> editProcs = _processList.where((p) => p != "완료").toList();
+                List<String> selectedProcs = [];
+                return StatefulBuilder(
+                  builder: (context, setEditState) {
+                    return AlertDialog(
+                      title: const Text("공정 일괄 편집"),
+                      content: SizedBox(
+                        width: double.maxFinite,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                TextButton.icon(
+                                  icon: const Icon(Icons.check_box),
+                                  label: const Text("전체 선택"),
+                                  onPressed: () {
+                                    setEditState(() {
+                                      selectedProcs = List.from(editProcs);
+                                    });
+                                  },
+                                ),
+                                TextButton.icon(
+                                  icon: const Icon(Icons.check_box_outline_blank),
+                                  label: const Text("전체 해제"),
+                                  onPressed: () {
+                                    setEditState(() {
+                                      selectedProcs.clear();
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                            const Divider(),
+                            Flexible(
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  children: editProcs.map((p) {
+                                    final bool isChecked = selectedProcs.contains(p);
+                                    Color dotColor;
+                                    if (_processColors[p] != null) {
+                                      dotColor = Color(_processColors[p]!);
+                                    } else {
+                                      if (p == "완료") dotColor = Colors.purple;
+                                      else if (p == "보류") dotColor = Colors.red;
+                                      else if (["용접", "도장", "도금", "인쇄"].contains(p)) dotColor = Colors.orange;
+                                      else dotColor = Colors.blueGrey;
+                                    }
+                                    return CheckboxListTile(
+                                      title: Row(
+                                        children: [
+                                          Container(
+                                            width: 16,
+                                            height: 16,
+                                            decoration: BoxDecoration(
+                                              color: dotColor,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(p),
+                                        ],
+                                      ),
+                                      value: isChecked,
+                                      onChanged: (val) {
+                                        setEditState(() {
+                                          if (val == true) {
+                                            selectedProcs.add(p);
+                                          } else {
+                                            selectedProcs.remove(p);
+                                          }
+                                        });
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            if (selectedProcs.isEmpty) return;
+                            showDialog(
+                              context: context,
+                              builder: (pCtx) => StatefulBuilder(
+                                builder: (context, setPickerState) => AlertDialog(
+                                  title: const Text("일괄 변경할 색상 선택"),
+                                  content: Wrap(
+                                    spacing: 8, runSpacing: 8,
+                                    children: palette.map((c) => GestureDetector(
+                                      onTap: () {
+                                        setDialogState(() {
+                                          for (var p in selectedProcs) {
+                                            _processColors[p] = c.value;
+                                          }
+                                        });
+                                        Navigator.pop(pCtx);
+                                        Navigator.pop(editCtx);
+                                      },
+                                      child: Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: c,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.white, width: 2),
+                                        ),
+                                      ),
+                                    )).toList(),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                          child: const Text("색상 변경"),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            if (selectedProcs.isEmpty) return;
+                            setDialogState(() {
+                              for (var p in selectedProcs) {
+                                _processColors.remove(p);
+                              }
+                            });
+                            Navigator.pop(editCtx);
+                          },
+                          child: const Text("색상 초기화", style: TextStyle(color: Colors.red)),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(editCtx),
+                          child: const Text("닫기"),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+            );
+          },
+          child: const Text("편집"),
+        ),
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")), 
         TextButton(
           onPressed: () async { 

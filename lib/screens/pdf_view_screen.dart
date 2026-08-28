@@ -184,18 +184,32 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   void _showComplementDialog(ItemModel item) {
-    String lastRecord = "마지막 기록: 없음";
+    String lastRecord = "입력시간 : 없음";
     if (item.complementTime.isNotEmpty) {
-      lastRecord = "마지막 기록: ${item.complement}: ${item.complementTime}";
+      lastRecord = "입력시간 : ${item.complementTime}";
     }
 
     showDialog(context: context, builder: (ctx) => AlertDialog(
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+          FittedBox(fit: BoxFit.scaleDown, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text("보완 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+              if (item.complement.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(color: (item.complement == "부족") ? Colors.orange : Colors.red, borderRadius: BorderRadius.circular(4)),
+                  child: Text(item.complement, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                ),
+              ]
+            ],
+          ),
           const SizedBox(height: 4),
-          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)),
+          Text(lastRecord, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.blueGrey)),
         ],
       ),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -228,9 +242,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   void _showProcessDialog(ItemModel item) {
-    String lastRecord = "마지막 기록: 없음";
+    String lastRecord = "입력시간 : 없음";
     if (item.processTime.isNotEmpty) {
-      lastRecord = "마지막 기록: ${item.process}: ${item.processTime}";
+      lastRecord = "입력시간 : ${item.processTime}";
     }
 
     List<String> sortedDisplayList = List.from(widget.processList);
@@ -241,9 +255,32 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+          FittedBox(fit: BoxFit.scaleDown, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text("공정 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+              if (item.process.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: (() {
+                      int? colorVal = widget.processColors[item.process];
+                      if (colorVal != null) return Color(colorVal);
+                      if (item.process == "완료") return Colors.purple;
+                      if (item.process == "보류") return Colors.red;
+                      return Colors.blueGrey;
+                    })(),
+                    borderRadius: BorderRadius.circular(4)
+                  ),
+                  child: Text(item.process, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                ),
+              ]
+            ],
+          ),
           const SizedBox(height: 4),
-          Text(lastRecord, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.blue)),
+          Text(lastRecord, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.blueGrey)),
         ],
       ),
       content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
