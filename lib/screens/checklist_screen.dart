@@ -718,7 +718,83 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             Row(children: [const Text("로직: "), Radio<String>(value: "AND", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)), const Text("AND"), Radio<String>(value: "OR", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)), const Text("OR")]),
           ] else ...[
             Row(children: [Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.addAll(options.where((o) => col == 'process' || col == 'quantity' || validOptions.contains(o)))), child: const Text("전체 선택", style: TextStyle(fontSize: 12)))), const SizedBox(width: 8), Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.clear()), child: const Text("전체 해제", style: TextStyle(fontSize: 12))))]),
-            const SizedBox(height: 10), if (col == 'quantity') ...[const Text("수량 직접 입력", style: TextStyle(fontWeight: FontWeight.bold)), TextField(controller: quantityController, keyboardType: TextInputType.number), const SizedBox(height: 15)],
+            const SizedBox(height: 10), 
+            if (col == 'process') ...[
+              const Text("색상 필터 (동일 색상 일괄 선택)", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              (() {
+                // 현재 옵션들(공정) 중 실제 매핑된 색상값 수집
+                final Map<int, List<String>> colorToProcesses = {};
+                for (var opt in options) {
+                  if (opt == "(빈칸)") continue;
+                  int? colorVal = _processColors[opt];
+                  int finalColorInt;
+                  if (colorVal != null) {
+                    finalColorInt = colorVal;
+                  } else {
+                    if (opt == "완료") finalColorInt = Colors.purple.value;
+                    else if (opt == "보류") finalColorInt = Colors.red.value;
+                    else if (["용접", "도장", "도금", "인쇄"].contains(opt)) finalColorInt = Colors.orange.value;
+                    else finalColorInt = Colors.blueGrey.value;
+                  }
+                  colorToProcesses.putIfAbsent(finalColorInt, () => []).add(opt);
+                }
+
+                if (colorToProcesses.isEmpty) return const SizedBox.shrink();
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: colorToProcesses.entries.map((entry) {
+                      final int colorVal = entry.key;
+                      final List<String> relatedProcs = entry.value;
+                      final Color displayColor = Color(colorVal);
+                      
+                      // 관련 공정이 모두 체크되어 있는지 여부
+                      final bool isAllSelected = relatedProcs.every((p) => localFilters.contains(p));
+                      
+                      return GestureDetector(
+                        onTap: () {
+                          setModalState(() {
+                            if (isAllSelected) {
+                              // 모두 체크되어 있으면 관련 공정 전체 체크 해제
+                              for (var p in relatedProcs) {
+                                localFilters.remove(p);
+                              }
+                            } else {
+                              // 그렇지 않으면 관련 공정 전체 체크
+                              localFilters.addAll(relatedProcs);
+                            }
+                          });
+                        },
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: displayColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isAllSelected ? Colors.yellowAccent : Colors.white24,
+                              width: isAllSelected ? 3 : 1,
+                            ),
+                            boxShadow: [
+                              if (isAllSelected)
+                                BoxShadow(color: displayColor.withOpacity(0.5), blurRadius: 6, spreadRadius: 1)
+                            ]
+                          ),
+                          child: isAllSelected
+                              ? const Icon(Icons.check, size: 18, color: Colors.white)
+                              : null,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                );
+              })(),
+            ],
+            if (col == 'quantity') ...[const Text("수량 직접 입력", style: TextStyle(fontWeight: FontWeight.bold)), TextField(controller: quantityController, keyboardType: TextInputType.number), const SizedBox(height: 15)],
             const Text("항목 선택", style: TextStyle(fontWeight: FontWeight.bold)), _buildFilterGrid(options, localFilters, col, setModalState, validOptions: (col == 'complete' || col == 'complement') ? validOptions : null),
           ],
         ],
@@ -1061,7 +1137,39 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         Color dotColor;
                         if (_processColors[_processList[i]] != null) dotColor = Color(_processColors[_processList[i]]!);
                         else { String p = _processList[i]; if (p == "완료") dotColor = Colors.purple; else if (p == "보류") dotColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(p)) dotColor = Colors.orange; else dotColor = Colors.blueGrey; }
-                        return GestureDetector(onTap: () { showDialog(context: context, builder: (pCtx) => AlertDialog(title: Text("${_processList[i]} 색상 선택"), content: Wrap(spacing: 8, runSpacing: 8, children: palette.map((c) => GestureDetector(onTap: () { setDialogState(() => _processColors[_processList[i]] = c.value); Navigator.pop(pCtx); }, child: Container(width: 40, height: 40, decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2))))).toList()))); }, child: Container(width: 20, height: 20, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)));
+                        return GestureDetector(
+                          onTap: () { 
+                            showDialog(
+                              context: context, 
+                              builder: (pCtx) => StatefulBuilder(
+                                builder: (context, setPickerState) => AlertDialog(
+                                  title: Text("${_processList[i]} 색상 선택"), 
+                                  content: Wrap(
+                                    spacing: 8, runSpacing: 8, 
+                                    children: palette.map((c) => GestureDetector(
+                                      onTap: () { 
+                                        setDialogState(() {
+                                          _processColors[_processList[i]] = c.value;
+                                        });
+                                        Navigator.pop(pCtx); 
+                                      }, 
+                                      child: Container(
+                                        width: 40, 
+                                        height: 40, 
+                                        decoration: BoxDecoration(
+                                          color: c, 
+                                          shape: BoxShape.circle, 
+                                          border: Border.all(color: Colors.white, width: 2)
+                                        )
+                                      )
+                                    )).toList()
+                                  )
+                                )
+                              )
+                            ); 
+                          }, 
+                          child: Container(width: 20, height: 20, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle))
+                        );
                       })(),
                     ]), 
                   title: Text(_processList[i], style: TextStyle(fontSize: 13, color: _processList[i] == "완료" ? Colors.purple : null, fontWeight: _processList[i] == "완료" ? FontWeight.bold : null)), 
