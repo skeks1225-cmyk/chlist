@@ -17,6 +17,7 @@ class PdfViewerScreen extends StatefulWidget {
   final Map<String, int> processColors; // ❗ 공정별 색상 정보
   final int completeMode; // ❗ 완료 체크 모드 (0: 클릭, 1: 더블클릭, 2: 확인창)
   final double swipeSensitivity; // ❗ 슬라이드 감도 (0.05 ~ 0.50)
+  final double pdfDoubleTapZoom; // ❗ 더블탭 확대 배율 (기본 3.0)
   final bool isPackingMode; // ❗ 포장모드 여부 추가
   final Function(ItemModel, String) onStatusUpdate;
 
@@ -31,6 +32,7 @@ class PdfViewerScreen extends StatefulWidget {
     required this.processColors,
     required this.completeMode,
     required this.swipeSensitivity,
+    this.pdfDoubleTapZoom = 3.0,
     required this.isPackingMode,
     required this.onStatusUpdate,
   });
@@ -529,10 +531,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                             // 확대 상태 → 화면 중앙을 중심으로 FIT 배율로 부드럽게 축소
                                             _pdfController.setZoom(docCenter, fitZoom);
                                           } else {
-                                            debugPrint("DoubleTap - Action: Zoom In (3x)");
                                             final tapPos = _doubleTapPosition ?? globalCenter;
                                             final docTapPos = _pdfController.globalToDocument(tapPos) ?? Offset.zero;
-                                            _pdfController.setZoom(docTapPos, 3.0);
+                                            _pdfController.setZoom(docTapPos, widget.pdfDoubleTapZoom);
                                           }
                                         },
                                       )

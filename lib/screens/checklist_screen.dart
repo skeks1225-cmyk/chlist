@@ -36,6 +36,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   double _scannerZoom = 0.0; // ❗ 스캐너 기본 줌 (0.0=1x, 1.0=3x)
   int _qrScanActionMode = 0; // ❗ QR 인식 시 동작 모드 (0: 리스트 검색, 1: 뷰어 바로보기)
   double _swipeSensitivity = 0.2; // ❗ 슬라이드 감도 (기본 20%)
+  double _pdfDoubleTapZoom = 3.0; // ❗ PDF 더블탭 확대 배율 (기본 3.0)
 
   String _currentSortCol = ""; 
   bool _isAscending = true;   
@@ -169,6 +170,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0;
       _qrScanActionMode = prefs.getInt('qrScanActionMode') ?? 0;
       _swipeSensitivity = prefs.getDouble('swipeSensitivity') ?? 0.2;
+      _pdfDoubleTapZoom = prefs.getDouble('pdfDoubleTapZoom') ?? 3.0;
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -226,6 +228,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setDouble('scannerZoom', _scannerZoom);
     await prefs.setInt('qrScanActionMode', _qrScanActionMode);
     await prefs.setDouble('swipeSensitivity', _swipeSensitivity);
+    await prefs.setDouble('pdfDoubleTapZoom', _pdfDoubleTapZoom);
     await prefs.setStringList('processList', _processList);
     await prefs.setString('processColors', jsonEncode(_processColors));
 
@@ -1091,6 +1094,38 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               ]),
             ]),
           ),
+          const SizedBox(height: 10),
+          // ❗ PDF 더블탭 확대 배율 설정 추가
+          Align(alignment: Alignment.centerLeft, child: Text("PDF 뷰어 더블탭 확대 배율 (${_pdfDoubleTapZoom.toStringAsFixed(1)}배)", style: const TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(height: 5),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blueGrey.withOpacity(0.2))),
+            child: Column(children: [
+              Row(children: [
+                const Icon(Icons.zoom_in_map, size: 20, color: Colors.blue),
+                const SizedBox(width: 10),
+                Expanded(child: Slider(
+                  value: _pdfDoubleTapZoom, min: 1.5, max: 6.0, 
+                  onChanged: (v) => setDialogState(() => _pdfDoubleTapZoom = (v * 10).round() / 10),
+                )),
+                Text("${_pdfDoubleTapZoom.toStringAsFixed(1)}배", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+              ]),
+              const SizedBox(height: 5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _pdfZoomQuickBtnDialog("1.5", 1.5, setDialogState),
+                  _pdfZoomQuickBtnDialog("2.0", 2.0, setDialogState),
+                  _pdfZoomQuickBtnDialog("2.5", 2.5, setDialogState),
+                  _pdfZoomQuickBtnDialog("3.0", 3.0, setDialogState),
+                  _pdfZoomQuickBtnDialog("4.0", 4.0, setDialogState),
+                  _pdfZoomQuickBtnDialog("5.0", 5.0, setDialogState),
+                  _pdfZoomQuickBtnDialog("6.0", 6.0, setDialogState),
+                ],
+              ),
+            ]),
+          ),
           const SizedBox(height: 20),
           ElevatedButton.icon(onPressed: () async { String? err = await _smbService.testConnection(ipController.text, userController.text, passController.text); if (err == null) { List<String> shares = await _smbService.listShares(); _showError("성공", "✅ 접속 성공!\n\n[공유 목록]\n${shares.join('\n')}"); } else _showError("오류", "접속 실패: $err"); }, icon: const Icon(Icons.check_circle_outline), label: const Text("접속 테스트")),
           const SizedBox(height: 15),
@@ -1750,7 +1785,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _handleItemClick(ItemModel item) async {
     _forgetFocus(); if (_autoSave) _manualSave(silent: true); if (_pdfFolderPath.startsWith("smb://")) { setState(() => _isLoading = true); try { String shareWithRest = _pdfFolderPath.replaceFirst("smb://", ""); int firstSlash = shareWithRest.indexOf("/"); String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest; String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : ""; String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf"; await _smbService.downloadFile(share, remoteFilePath, "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf"); } catch (_) {} finally { setState(() => _isLoading = false); } }
-    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, completeMode: _completeMode, swipeSensitivity: _swipeSensitivity, isPackingMode: _isPackingMode, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { if (_isPackingMode) { it.packed = !it.packed; if (it.packed) { it.packedTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.packedTime = ""; } } else { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
+    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, completeMode: _completeMode, swipeSensitivity: _swipeSensitivity, pdfDoubleTapZoom: _pdfDoubleTapZoom, isPackingMode: _isPackingMode, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { if (_isPackingMode) { it.packed = !it.packed; if (it.packed) { it.packedTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.packedTime = ""; } } else { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
     if (lastItemCode != null) { 
       // ❗ 추적 메모리에 기록
       setState(() {
@@ -2973,6 +3008,30 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       onTap: () => setDialogState(() => _scannerZoom = value),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isSelected ? Colors.blue : Colors.grey.withOpacity(0.3)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: isSelected ? Colors.white : Colors.black87,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ❗ 설정 다이얼로그용 PDF 뷰어 줌 퀵 버튼 헬퍼
+  Widget _pdfZoomQuickBtnDialog(String label, double value, StateSetter setDialogState) {
+    bool isSelected = (_pdfDoubleTapZoom - value).abs() < 0.05;
+    return GestureDetector(
+      onTap: () => setDialogState(() => _pdfDoubleTapZoom = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected ? Colors.blue : Colors.white,
           borderRadius: BorderRadius.circular(8),
