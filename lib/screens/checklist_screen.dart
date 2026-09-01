@@ -413,7 +413,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         if (selectedValues.isNotEmpty || (col == 'quantity' && _quantitySearchQuery.isNotEmpty)) {
           sectionItems = sectionItems.where((item) {
             String val = "";
-            if (col == 'complete') val = item.complete ? "완료" : "미완료";
+            if (col == 'complete') {
+              val = (_isPackingMode ? item.packed : item.complete) 
+                  ? (_isPackingMode ? "포장" : "완료") 
+                  : (_isPackingMode ? "미포장" : "미완료");
+            }
             else if (col == 'complement') val = item.complement.isEmpty ? "(빈칸)" : item.complement;
             else if (col == 'process') val = item.process.isEmpty ? "(빈칸)" : item.process;
             else if (col == 'quantity') val = item.quantity;
@@ -503,7 +507,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           case 'no': cmp = _compareDisplayNo(a.displayNo, b.displayNo); break;
           case 'itemCode': cmp = a.itemCode.compareTo(b.itemCode); break;
           case 'quantity': cmp = (int.tryParse(a.quantity) ?? 0).compareTo(int.tryParse(b.quantity) ?? 0); break;
-          case 'complete': cmp = (a.complete ? 1 : 0).compareTo(b.complete ? 1 : 0); break;
+          case 'complete': cmp = ((_isPackingMode ? a.packed : a.complete) ? 1 : 0).compareTo((_isPackingMode ? b.packed : b.complete) ? 1 : 0); break;
           case 'complement': cmp = a.complement.compareTo(b.complement); break;
           case 'process': cmp = a.process.compareTo(b.process); break;
           case 'remarks': cmp = a.remarks.compareTo(b.remarks); break;
@@ -540,7 +544,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _searchController.clear();
       _isSelectionFiltered = false;
       _selectedIndices.clear();
-      _isPackingMode = false; // ❗ 필터 리셋 시 포장모드도 해제
+      // ❗ _isPackingMode는 유지 (각 모드 내에서 필터 리셋 동작)
     });
     _applyFilterAndSort();
   }
@@ -577,6 +581,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     Set<String> validSet = {};
     for (var item in _originalItems) {
       if (item.isSubheading) continue;
+      // ❗ 포장모드 시 하이픈(-) 포함 하위 항목은 유효 옵션 계산에서 제외
+      if (_isPackingMode && item.displayNo.contains('-')) continue;
+
       if (_selectedSections.isNotEmpty) {
         String? targetHeader;
         for(var i in _originalItems) {
@@ -590,7 +597,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         final targetStr = item.itemCode.toLowerCase();
         if (!queryParts.every((part) => targetStr.contains(part))) continue;
       }
-      if (_showUnfinishedOnly && item.complete) continue;
+      if (_showUnfinishedOnly && (_isPackingMode ? item.packed : item.complete)) continue;
       if (_noFilterMode == 1 && item.no.isEmpty) continue;
       if (_noFilterMode == 2) {
         if (!item.displayNo.contains('-')) {
@@ -617,7 +624,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         if (c == col) return; 
         if (selectedValues.isNotEmpty || (c == 'quantity' && _quantitySearchQuery.isNotEmpty)) {
           String val = "";
-          if (c == 'complete') val = item.complete ? "완료" : "미완료";
+          if (c == 'complete') {
+            val = (_isPackingMode ? item.packed : item.complete) 
+                ? (_isPackingMode ? "포장" : "완료") 
+                : (_isPackingMode ? "미포장" : "미완료");
+          }
           else if (c == 'complement') val = item.complement.isEmpty ? "(빈칸)" : item.complement;
           else if (c == 'process') val = item.process.isEmpty ? "(빈칸)" : item.process;
           else if (c == 'quantity') val = item.quantity;
@@ -632,7 +643,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       });
       if (!passOtherFilters) continue;
       String val = "";
-      if (col == 'complete') val = item.complete ? "완료" : "미완료";
+      if (col == 'complete') {
+        val = (_isPackingMode ? item.packed : item.complete) 
+            ? (_isPackingMode ? "포장" : "완료") 
+            : (_isPackingMode ? "미포장" : "미완료");
+      }
       else if (col == 'complement') val = item.complement.isEmpty ? "(빈칸)" : item.complement;
       else if (col == 'process') val = item.process.isEmpty ? "(빈칸)" : item.process;
       else if (col == 'quantity') val = item.quantity;
@@ -645,7 +660,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     List<String> options = [];
     String titleText = "";
     Set<String> validOptions = _getValidOptionsForColumn(col);
-    if (col == 'complete') { options = ["완료", "미완료"]; titleText = "완료 설정"; }
+    if (col == 'complete') { 
+      options = _isPackingMode ? ["포장", "미포장"] : ["완료", "미완료"]; 
+      titleText = _isPackingMode ? "포장 설정" : "완료 설정"; 
+    }
     else if (col == 'complement') { options = ["부족", "재작업", "(빈칸)"]; titleText = "보완 설정"; }
     else if (col == 'process') { 
       // ❗ 공정 필터 순서: (빈칸) -> 설정 > 공정관리 순서 -> 미등록 공정(알파벳순) -> 완료(항상 마지막)
@@ -2368,7 +2386,27 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         if (!_isEditMode && !_isReorderMode) Padding(padding: const EdgeInsets.all(8.0), child: Row(children: [
           _topBtn("설정", _openSettings), const SizedBox(width: 4), _topBtn("엑셀\n선택", () => _pickSource('file')), const SizedBox(width: 4), _topBtn("PDF\n선택", () => _pickSource('dir')), const SizedBox(width: 4),
           _topBtn(_isPackingMode ? "완료\n모드" : "포장\n모드", () {
-            setState(() => _isPackingMode = !_isPackingMode);
+            setState(() {
+              _isPackingMode = !_isPackingMode;
+              // ❗ 부분제목(_selectedSections)만 유지하고 나머지 모든 필터/정렬/검색 초기화
+              _isSorted = false;
+              _currentSortCol = "";
+              _remarksFilterQuery = "";
+              _remarksExcludeQuery = "";
+              _quantitySearchQuery = "";
+              _remarksIncludeLogic = "AND";
+              _remarksExcludeLogic = "OR";
+              _noFilterMode = 0;
+              _temporaryVisibleItem = null;
+              _columnFilters.forEach((key, value) => value.clear());
+              _showUnfinishedOnly = false;
+              _isSubheadingViewMode = false;
+              _isReorderMode = false;
+              _searchQuery = "";
+              _searchController.clear();
+              _isSelectionFiltered = false;
+              _selectedIndices.clear();
+            });
             _applyFilterAndSort();
           }, bgColor: _isPackingMode ? Colors.cyan[700] : Colors.lightBlue[700]), const SizedBox(width: 4),
           _topBtn("부분\n제목", () { 
