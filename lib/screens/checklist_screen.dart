@@ -147,8 +147,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _initApp() async {
     if (Platform.isAndroid) {
+      List<Permission> permissionsToRequest = [];
       if (!await Permission.manageExternalStorage.isGranted) {
-        await Permission.manageExternalStorage.request();
+        permissionsToRequest.add(Permission.manageExternalStorage);
+      }
+      if (!await Permission.camera.isGranted) {
+        permissionsToRequest.add(Permission.camera);
+      }
+      if (permissionsToRequest.isNotEmpty) {
+        await permissionsToRequest.request();
       }
     }
     await _loadSettings();
