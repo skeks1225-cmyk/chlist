@@ -2903,6 +2903,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   void _showEditSubheadingDialog(ItemModel item) {
     final controller = TextEditingController(text: item.itemCode);
+    final String oldSubheading = item.itemCode;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -2923,11 +2924,21 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           ElevatedButton(
             onPressed: () {
               final newText = controller.text.trim();
-              if (newText.isNotEmpty && newText != item.itemCode) {
+              if (newText.isNotEmpty && newText != oldSubheading) {
                 setState(() {
                   item.itemCode = newText;
-                  if (item.realIndex != -1 && item.realIndex < _originalItems.length) {
-                    _originalItems[item.realIndex].itemCode = newText;
+                  int targetIdx = _originalItems.indexWhere((e) => e.isSubheading && e.realIndex == item.realIndex);
+                  if (targetIdx != -1) {
+                    _originalItems[targetIdx].itemCode = newText;
+                  }
+                  for (var e in _originalItems) {
+                    if (e.subheadingTitle == oldSubheading) {
+                      e.subheadingTitle = newText;
+                    }
+                  }
+                  if (_selectedSections.contains(oldSubheading)) {
+                    _selectedSections.remove(oldSubheading);
+                    _selectedSections.add(newText);
                   }
                 });
                 _applyFilterAndSort();
@@ -2970,8 +2981,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               if (newQty != item.quantity) {
                 setState(() {
                   item.quantity = newQty;
-                  if (item.realIndex != -1 && item.realIndex < _originalItems.length) {
-                    _originalItems[item.realIndex].quantity = newQty;
+                  int targetIdx = _originalItems.indexWhere((e) => !e.isSubheading && e.realIndex == item.realIndex);
+                  if (targetIdx != -1) {
+                    _originalItems[targetIdx].quantity = newQty;
                   }
                 });
                 _applyFilterAndSort();
