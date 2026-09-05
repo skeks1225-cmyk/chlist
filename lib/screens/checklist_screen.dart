@@ -37,6 +37,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   int _qrScanActionMode = 0; // ❗ QR 인식 시 동작 모드 (0: 리스트 검색, 1: 뷰어 바로보기)
   double _swipeSensitivity = 0.2; // ❗ 슬라이드 감도 (기본 20%)
   double _pdfDoubleTapZoom = 3.0; // ❗ PDF 더블탭 확대 배율 (기본 3.0)
+  bool _enableLongPressEdit = false; // ❗ 부분제목/수량 롱프레스 편집 허용 여부 (기본 false)
 
   String _currentSortCol = ""; 
   bool _isAscending = true;   
@@ -178,6 +179,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _qrScanActionMode = prefs.getInt('qrScanActionMode') ?? 0;
       _swipeSensitivity = prefs.getDouble('swipeSensitivity') ?? 0.2;
       _pdfDoubleTapZoom = prefs.getDouble('pdfDoubleTapZoom') ?? 3.0;
+      _enableLongPressEdit = prefs.getBool('enableLongPressEdit') ?? false;
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -236,6 +238,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setInt('qrScanActionMode', _qrScanActionMode);
     await prefs.setDouble('swipeSensitivity', _swipeSensitivity);
     await prefs.setDouble('pdfDoubleTapZoom', _pdfDoubleTapZoom);
+    await prefs.setBool('enableLongPressEdit', _enableLongPressEdit);
     await prefs.setStringList('processList', _processList);
     await prefs.setString('processColors', jsonEncode(_processColors));
 
@@ -1126,6 +1129,21 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 ],
               ),
             ]),
+          ),
+          const SizedBox(height: 10),
+          // ❗ 부분제목 / 수량 롱프레스 편집 설정 추가
+          const Align(alignment: Alignment.centerLeft, child: Text("롱프레스 편집 설정", style: TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(height: 5),
+          Container(
+            decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blueGrey.withOpacity(0.2))),
+            child: SwitchListTile(
+              title: const Text("부분제목 / 수량 롱프레스 편집"),
+              subtitle: const Text("메인 리스트에서 부분제목과 수량 셀을 길게 눌러 수정합니다.", style: TextStyle(fontSize: 10)),
+              value: _enableLongPressEdit,
+              onChanged: (v) => setDialogState(() => _enableLongPressEdit = v),
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
           ),
           const SizedBox(height: 15),
           const Divider(),
@@ -2621,6 +2639,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   else if (_isSubheadingViewMode) { if (item.realIndex != -1) { setState(() { _selectedSections = {item.itemCode}; _isSubheadingViewMode = false; }); _applyFilterAndSort(); } else setState(() => _isSubheadingViewMode = false); } 
                   else { setState(() { if (_selectedSections.contains(item.itemCode)) _selectedSections.remove(item.itemCode); else _selectedSections.add(item.itemCode); }); _applyFilterAndSort(); }
                 }, 
+                onLongPress: (_enableLongPressEdit && !_isEditMode) ? () => _showEditSubheadingDialog(item) : null,
                 child: Container(
                   height: _subheadingHeight, 
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), 
@@ -2882,6 +2901,93 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
   }
 
+  void _showEditSubheadingDialog(ItemModel item) {
+    final controller = TextEditingController(text: item.itemCode);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("부분제목 수정"),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: "부분제목",
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("취소"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newText = controller.text.trim();
+              if (newText.isNotEmpty && newText != item.itemCode) {
+                setState(() {
+                  item.itemCode = newText;
+                  if (item.realIndex != -1 && item.realIndex < _originalItems.length) {
+                    _originalItems[item.realIndex].itemCode = newText;
+                  }
+                });
+                _applyFilterAndSort();
+                if (_autoSave) {
+                  _manualSave(silent: true);
+                }
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text("저장"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditQuantityDialog(ItemModel item) {
+    final controller = TextEditingController(text: item.quantity);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("수량 수정"),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.text,
+          decoration: const InputDecoration(
+            labelText: "수량",
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("취소"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newQty = controller.text.trim();
+              if (newQty != item.quantity) {
+                setState(() {
+                  item.quantity = newQty;
+                  if (item.realIndex != -1 && item.realIndex < _originalItems.length) {
+                    _originalItems[item.realIndex].quantity = newQty;
+                  }
+                });
+                _applyFilterAndSort();
+                if (_autoSave) {
+                  _manualSave(silent: true);
+                }
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text("저장"),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDataRow(ItemModel item, bool isDark) {
     bool isSel = _selectedIndices.contains(item.realIndex);
     bool isHigh = item.realIndex == _highlightedRealIndex;
@@ -2944,7 +3050,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           // ❗ 4. 수량
           _buildSelectionZone(
             item: item,
-            child: SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+            child: GestureDetector(
+              onLongPress: (_enableLongPressEdit && !_isEditMode) ? () => _showEditQuantityDialog(item) : null,
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+            ),
           ),
 
           // ❗ 5. 완료 체크
