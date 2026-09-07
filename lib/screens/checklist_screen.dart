@@ -20,7 +20,7 @@ class ChecklistScreen extends StatefulWidget {
   State<ChecklistScreen> createState() => _ChecklistScreenState();
 }
 
-class _ChecklistScreenState extends State<ChecklistScreen> {
+class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingObserver {
   final ExcelService _excelService = ExcelService();
   final SmbService _smbService = SmbService();
   
@@ -40,7 +40,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   double _swipeSensitivity = 0.2; // ❗ 슬라이드 감도 (기본 20%)
   double _pdfDoubleTapZoom = 3.0; // ❗ PDF 더블탭 확대 배율 (기본 3.0)
   bool _enableLongPressEdit = false; // ❗ 부분제목/수량 롱프레스 편집 허용 여부 (기본 false)
-  bool _keepScreenOn = false; // ❗ 화면 상시 켜짐 유지 여부 (기본 false)
+  int _keepScreenMode = 0; // ❗ 화면 꺼짐 모드 (0: 사용 안 함, 1: 상시 켜짐, 2: 분 단위 설정)
+  double _keepScreenMinutes = 5.0; // ❗ 분 단위 유지 시간 (1~20분, 기본 5분)
+  Timer? _inactivityTimer; // ❗ 무조작 감지 타이머
 
   String _currentSortCol = ""; 
   bool _isAscending = true;   
@@ -92,17 +94,45 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initApp();
     _searchFocusNode.addListener(() => setState(() {})); 
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _inactivityTimer?.cancel();
     _scrollController.dispose();
     _dummyFocusNode.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _resetInactivityTimer();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _inactivityTimer?.cancel();
+      _applyKeepScreenOn(false);
+    }
+  }
+
+  void _resetInactivityTimer() {
+    _inactivityTimer?.cancel();
+    if (_keepScreenMode == 0) {
+      _applyKeepScreenOn(false);
+    } else if (_keepScreenMode == 1) {
+      _applyKeepScreenOn(true);
+    } else if (_keepScreenMode == 2) {
+      _applyKeepScreenOn(true);
+      int seconds = (_keepScreenMinutes * 60).round();
+      _inactivityTimer = Timer(Duration(seconds: seconds), () {
+        _applyKeepScreenOn(false);
+      });
+    }
   }
 
   void _clearHighlight() {
@@ -183,8 +213,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _swipeSensitivity = prefs.getDouble('swipeSensitivity') ?? 0.2;
       _pdfDoubleTapZoom = prefs.getDouble('pdfDoubleTapZoom') ?? 3.0;
       _enableLongPressEdit = prefs.getBool('enableLongPressEdit') ?? false;
-      _keepScreenOn = prefs.getBool('keepScreenOn') ?? false;
-      _applyKeepScreenOn(_keepScreenOn);
+      _keepScreenMode = prefs.getInt('keepScreenMode') ?? 0;
+      _keepScreenMinutes = prefs.getDouble('keepScreenMinutes') ?? 5.0;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _resetInactivityTimer());
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -244,7 +275,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setDouble('swipeSensitivity', _swipeSensitivity);
     await prefs.setDouble('pdfDoubleTapZoom', _pdfDoubleTapZoom);
     await prefs.setBool('enableLongPressEdit', _enableLongPressEdit);
-    await prefs.setBool('keepScreenOn', _keepScreenOn);
+    await prefs.setInt('keepScreenMode', _keepScreenMode);
+    await prefs.setDouble('keepScreenMinutes', _keepScreenMinutes);
     await prefs.setStringList('processList', _processList);
     await prefs.setString('processColors', jsonEncode(_processColors));
 
@@ -1159,21 +1191,89 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          // ❗ 화면 상시 켜짐 유지 설정 추가
-          const Align(alignment: Alignment.centerLeft, child: Text("디스플레이 설정", style: TextStyle(fontWeight: FontWeight.bold))),
+          // ❗ 화면 꺼짐 방지 설정 (분 단위 슬라이더 + 상시 켜짐 / 사용 안 함)
+          const Align(alignment: Alignment.centerLeft, child: Text("디스플레이 설정 (화면 꺼짐 방지)", style: TextStyle(fontWeight: FontWeight.bold))),
           const SizedBox(height: 5),
           Container(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
             decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blueGrey.withOpacity(0.2))),
-            child: SwitchListTile(
-              title: const Text("화면 상시 켜짐 유지"),
-              subtitle: const Text("앱이 화면에 나타나 있는 동안 화면이 꺼지지 않습니다.", style: TextStyle(fontSize: 10)),
-              value: _keepScreenOn,
-              onChanged: (v) {
-                setDialogState(() => _keepScreenOn = v);
-                _applyKeepScreenOn(v);
-              },
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RadioListTile<int>(
+                  title: const Text("사용 안 함", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  subtitle: const Text("휴대폰의 원래 화면 자동 꺼짐 설정을 적용합니다.", style: TextStyle(fontSize: 10)),
+                  value: 0,
+                  groupValue: _keepScreenMode,
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDialogState(() => _keepScreenMode = val);
+                      _resetInactivityTimer();
+                    }
+                  },
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                RadioListTile<int>(
+                  title: const Text("상시 켜짐", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  subtitle: const Text("앱이 화면에 표시되는 동안 계속 화면을 켜둡니다.", style: TextStyle(fontSize: 10)),
+                  value: 1,
+                  groupValue: _keepScreenMode,
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDialogState(() => _keepScreenMode = val);
+                      _resetInactivityTimer();
+                    }
+                  },
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                RadioListTile<int>(
+                  title: const Text("분 단위 설정 (미조작 시 꺼짐)", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  subtitle: const Text("화면 터치 조작이 없으면 설정된 시간 후 꺼집니다.", style: TextStyle(fontSize: 10)),
+                  value: 2,
+                  groupValue: _keepScreenMode,
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDialogState(() => _keepScreenMode = val);
+                      _resetInactivityTimer();
+                    }
+                  },
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                const SizedBox(height: 4),
+                // ❗ 분 단위 슬라이더 (분 단위 설정 모드일 때만 활성화)
+                Opacity(
+                  opacity: _keepScreenMode == 2 ? 1.0 : 0.4,
+                  child: IgnorePointer(
+                    ignoring: _keepScreenMode != 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("  꺼짐 유지 시간:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            Text("${_keepScreenMinutes.toInt()} 분  ", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _keepScreenMode == 2 ? Colors.blue : Colors.grey)),
+                          ],
+                        ),
+                        Slider(
+                          value: _keepScreenMinutes,
+                          min: 1.0,
+                          max: 20.0,
+                          divisions: 19,
+                          label: "${_keepScreenMinutes.toInt()}분",
+                          onChanged: (val) {
+                            setDialogState(() => _keepScreenMinutes = val);
+                            _resetInactivityTimer();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 15),
@@ -2392,7 +2492,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
+    return Listener(
+      onPointerDown: (_) => _resetInactivityTimer(),
+      child: Scaffold(
       appBar: AppBar(
         title: (_isReorderMode) 
           ? const Text("순서 변경 모드", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orangeAccent)) 
@@ -2784,7 +2886,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         if (_isSyncing) const LinearProgressIndicator(minHeight: 2, color: Colors.orange),
         Offstage(child: TextField(focusNode: _dummyFocusNode, readOnly: true)),
       ])),
-    );
+    ));
   }
 
   void _handleDragUpdate(double globalY) {
@@ -3149,7 +3251,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             )
           ),
         ]
-      )
+      ),
     );
   }
   Widget _cellCheck(ItemModel item, bool isDark, {VoidCallback? onTap, VoidCallback? onDoubleTap}) {
