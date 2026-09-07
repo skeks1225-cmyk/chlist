@@ -3,6 +3,7 @@ package org.example.checksheet
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import android.view.WindowManager
 import kotlinx.coroutines.*
 
 class MainActivity: FlutterActivity() {
@@ -15,6 +16,17 @@ class MainActivity: FlutterActivity() {
         smbHandler = SmbHandler(this)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+            if (call.method == "setKeepScreenOn") {
+                val keepOn = call.argument<Boolean>("keepOn") ?: false
+                if (keepOn) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+                result.success(true)
+                return@setMethodCallHandler
+            }
+
             // ❗ 모든 호출에서 공통적으로 IP, User, Pass 추출
             val ip = call.argument<String>("ip")
             val user = call.argument<String>("user")

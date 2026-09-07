@@ -38,6 +38,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   double _swipeSensitivity = 0.2; // ❗ 슬라이드 감도 (기본 20%)
   double _pdfDoubleTapZoom = 3.0; // ❗ PDF 더블탭 확대 배율 (기본 3.0)
   bool _enableLongPressEdit = false; // ❗ 부분제목/수량 롱프레스 편집 허용 여부 (기본 false)
+  bool _keepScreenOn = false; // ❗ 화면 상시 켜짐 유지 여부 (기본 false)
 
   String _currentSortCol = ""; 
   bool _isAscending = true;   
@@ -180,6 +181,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       _swipeSensitivity = prefs.getDouble('swipeSensitivity') ?? 0.2;
       _pdfDoubleTapZoom = prefs.getDouble('pdfDoubleTapZoom') ?? 3.0;
       _enableLongPressEdit = prefs.getBool('enableLongPressEdit') ?? false;
+      _keepScreenOn = prefs.getBool('keepScreenOn') ?? false;
+      _applyKeepScreenOn(_keepScreenOn);
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
         prefs.getString('smbUser') ?? "",
@@ -239,6 +242,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     await prefs.setDouble('swipeSensitivity', _swipeSensitivity);
     await prefs.setDouble('pdfDoubleTapZoom', _pdfDoubleTapZoom);
     await prefs.setBool('enableLongPressEdit', _enableLongPressEdit);
+    await prefs.setBool('keepScreenOn', _keepScreenOn);
     await prefs.setStringList('processList', _processList);
     await prefs.setString('processColors', jsonEncode(_processColors));
 
@@ -259,6 +263,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     Map<String, List<String>> colFilterMap = _columnFilters.map((k, v) => MapEntry(k, v.toList()));
     await prefs.setString('filter_columnFilters', jsonEncode(colFilterMap));
     await prefs.setStringList('filter_selectedSections', _selectedSections.toList());
+  }
+
+  Future<void> _applyKeepScreenOn(bool keepOn) async {
+    try {
+      await const MethodChannel('org.example.checksheet/smb').invokeMethod('setKeepScreenOn', {'keepOn': keepOn});
+    } catch (_) {}
   }
 
   // ❗ 설정 백업 내보내기 (안 2)
@@ -1141,6 +1151,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               subtitle: const Text("메인 리스트에서 부분제목과 수량 셀을 길게 눌러 수정합니다.", style: TextStyle(fontSize: 10)),
               value: _enableLongPressEdit,
               onChanged: (v) => setDialogState(() => _enableLongPressEdit = v),
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+          ),
+          const SizedBox(height: 10),
+          // ❗ 화면 상시 켜짐 유지 설정 추가
+          const Align(alignment: Alignment.centerLeft, child: Text("디스플레이 설정", style: TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(height: 5),
+          Container(
+            decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blueGrey.withOpacity(0.2))),
+            child: SwitchListTile(
+              title: const Text("화면 상시 켜짐 유지"),
+              subtitle: const Text("앱이 화면에 나타나 있는 동안 화면이 꺼지지 않습니다.", style: TextStyle(fontSize: 10)),
+              value: _keepScreenOn,
+              onChanged: (v) {
+                setDialogState(() => _keepScreenOn = v);
+                _applyKeepScreenOn(v);
+              },
               dense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 8),
             ),
