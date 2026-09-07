@@ -730,41 +730,53 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                           )
                         ),
                         Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Row(
+                          child: Builder(
+                            builder: (context) {
+                              final String displayTitle = item.displayNo.isNotEmpty
+                                  ? "[${item.displayNo}] ${item.itemCode}"
+                                  : item.itemCode;
+                              int currentFilteredIdx = widget.filteredItems.indexOf(item);
+                              String pageText = (currentFilteredIdx != -1)
+                                  ? "${currentFilteredIdx + 1} / ${widget.filteredItems.length}"
+                                  : "${_currentIndex + 1} / ${widget.allItems.length}";
+
+                              return Column(
+                                mainAxisSize: MainAxisSize.min,
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Flexible(
-                                    child: Text(
-                                      item.itemCode,
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue,
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          displayTitle,
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.blue,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        "(수량: ${item.quantity})",
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.yellowAccent : Colors.orange[800],
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 4),
+                                  const SizedBox(height: 2),
                                   Text(
-                                    "(수량: ${item.quantity})",
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: isDark ? Colors.yellowAccent : Colors.orange[800],
-                                    ),
+                                    pageText, 
+                                    style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 14, fontWeight: FontWeight.bold)
                                   ),
                                 ],
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                "${_currentIndex + 1} / ${widget.filteredItems.length}", 
-                                style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 14, fontWeight: FontWeight.bold)
-                              ),
-                            ],
+                              );
+                            }
                           ),
                         ),
                         ElevatedButton.icon(
