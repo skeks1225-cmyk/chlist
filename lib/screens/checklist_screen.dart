@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/item_model.dart';
@@ -268,6 +269,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   Future<void> _applyKeepScreenOn(bool keepOn) async {
     try {
+      await WakelockPlus.toggle(enable: keepOn);
       await const MethodChannel('org.example.checksheet/smb').invokeMethod('setKeepScreenOn', {'keepOn': keepOn});
     } catch (_) {}
   }
