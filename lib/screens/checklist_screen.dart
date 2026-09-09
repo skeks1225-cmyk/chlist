@@ -1848,7 +1848,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                         color: baseColor.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(8),
                         border: Border(
-                          left: BorderSide(color: baseColor, width: 4),
+                          left: BorderSide(color: baseColor, width: 12),
                           top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
                           right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
                           bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
@@ -1886,7 +1886,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             color: color.withOpacity(0.15),
             borderRadius: BorderRadius.circular(8),
             border: Border(
-              left: BorderSide(color: color, width: 4),
+              left: BorderSide(color: color, width: 12),
               top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
               right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
               bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
