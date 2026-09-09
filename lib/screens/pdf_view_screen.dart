@@ -302,7 +302,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
               else btnColor = Colors.blueGrey[700]!;
             }
             return ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white, textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: btnColor, 
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
               onPressed: () {
                 setState(() {
                   item.process = p;
@@ -310,7 +315,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 });
                 widget.onStatusUpdate(item, 'process'); Navigator.pop(ctx);
               },
-              child: Text(p),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(p),
+              ),
             );
           }).toList(),
         ),

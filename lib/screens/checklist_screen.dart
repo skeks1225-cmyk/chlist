@@ -1287,7 +1287,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[600], foregroundColor: Colors.white),
                   onPressed: () {
-                    Navigator.pop(ctx);
                     _exportSettings();
                   },
                   icon: const Icon(Icons.upload, size: 16),
@@ -1299,7 +1298,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[800], foregroundColor: Colors.white),
                   onPressed: () {
-                    Navigator.pop(ctx);
                     _importSettings();
                   },
                   icon: const Icon(Icons.download, size: 16),
@@ -1835,13 +1833,27 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       ),
       content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
                 GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 3, childAspectRatio: 2.0, mainAxisSpacing: 8, crossAxisSpacing: 8, children: sortedDisplayList.map((p) { 
- int? colorVal = _processColors[p]; Color btnColor; if (colorVal != null) { btnColor = Color(colorVal); } else { if (p == "완료") btnColor = Colors.purple; else if (p == "보류") btnColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnColor = Colors.orange; else btnColor = Colors.blueGrey[700]!; } return ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white), onPressed: () { 
-   setState(() { 
-     item.process = p; 
-     item.processTime = DateTime.now().toString().substring(0, 16);
-   }); 
-   if (_autoSave) _manualSave(silent: true); Navigator.pop(context); 
- }, child: Text(p)); }).toList()),
+                  int? colorVal = _processColors[p]; Color btnColor; if (colorVal != null) { btnColor = Color(colorVal); } else { if (p == "완료") btnColor = Colors.purple; else if (p == "보류") btnColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnColor = Colors.orange; else btnColor = Colors.blueGrey[700]!; } 
+                  return ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: btnColor, 
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ), 
+                    onPressed: () { 
+                      setState(() { 
+                        item.process = p; 
+                        item.processTime = DateTime.now().toString().substring(0, 16);
+                      }); 
+                      if (_autoSave) _manualSave(silent: true); Navigator.pop(context); 
+                    }, 
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(p),
+                    ),
+                  ); 
+                }).toList()),
                 const Divider(), _dialogBtn("지우기", Colors.grey, () { 
                   item.process = ""; 
                   item.processTime = "";
