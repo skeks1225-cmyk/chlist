@@ -1789,6 +1789,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
   }
 
   void _showProcessDialog(ItemModel item) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     _forgetFocus();
     String lastRecord = "입력시간 : 없음";
     if (item.processTime.isNotEmpty) {
