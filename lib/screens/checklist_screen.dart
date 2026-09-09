@@ -1287,7 +1287,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[600], foregroundColor: Colors.white),
                   onPressed: () {
-                    _exportSettings();
+                    showDialog(
+                      context: context,
+                      builder: (c) => AlertDialog(
+                        title: const Text("설정 내보내기", style: TextStyle(fontWeight: FontWeight.bold)),
+                        content: const Text("현재 앱 설정을 백업 파일(app_settings.json)로 내보내시겠습니까?"),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(c), child: const Text("취소")),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                            onPressed: () {
+                              Navigator.pop(c);
+                              _exportSettings();
+                            },
+                            child: const Text("내보내기", style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.upload, size: 16),
                   label: const Text("설정 내보내기", style: TextStyle(fontSize: 12)),
@@ -1298,7 +1315,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[800], foregroundColor: Colors.white),
                   onPressed: () {
-                    _importSettings();
+                    showDialog(
+                      context: context,
+                      builder: (c) => AlertDialog(
+                        title: const Text("설정 불러오기", style: TextStyle(fontWeight: FontWeight.bold)),
+                        content: const Text("기존 설정을 덮어쓰고 백업 파일(app_settings.json)에서 설정을 불러오시겠습니까?"),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(c), child: const Text("취소")),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                            onPressed: () {
+                              Navigator.pop(c);
+                              _importSettings();
+                            },
+                            child: const Text("불러오기", style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.download, size: 16),
                   label: const Text("설정 불러오기", style: TextStyle(fontSize: 12)),

@@ -432,7 +432,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 color: bgColor,
                 borderRadius: BorderRadius.circular(8),
                 border: Border(
-                  left: BorderSide(color: active ? baseColor : (isDark ? Colors.grey[700]! : Colors.grey[400]!), width: active ? 4 : 1),
+                  left: BorderSide(color: active ? baseColor : (isDark ? Colors.grey[700]! : Colors.grey[400]!), width: active ? 12 : 1),
                   top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
                   right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
                   bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
