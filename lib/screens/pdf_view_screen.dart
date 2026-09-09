@@ -314,17 +314,28 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 decoration: BoxDecoration(
                   color: baseColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border(
-                    left: BorderSide(color: baseColor, width: 12),
-                    top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-                    right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-                    bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-                  ),
                 ),
-                alignment: Alignment.center,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(p, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                child: Row(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6, top: 6, bottom: 6),
+                      child: Container(
+                        width: 5,
+                        decoration: BoxDecoration(
+                          color: baseColor,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(p, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );
@@ -354,15 +365,26 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           decoration: BoxDecoration(
             color: color.withOpacity(0.15),
             borderRadius: BorderRadius.circular(8),
-            border: Border(
-              left: BorderSide(color: color, width: 12),
-              top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-              right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-              bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-            ),
           ),
-          alignment: Alignment.center,
-          child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
+                child: Container(
+                  width: 6,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -437,36 +459,46 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
               decoration: BoxDecoration(
                 color: bgColor,
                 borderRadius: BorderRadius.circular(8),
-                border: Border(
-                  left: BorderSide(color: active ? baseColor : (isDark ? Colors.grey[700]! : Colors.grey[400]!), width: active ? 12 : 1),
-                  top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-                  right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-                  bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-                ),
               ),
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: Row(
                 children: [
-                  if (subText.isEmpty)
-                    Text(
-                      label, 
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold, 
-                        fontSize: 15,
-                        color: fgColor
-                      )
+                  if (active)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
+                      child: Container(
+                        width: 6,
+                        decoration: BoxDecoration(
+                          color: baseColor,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
                     ),
-                  if (subText.isNotEmpty) 
-                    Text(
-                      subText, 
-                      style: TextStyle(
-                        fontSize: 16, 
-                        fontWeight: FontWeight.bold,
-                        color: fgColor
-                      ), 
-                      overflow: TextOverflow.ellipsis
-                    )
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (subText.isEmpty)
+                          Text(
+                            label, 
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold, 
+                              fontSize: 15,
+                              color: fgColor
+                            )
+                          ),
+                        if (subText.isNotEmpty) 
+                          Text(
+                            subText, 
+                            style: TextStyle(
+                              fontSize: 16, 
+                              fontWeight: FontWeight.bold,
+                              color: fgColor
+                            ), 
+                            overflow: TextOverflow.ellipsis
+                          )
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),

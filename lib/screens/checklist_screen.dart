@@ -1881,17 +1881,28 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                       decoration: BoxDecoration(
                         color: baseColor.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border(
-                          left: BorderSide(color: baseColor, width: 12),
-                          top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-                          right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-                          bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-                        ),
                       ),
-                      alignment: Alignment.center,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(p, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                      child: Row(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6, top: 6, bottom: 6),
+                            child: Container(
+                              width: 5,
+                              decoration: BoxDecoration(
+                                color: baseColor,
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Center(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(p, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ); 
@@ -1919,15 +1930,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           decoration: BoxDecoration(
             color: color.withOpacity(0.15),
             borderRadius: BorderRadius.circular(8),
-            border: Border(
-              left: BorderSide(color: color, width: 12),
-              top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-              right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-              bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-            ),
           ),
-          alignment: Alignment.center,
-          child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
+                child: Container(
+                  width: 6,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Alignment(0.0, 0.0) == Alignment.center
+                    ? Center(child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)))
+                    : Center(child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2406,9 +2428,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _batchTypeBtn(_isPackingMode ? "포장 일괄 변경" : "완료 일괄 변경", () => _showBatchValueSelection("complete")),
-            _batchTypeBtn("공정 일괄 변경", () => _showBatchValueSelection("process")),
-            _batchTypeBtn("보완 일괄 변경", () => _showBatchValueSelection("complement")),
+            _batchTypeBtn(_isPackingMode ? "포장 일괄 변경" : "완료 일괄 변경", _isPackingMode ? Colors.cyan : Colors.green, () => _showBatchValueSelection("complete")),
+            _batchTypeBtn("공정 일괄 변경", Colors.blue, () => _showBatchValueSelection("process")),
+            _batchTypeBtn("보완 일괄 변경", Colors.orange, () => _showBatchValueSelection("complement")),
           ],
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))],
@@ -2416,17 +2438,38 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     );
   }
 
-  Widget _batchTypeBtn(String label, VoidCallback onTap) {
+  Widget _batchTypeBtn(String label, Color color, VoidCallback onTap) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          minimumSize: const Size(double.infinity, 50),
-          backgroundColor: Colors.blueGrey[700],
-          foregroundColor: Colors.white,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
+                child: Container(
+                  width: 6,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                ),
+              ),
+            ],
+          ),
         ),
-        onPressed: onTap,
-        child: Text(label),
       ),
     );
   }
@@ -2437,6 +2480,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     String title = "";
     List<Widget> options = [];
 
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     if (type == "process") {
       title = "공정 일괄 선택";
       List<String> sortedList = List.from(_processList);
@@ -2444,8 +2489,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       if (hasFinished) sortedList.add("완료");
 
       options = [
-        Wrap(
-          spacing: 8, runSpacing: 8,
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 3,
+          childAspectRatio: 2.0,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
           children: sortedList.map((p) {
             int? colorVal = _processColors[p];
             Color btnColor;
@@ -2456,29 +2506,58 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
               else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnColor = Colors.orange;
               else btnColor = Colors.blueGrey[700]!;
             }
-            return ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white),
-              onPressed: () => _applyBatchInput(type, p),
-              child: Text(p),
+            return GestureDetector(
+              onTap: () => _applyBatchInput(type, p),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: btnColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6, top: 6, bottom: 6),
+                      child: Container(
+                        width: 5,
+                        decoration: BoxDecoration(
+                          color: btnColor,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(p, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             );
           }).toList(),
         ),
         const Divider(),
-        _batchValueBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
+        _dialogBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
+        _dialogBtn("선택취소", Colors.blueGrey, () {}),
       ];
     } else if (type == "complement") {
       title = "보완 일괄 선택";
       options = [
-        _batchValueBtn("부족", Colors.orange, () => _applyBatchInput(type, "부족")),
-        _batchValueBtn("재작업", Colors.red, () => _applyBatchInput(type, "재작업")),
+        _dialogBtn("부족", Colors.orange, () => _applyBatchInput(type, "부족")),
+        _dialogBtn("재작업", Colors.red, () => _applyBatchInput(type, "재작업")),
         const Divider(),
-        _batchValueBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
+        _dialogBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
+        _dialogBtn("선택취소", Colors.blueGrey, () {}),
       ];
     } else if (type == "complete") {
       title = _isPackingMode ? "포장 여부 일괄 변경" : "완료 여부 일괄 변경";
       options = [
-        _batchValueBtn(_isPackingMode ? "포장 완료 처리" : "완료 처리", _isPackingMode ? Colors.cyan : Colors.green, () => _applyBatchInput(type, true)),
-        _batchValueBtn(_isPackingMode ? "미포장 처리 (체크해제)" : "미완료 처리 (체크해제)", Colors.blueGrey, () => _applyBatchInput(type, false)),
+        _dialogBtn(_isPackingMode ? "포장 완료 처리" : "완료 처리", _isPackingMode ? Colors.cyan : Colors.green, () => _applyBatchInput(type, true)),
+        _dialogBtn(_isPackingMode ? "미포장 처리 (체크해제)" : "미완료 처리 (체크해제)", Colors.blueGrey, () => _applyBatchInput(type, false)),
+        _dialogBtn("선택취소", Colors.blueGrey, () {}),
       ];
     }
 
@@ -2488,21 +2567,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: options)),
         actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))],
-      ),
-    );
-  }
-
-  Widget _batchValueBtn(String label, Color color, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          minimumSize: const Size(double.infinity, 45),
-          backgroundColor: color,
-          foregroundColor: Colors.white,
-        ),
-        onPressed: onTap,
-        child: Text(label),
       ),
     );
   }
