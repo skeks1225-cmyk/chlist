@@ -400,7 +400,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     final item = widget.allItems[_currentIndex];
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     String subText = "";
-    if (label == "보완") subText = item.complement;
+    if (label == "보완") {
+      subText = item.complement;
+      if (active) {
+        if (subText == "재작업") color = Colors.red;
+        else if (subText == "부족") color = Colors.orange;
+      }
+    }
     if (label == "공정") {
       subText = item.process;
       if (active) {
@@ -442,14 +448,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    label, 
-                    style: TextStyle(
-                      fontWeight: subText.isEmpty ? FontWeight.bold : FontWeight.normal, 
-                      fontSize: subText.isEmpty ? 15 : 12,
-                      color: fgColor
-                    )
-                  ),
+                  if (subText.isEmpty)
+                    Text(
+                      label, 
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold, 
+                        fontSize: 15,
+                        color: fgColor
+                      )
+                    ),
                   if (subText.isNotEmpty) 
                     Text(
                       subText, 
