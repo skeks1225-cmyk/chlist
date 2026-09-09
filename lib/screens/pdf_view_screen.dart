@@ -244,6 +244,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   void _showProcessDialog(ItemModel item) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     String lastRecord = "입력시간 : 없음";
     if (item.processTime.isNotEmpty) {
       lastRecord = "입력시간 : ${item.processTime}";
@@ -292,32 +293,39 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           mainAxisSpacing: 8, crossAxisSpacing: 8,
           children: sortedDisplayList.map((p) {
             int? colorVal = widget.processColors[p];
-            Color btnColor;
+            Color baseColor;
             if (colorVal != null) {
-              btnColor = Color(colorVal);
+              baseColor = Color(colorVal);
             } else {
-              if (p == "완료") btnColor = Colors.purple;
-              else if (p == "보류") btnColor = Colors.red;
-              else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnColor = Colors.orange;
-              else btnColor = Colors.blueGrey[700]!;
+              if (p == "완료") baseColor = Colors.purple;
+              else if (p == "보류") baseColor = Colors.red;
+              else if (["용접", "도장", "도금", "인쇄"].contains(p)) baseColor = Colors.orange;
+              else baseColor = Colors.blueGrey;
             }
-            return ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: btnColor, 
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () {
+            return GestureDetector(
+              onTap: () {
                 setState(() {
                   item.process = p;
                   item.processTime = DateTime.now().toString().substring(0, 16);
                 });
                 widget.onStatusUpdate(item, 'process'); Navigator.pop(ctx);
               },
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(p),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: baseColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border(
+                    left: BorderSide(color: baseColor, width: 4),
+                    top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+                    right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+                    bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(p, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                ),
               ),
             );
           }).toList(),
@@ -332,7 +340,32 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   Widget _dialogBtn(String label, Color color, VoidCallback onSelected) {
-    return Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), onPressed: () { setState(onSelected); widget.onStatusUpdate(widget.allItems[_currentIndex], 'update'); Navigator.pop(context); }, child: Text(label)));
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: GestureDetector(
+        onTap: () {
+          setState(onSelected);
+          widget.onStatusUpdate(widget.allItems[_currentIndex], 'update');
+          Navigator.pop(context);
+        },
+        child: Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(8),
+            border: Border(
+              left: BorderSide(color: color, width: 4),
+              top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+              right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+              bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+        ),
+      ),
+    );
   }
 
   Widget _navArrowBtn(IconData icon, VoidCallback onTap, bool isDark) {
@@ -379,16 +412,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       }
     }
 
-    Color bgColor = active ? color : (isDark ? Colors.grey[800]! : Colors.grey[300]!);
-    Color fgColor = active ? Colors.white : (isDark ? Colors.white70 : Colors.black54);
+    Color baseColor = active ? color : Colors.blueGrey;
+    Color bgColor = active ? color.withOpacity(0.15) : (isDark ? Colors.grey[850]! : Colors.grey[200]!);
+    Color fgColor = active ? (isDark ? Colors.white : Colors.black87) : (isDark ? Colors.white70 : Colors.black54);
 
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Material(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(8),
-          elevation: active ? 2 : 0,
+          color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
             onDoubleTap: onDoubleTap,
@@ -396,6 +428,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             borderRadius: BorderRadius.circular(8),
             child: Container(
               height: 55,
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(8),
+                border: Border(
+                  left: BorderSide(color: active ? baseColor : (isDark ? Colors.grey[700]! : Colors.grey[400]!), width: active ? 4 : 1),
+                  top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+                  right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+                  bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+                ),
+              ),
               alignment: Alignment.center,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,

@@ -1833,24 +1833,31 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       ),
       content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
                 GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 3, childAspectRatio: 2.0, mainAxisSpacing: 8, crossAxisSpacing: 8, children: sortedDisplayList.map((p) { 
-                  int? colorVal = _processColors[p]; Color btnColor; if (colorVal != null) { btnColor = Color(colorVal); } else { if (p == "완료") btnColor = Colors.purple; else if (p == "보류") btnColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(p)) btnColor = Colors.orange; else btnColor = Colors.blueGrey[700]!; } 
-                  return ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: btnColor, 
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ), 
-                    onPressed: () { 
+                  int? colorVal = _processColors[p]; Color baseColor; if (colorVal != null) { baseColor = Color(colorVal); } else { if (p == "완료") baseColor = Colors.purple; else if (p == "보류") baseColor = Colors.red; else if (["용접", "도장", "도금", "인쇄"].contains(p)) baseColor = Colors.orange; else baseColor = Colors.blueGrey; } 
+                  return GestureDetector(
+                    onTap: () {
                       setState(() { 
                         item.process = p; 
                         item.processTime = DateTime.now().toString().substring(0, 16);
                       }); 
-                      if (_autoSave) _manualSave(silent: true); Navigator.pop(context); 
-                    }, 
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(p),
+                      if (_autoSave) _manualSave(silent: true); Navigator.pop(context);
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: baseColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border(
+                          left: BorderSide(color: baseColor, width: 4),
+                          top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+                          right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+                          bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(p, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                      ),
                     ),
                   ); 
                 }).toList()),
@@ -1862,7 +1869,34 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
               ])))));
   }
 
-  Widget _dialogBtn(String label, Color color, VoidCallback onSelected) { return Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50)), onPressed: () { setState(onSelected); if (_autoSave) _manualSave(silent: true); Navigator.pop(context); }, child: Text(label))); }
+  Widget _dialogBtn(String label, Color color, VoidCallback onSelected) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: GestureDetector(
+        onTap: () {
+          setState(onSelected);
+          if (_autoSave) _manualSave(silent: true);
+          Navigator.pop(context);
+        },
+        child: Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(8),
+            border: Border(
+              left: BorderSide(color: color, width: 4),
+              top: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+              right: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+              bottom: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+        ),
+      ),
+    );
+  }
 
   void _deleteSelectedRows() {
     if (_selectedIndices.isEmpty) return; final Set<int> finalDeleteIndices = Set.from(_selectedIndices);
