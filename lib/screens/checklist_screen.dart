@@ -799,8 +799,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
               const Text("색상 필터 (동일 색상 일괄 선택)", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               (() {
-                // 현재 옵션들(공정) 중 실제 매핑된 색상값 수집
-                final Map<int, List<String>> colorToProcesses = {};
+                // 현재 옵션들(공정) 중 실제 매핑된 색상값 수집 (null 키는 "(빈칸)")
+                final Map<int?, List<String>> colorToProcesses = {};
+                if (options.contains("(빈칸)")) {
+                  colorToProcesses[null] = ["(빈칸)"];
+                }
                 for (var opt in options) {
                   if (opt == "(빈칸)") continue;
                   int? colorVal = _processColors[opt];
@@ -824,9 +827,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                     spacing: 8,
                     runSpacing: 8,
                     children: colorToProcesses.entries.map((entry) {
-                      final int colorVal = entry.key;
+                      final int? colorVal = entry.key;
                       final List<String> relatedProcs = entry.value;
-                      final Color displayColor = Color(colorVal);
+                      final bool isEmptyOption = colorVal == null;
+                      final Color displayColor = isEmptyOption ? Colors.transparent : Color(colorVal);
                       
                       // 관련 공정이 모두 체크되어 있는지 여부
                       final bool isAllSelected = relatedProcs.every((p) => localFilters.contains(p));
@@ -845,25 +849,47 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                             }
                           });
                         },
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: displayColor,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isAllSelected ? Colors.yellowAccent : Colors.white24,
-                              width: isAllSelected ? 3 : 1,
-                            ),
-                            boxShadow: [
-                              if (isAllSelected)
-                                BoxShadow(color: displayColor.withOpacity(0.5), blurRadius: 6, spreadRadius: 1)
-                            ]
-                          ),
-                          child: isAllSelected
-                              ? const Icon(Icons.check, size: 18, color: Colors.white)
-                              : null,
-                        ),
+                        child: isEmptyOption
+                            ? CustomPaint(
+                                painter: _DottedCircleBorderPainter(
+                                  color: isAllSelected ? Colors.yellowAccent : (isDark ? Colors.white54 : Colors.grey[600]!),
+                                  borderWidth: isAllSelected ? 3 : 1.5,
+                                ),
+                                child: Container(
+                                  width: 32,
+                                  height: 32,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      if (isAllSelected)
+                                        BoxShadow(color: Colors.yellowAccent.withOpacity(0.4), blurRadius: 6, spreadRadius: 1)
+                                    ],
+                                  ),
+                                  child: isAllSelected
+                                      ? const Icon(Icons.check, size: 18, color: Colors.yellowAccent)
+                                      : null,
+                                ),
+                              )
+                            : Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: displayColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isAllSelected ? Colors.yellowAccent : Colors.white24,
+                                    width: isAllSelected ? 3 : 1,
+                                  ),
+                                  boxShadow: [
+                                    if (isAllSelected)
+                                      BoxShadow(color: displayColor.withOpacity(0.5), blurRadius: 6, spreadRadius: 1)
+                                  ]
+                                ),
+                                child: isAllSelected
+                                    ? const Icon(Icons.check, size: 18, color: Colors.white)
+                                    : null,
+                              ),
                       );
                     }).toList(),
                   ),
@@ -3481,4 +3507,42 @@ class _RemarksCellState extends State<_RemarksCell> {
   @override void didUpdateWidget(_RemarksCell old) { super.didUpdateWidget(old); if (!_node.hasFocus) _ctrl.text = widget.item.remarks; }
   @override void dispose() { _node.dispose(); _ctrl.dispose(); super.dispose(); }
   @override Widget build(BuildContext context) { return Stack(alignment: Alignment.centerRight, children: [TextField(focusNode: _node, controller: _ctrl, style: const TextStyle(fontSize: 12), decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 4)), onSubmitted: (v) { widget.item.remarks = v; widget.onSave(); widget.onForgetFocus(); }), if (_ctrl.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 14), onPressed: () { setState(() => _ctrl.clear()); widget.item.remarks = ""; widget.onSave(); })]); }
+}
+
+class _DottedCircleBorderPainter extends CustomPainter {
+  final Color color;
+  final double borderWidth;
+
+  _DottedCircleBorderPainter({required this.color, this.borderWidth = 1.5});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = borderWidth;
+
+    final double radius = (size.width / 2) - (borderWidth / 2);
+    final Offset center = Offset(size.width / 2, size.height / 2);
+
+    const int dashCount = 12;
+    const double dashArc = (2 * 3.141592653589793) / dashCount;
+    const double dashWidth = dashArc * 0.55;
+
+    for (int i = 0; i < dashCount; i++) {
+      final double startAngle = i * dashArc;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        dashWidth,
+        false,
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DottedCircleBorderPainter oldDelegate) {
+    return oldDelegate.color != color || oldDelegate.borderWidth != borderWidth;
+  }
 }
