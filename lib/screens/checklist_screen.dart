@@ -758,8 +758,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     final quantityController = TextEditingController(text: _quantitySearchQuery);
     String localIncludeLogic = _remarksIncludeLogic;
     String localExcludeLogic = _remarksExcludeLogic;
-    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (context, setModalState) => AlertDialog(
-      title: Text(titleText, style: const TextStyle(fontWeight: FontWeight.bold)),
+    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (context, setModalState) {
+      final bool isDark = Theme.of(context).brightness == Brightness.dark;
+      return AlertDialog(
+        title: Text(titleText, style: const TextStyle(fontWeight: FontWeight.bold)),
       content: SizedBox(width: 400, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text("정렬", style: TextStyle(fontWeight: FontWeight.bold)),
         RadioListTile<bool?>(title: const Text("오름차순"), value: true, groupValue: localIsSorted ? localIsAscending : null, onChanged: (val) => setModalState(() { localIsSorted = true; localIsAscending = true; }), contentPadding: EdgeInsets.zero, dense: true),
@@ -917,7 +919,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
         ],
       ]))),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")), TextButton(onPressed: () { setState(() { _isSorted = localIsSorted; if (localIsSorted) { _currentSortCol = col; _isAscending = localIsAscending; } else if (_currentSortCol == col) _currentSortCol = ""; if (_columnFilters.containsKey(col)) _columnFilters[col] = localFilters; if (col == 'remarks') { _remarksFilterQuery = includeController.text; _remarksExcludeQuery = excludeController.text; _remarksIncludeLogic = localIncludeLogic; _remarksExcludeLogic = localExcludeLogic; } if (col == 'quantity') _quantitySearchQuery = quantityController.text; }); _applyFilterAndSort(); Navigator.pop(ctx); }, child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold)))],
-    )));
+    );
+    })));
   }
 
   Widget _buildFilterGrid(List<String> options, Set<String> localFilters, String col, StateSetter setModalState, {Set<String>? validOptions}) {
