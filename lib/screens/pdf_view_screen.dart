@@ -697,7 +697,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                           code = result;
                                         }
 
-                                        if (code == null || code.isEmpty) return;
+                                        if (code.isEmpty) return;
                                         String cleaned = code.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
                                         cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');
                                         if (cleaned.toUpperCase().endsWith('-S')) {

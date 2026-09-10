@@ -2842,7 +2842,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                   code = result;
                 }
 
-                if (code == null || code.isEmpty) return;
+                if (code.isEmpty) return;
 
                 // 데이터 정제 로직 강화 (<NUL>, <NULL> 제거 및 대소문자 무관 -S 처리)
                 String cleaned = code.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
