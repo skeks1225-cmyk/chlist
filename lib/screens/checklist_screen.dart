@@ -688,7 +688,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                 : (_isPackingMode ? "미포장" : "미완료");
           }
           else if (c == 'complement') val = item.complement.isEmpty ? "(빈칸)" : item.complement;
-          else if (c == 'process') val = item.process.isEmpty ? "(빈칸)" : item.process;
+          else if (c == 'process') val = item.process.trim().isEmpty ? "(빈칸)" : item.process;
           else if (c == 'quantity') val = item.quantity;
           bool isSelected = selectedValues.contains(val);
           if (c == 'quantity' && _quantitySearchQuery.isNotEmpty) {
@@ -707,7 +707,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             : (_isPackingMode ? "미포장" : "미완료");
       }
       else if (col == 'complement') val = item.complement.isEmpty ? "(빈칸)" : item.complement;
-      else if (col == 'process') val = item.process.isEmpty ? "(빈칸)" : item.process;
+      else if (col == 'process') val = item.process.trim().isEmpty ? "(빈칸)" : item.process;
       else if (col == 'quantity') val = item.quantity;
       validSet.add(val);
     }
@@ -838,6 +838,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                       final bool isAllSelected = relatedProcs.every((p) => localFilters.contains(p));
                       
                       return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () {
                           setModalState(() {
                             if (isAllSelected) {
@@ -854,12 +855,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                         child: isEmptyOption
                             ? CustomPaint(
                                 painter: _DottedCircleBorderPainter(
-                                  color: isAllSelected ? Colors.yellowAccent : (isDark ? Colors.white54 : Colors.grey[600]!),
-                                  borderWidth: isAllSelected ? 3 : 1.5,
+                                  color: isAllSelected ? Colors.yellowAccent : (isDark ? Colors.white70 : Colors.grey[700]!),
+                                  borderWidth: isAllSelected ? 3 : 2,
                                 ),
                                 child: Container(
                                   width: 32,
                                   height: 32,
+                                  color: Colors.transparent,
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
