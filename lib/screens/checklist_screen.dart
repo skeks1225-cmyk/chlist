@@ -3704,17 +3704,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             child: _cellCheck(
               item, 
               isDark, 
-              onTap: _isEditMode ? null : () { 
+              onTap: (_isEditMode || _completeMode == 1) ? null : () { 
                 if (_completeMode == 0) { // 클릭 (즉시)
                   _toggleComplete(item);
                 } else if (_completeMode == 2) { // 클릭 (확인창)
                   _showCompleteConfirmDialog(item);
                 }
               },
-              onDoubleTap: _isEditMode ? null : () {
-                if (_completeMode == 1) { // 더블클릭 (즉시)
-                  _toggleComplete(item);
-                }
+              onDoubleTap: (_isEditMode || _completeMode != 1) ? null : () {
+                _toggleComplete(item);
               },
             ),
           ),
