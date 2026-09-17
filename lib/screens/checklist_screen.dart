@@ -2612,6 +2612,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             _batchTypeBtn(_isPackingMode ? "포장 일괄 변경" : "완료 일괄 변경", _isPackingMode ? Colors.cyan : Colors.green, () => _showBatchValueSelection("complete")),
             _batchTypeBtn("공정 일괄 변경", Colors.blue, () => _showBatchValueSelection("process")),
             _batchTypeBtn("보완 일괄 변경", Colors.orange, () => _showBatchValueSelection("complement")),
+            _batchTypeBtn("비고 일괄 변경", Colors.purple, () => _showBatchValueSelection("remarks")),
           ],
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))],
@@ -2740,6 +2741,137 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
         _dialogBtn(_isPackingMode ? "미포장 처리 (체크해제)" : "미완료 처리 (체크해제)", Colors.blueGrey, () => _applyBatchInput(type, false)),
         _dialogBtn("선택취소", Colors.blueGrey, () {}),
       ];
+    } else if (type == "remarks") {
+      title = "비고 일괄 선택";
+      final Set<String> kwSet = {};
+      for (var item in _originalItems) {
+        if (item.isSubheading || item.remarks.trim().isEmpty) continue;
+        final tokens = item.remarks.split(RegExp(r'[:,\s]+')).where((t) => t.trim().isNotEmpty);
+        for (var token in tokens) kwSet.add(token.trim());
+      }
+      final List<String> keywords = kwSet.toList()..sort();
+
+      final textController = TextEditingController();
+      final Set<String> selectedKw = {};
+
+      showDialog(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (context, setModalState) {
+            final List<String> parts = [...selectedKw];
+            if (textController.text.trim().isNotEmpty) {
+              parts.add(textController.text.trim());
+            }
+            final String combinedResult = parts.join(', ');
+
+            return AlertDialog(
+              title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (keywords.isNotEmpty) ...[
+                        Text("키워드 선택 (${keywords.length}개)", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey)),
+                        const SizedBox(height: 6),
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 100),
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.grey[850] : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: isDark ? Colors.white12 : Colors.grey[300]!),
+                          ),
+                          child: SingleChildScrollView(
+                            child: Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: keywords.map((kw) {
+                                final bool isSel = selectedKw.contains(kw);
+                                return InkWell(
+                                  onTap: () {
+                                    setModalState(() {
+                                      if (isSel) {
+                                        selectedKw.remove(kw);
+                                      } else {
+                                        selectedKw.add(kw);
+                                      }
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isSel ? Colors.blue : (isDark ? Colors.grey[800] : Colors.white),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: isSel ? Colors.blue : (isDark ? Colors.white24 : Colors.grey[400]!)),
+                                    ),
+                                    child: Text(
+                                      kw,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                        color: isSel ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      const Text("직접 입력", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey)),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: textController,
+                        style: const TextStyle(fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: "비고에 추가할 텍스트 입력",
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                          suffixIcon: textController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 16),
+                                  onPressed: () {
+                                    setModalState(() => textController.clear());
+                                  },
+                                )
+                              : null,
+                        ),
+                        onChanged: (_) => setModalState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.grey[900] : Colors.grey[200],
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          "적용 예정: ${combinedResult.isEmpty ? '(빈칸)' : combinedResult}",
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: combinedResult.isEmpty ? Colors.grey : (isDark ? Colors.cyanAccent : Colors.blue[800])),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _dialogBtn("일괄 적용", Colors.purple, () => _applyBatchInput(type, combinedResult)),
+                      const Divider(),
+                      _dialogBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
+                      _dialogBtn("선택취소", Colors.blueGrey, () {}),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소"))],
+            );
+          },
+        ),
+      );
+      return;
     }
 
     showDialog(
@@ -2763,6 +2895,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       if (type == "process") return i.process.isNotEmpty;
       if (type == "complement") return i.complement.isNotEmpty;
       if (type == "complete") return _isPackingMode ? i.packed : i.complete;
+      if (type == "remarks") return i.remarks.isNotEmpty;
       return false;
     });
 
@@ -2807,6 +2940,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
               item.complementTime = "";
             }
           }
+        } else if (type == "remarks") {
+          item.remarks = value.toString();
         }
       }
     });
@@ -2844,13 +2979,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                       onPressed: _selectAllVisible, 
                       style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                       child: const FittedBox(child: Text("전체\n선택", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
-                    ),
-                  ),
-                  Expanded(
-                    child: TextButton(
-                      onPressed: _selectSubItems, 
-                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                      child: const FittedBox(child: Text("하위\n선택", textAlign: TextAlign.center, style: TextStyle(color: Colors.lightGreenAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
                     ),
                   ),
                   Expanded(
@@ -3661,7 +3789,7 @@ class _RemarksCellState extends State<_RemarksCell> {
   @override void initState() { super.initState(); _ctrl = TextEditingController(text: widget.item.remarks); _node = FocusNode(); _node.addListener(() { if (!_node.hasFocus) { widget.item.remarks = _ctrl.text; widget.onSave(); } }); }
   @override void didUpdateWidget(_RemarksCell old) { super.didUpdateWidget(old); if (!_node.hasFocus) _ctrl.text = widget.item.remarks; }
   @override void dispose() { _node.dispose(); _ctrl.dispose(); super.dispose(); }
-  @override Widget build(BuildContext context) { return Stack(alignment: Alignment.centerRight, children: [TextField(focusNode: _node, controller: _ctrl, style: const TextStyle(fontSize: 12), decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 4)), onSubmitted: (v) { widget.item.remarks = v; widget.onSave(); widget.onForgetFocus(); }), if (_ctrl.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 14), onPressed: () { setState(() => _ctrl.clear()); widget.item.remarks = ""; widget.onSave(); })]); }
+  @override Widget build(BuildContext context) { return Stack(alignment: Alignment.centerRight, children: [TextField(focusNode: _node, controller: _ctrl, style: const TextStyle(fontSize: 12), decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 4)), onSubmitted: (v) { widget.item.remarks = v; widget.onSave(); widget.onForgetFocus(); }), if (_ctrl.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 14), onPressed: () async { bool? confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text("비고 삭제"), content: const Text("비고 내용을 삭제하시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("삭제", style: TextStyle(color: Colors.red)))])); if (confirm == true) { setState(() => _ctrl.clear()); widget.item.remarks = ""; widget.onSave(); } })]); }
 }
 
 class _DottedCircleBorderPainter extends CustomPainter {
