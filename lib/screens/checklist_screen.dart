@@ -520,8 +520,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       } else if (_noFilterMode == 2) {
         sectionItems = sectionItems.where((item) {
           if (item.displayNo.contains('-')) return true;
-          if (item.no.isNotEmpty) {
-            bool hasSub = _originalItems.any((other) => !other.isSubheading && other.displayNo.startsWith("${item.no}-"));
+          final cleanNo = item.no.trim();
+          if (cleanNo.isNotEmpty) {
+            bool hasSub = _originalItems.any((other) => 
+              !other.isSubheading && 
+              other.displayNo.contains('-') && 
+              other.displayNo.split('-')[0].trim() == cleanNo
+            );
             return !hasSub;
           }
           return false;
@@ -659,8 +664,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       if (_noFilterMode == 1 && item.no.isEmpty) continue;
       if (_noFilterMode == 2) {
         if (!item.displayNo.contains('-')) {
-          if (item.no.isNotEmpty) {
-            bool hasSub = _originalItems.any((other) => !other.isSubheading && other.displayNo.startsWith("${item.no}-"));
+          final cleanNo = item.no.trim();
+          if (cleanNo.isNotEmpty) {
+            bool hasSub = _originalItems.any((other) => 
+              !other.isSubheading && 
+              other.displayNo.contains('-') && 
+              other.displayNo.split('-')[0].trim() == cleanNo
+            );
             if (hasSub) continue;
           } else continue;
         }
@@ -756,10 +766,94 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     final includeController = TextEditingController(text: _remarksFilterQuery);
     final excludeController = TextEditingController(text: _remarksExcludeQuery);
     final quantityController = TextEditingController(text: _quantitySearchQuery);
+    final includeFocusNode = FocusNode();
+    final excludeFocusNode = FocusNode();
     String localIncludeLogic = _remarksIncludeLogic;
     String localExcludeLogic = _remarksExcludeLogic;
+
+    // ❗ 비고 데이터에서 구분자(:, , 공백)로 키워드 추출
+    final Set<String> remarkKeywordsSet = {};
+    if (col == 'remarks') {
+      for (var item in _originalItems) {
+        if (item.isSubheading || item.remarks.trim().isEmpty) continue;
+        final tokens = item.remarks.split(RegExp(r'[:,\s]+')).where((t) => t.trim().isNotEmpty);
+        for (var token in tokens) {
+          remarkKeywordsSet.add(token.trim());
+        }
+      }
+    }
+    final List<String> remarkKeywords = remarkKeywordsSet.toList()..sort();
+
     showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (context, setModalState) {
       final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+      Widget buildKeywordChips(TextEditingController ctrl, bool isInclude) {
+        if (remarkKeywords.isEmpty) return const SizedBox.shrink();
+        final List<String> currentWords = ctrl.text.split(' ').where((w) => w.trim().isNotEmpty).toList();
+        final Color activeColor = isInclude ? Colors.blue : Colors.redAccent;
+
+        return Container(
+          constraints: const BoxConstraints(maxHeight: 75),
+          margin: const EdgeInsets.only(top: 4, bottom: 6),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.grey[850] : Colors.grey[100],
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: isDark ? Colors.white12 : Colors.grey[300]!),
+          ),
+          child: SingleChildScrollView(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: remarkKeywords.map((kw) {
+                final bool isSel = currentWords.contains(kw);
+                return InkWell(
+                  onTap: () {
+                    setModalState(() {
+                      List<String> words = ctrl.text.split(' ').where((w) => w.trim().isNotEmpty).toList();
+                      if (words.contains(kw)) {
+                        words.removeWhere((w) => w == kw);
+                      } else {
+                        words.add(kw);
+                      }
+                      ctrl.text = words.join(' ');
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isSel ? activeColor : (isDark ? Colors.grey[800] : Colors.white),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSel ? activeColor : (isDark ? Colors.white24 : Colors.grey[400]!),
+                        width: isSel ? 1.5 : 1.0,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          kw,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            color: isSel ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                          ),
+                        ),
+                        if (isSel) ...[
+                          const SizedBox(width: 3),
+                          const Icon(Icons.check, size: 12, color: Colors.white),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      }
+
       return AlertDialog(
         title: Text(titleText, style: const TextStyle(fontWeight: FontWeight.bold)),
       content: SizedBox(width: 400, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -773,6 +867,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             const Text("포함 필터", style: TextStyle(fontWeight: FontWeight.bold)), 
             TextField(
               controller: includeController,
+              focusNode: includeFocusNode,
+              scrollPadding: const EdgeInsets.only(bottom: 160),
               decoration: InputDecoration(
                 isDense: true,
                 suffixIcon: includeController.text.isNotEmpty 
@@ -781,10 +877,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
               ),
               onChanged: (v) => setModalState(() {}),
             ),
+            buildKeywordChips(includeController, true),
             Row(children: [const Text("로직: "), Radio<String>(value: "AND", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)), const Text("AND"), Radio<String>(value: "OR", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)), const Text("OR")]),
             const SizedBox(height: 10), const Text("제외 필터", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)), 
             TextField(
               controller: excludeController,
+              focusNode: excludeFocusNode,
+              scrollPadding: const EdgeInsets.only(bottom: 160),
               decoration: InputDecoration(
                 isDense: true,
                 suffixIcon: excludeController.text.isNotEmpty 
@@ -793,6 +892,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
               ),
               onChanged: (v) => setModalState(() {}),
             ),
+            buildKeywordChips(excludeController, false),
             Row(children: [const Text("로직: "), Radio<String>(value: "AND", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)), const Text("AND"), Radio<String>(value: "OR", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)), const Text("OR")]),
           ] else ...[
             Row(children: [Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.addAll(options.where((o) => col == 'process' || col == 'quantity' || validOptions.contains(o)))), child: const Text("전체 선택", style: TextStyle(fontSize: 12)))), const SizedBox(width: 8), Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.clear()), child: const Text("전체 해제", style: TextStyle(fontSize: 12))))]),
