@@ -945,6 +945,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                 ],
               ),
             ),
+          ] else ...[
             Row(children: [Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.addAll(options.where((o) => col == 'process' || col == 'quantity' || validOptions.contains(o)))), child: const Text("전체 선택", style: TextStyle(fontSize: 12)))), const SizedBox(width: 8), Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.clear()), child: const Text("전체 해제", style: TextStyle(fontSize: 12))))]),
             const SizedBox(height: 10), 
             if (col == 'process') ...[
