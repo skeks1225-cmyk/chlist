@@ -520,16 +520,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       } else if (_noFilterMode == 2) {
         sectionItems = sectionItems.where((item) {
           if (item.displayNo.contains('-')) return true;
-          final cleanNo = item.no.trim();
-          if (cleanNo.isNotEmpty) {
-            bool hasSub = _originalItems.any((other) => 
-              !other.isSubheading && 
-              other.displayNo.contains('-') && 
-              other.displayNo.split('-')[0].trim() == cleanNo
-            );
-            return !hasSub;
-          }
-          return false;
+          final mainNo = item.displayNo.split('-')[0].trim();
+          if (mainNo.isEmpty) return false;
+          bool hasSub = _originalItems.any((other) => 
+            !other.isSubheading && 
+            other.displayNo.contains('-') && 
+            other.displayNo.split('-')[0].trim() == mainNo
+          );
+          return !hasSub;
         }).toList();
       }
 
@@ -664,15 +662,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       if (_noFilterMode == 1 && item.no.isEmpty) continue;
       if (_noFilterMode == 2) {
         if (!item.displayNo.contains('-')) {
-          final cleanNo = item.no.trim();
-          if (cleanNo.isNotEmpty) {
-            bool hasSub = _originalItems.any((other) => 
-              !other.isSubheading && 
-              other.displayNo.contains('-') && 
-              other.displayNo.split('-')[0].trim() == cleanNo
-            );
-            if (hasSub) continue;
-          } else continue;
+          final mainNo = item.displayNo.split('-')[0].trim();
+          if (mainNo.isEmpty) continue;
+          bool hasSub = _originalItems.any((other) => 
+            !other.isSubheading && 
+            other.displayNo.contains('-') && 
+            other.displayNo.split('-')[0].trim() == mainNo
+          );
+          if (hasSub) continue;
         }
       }
       if (_remarksFilterQuery.isNotEmpty && col != 'remarks') {
