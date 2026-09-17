@@ -524,6 +524,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           if (mainNo.isEmpty) return false;
           bool hasSub = _originalItems.any((other) => 
             !other.isSubheading && 
+            other.subheadingTitle == item.subheadingTitle &&
             other.displayNo.contains('-') && 
             other.displayNo.split('-')[0].trim() == mainNo
           );
@@ -666,6 +667,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           if (mainNo.isEmpty) continue;
           bool hasSub = _originalItems.any((other) => 
             !other.isSubheading && 
+            other.subheadingTitle == item.subheadingTitle &&
             other.displayNo.contains('-') && 
             other.displayNo.split('-')[0].trim() == mainNo
           );
