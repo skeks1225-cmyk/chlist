@@ -767,7 +767,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                               suffixIcon: _remarksController.text.isNotEmpty 
-                                ? IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); }) 
+                                ? IconButton(icon: const Icon(Icons.cancel, size: 18, color: Colors.grey), onPressed: () async { bool? confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text("비고 삭제"), content: const Text("비고 내용을 삭제하시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("삭제", style: TextStyle(color: Colors.red)))])); if (confirm == true) { setState(() => _remarksController.clear()); item.remarks = ""; widget.onStatusUpdate(item, 'remarks'); } }) 
                                 : null
                             ),
                             onChanged: (val) { item.remarks = val; setState(() {}); },

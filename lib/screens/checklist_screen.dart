@@ -2656,6 +2656,42 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     );
   }
 
+  Widget _batchOptionBtn(String label, Color color, VoidCallback onTap) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
+                child: Container(
+                  width: 6,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showBatchValueSelection(String type) {
     Navigator.pop(context); // 타입 선택창 닫기
     
@@ -2722,24 +2758,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           }).toList(),
         ),
         const Divider(),
-        _dialogBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
-        _dialogBtn("선택취소", Colors.blueGrey, () {}),
+        _batchOptionBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
+        _batchOptionBtn("선택취소", Colors.blueGrey, () => Navigator.pop(context)),
       ];
     } else if (type == "complement") {
       title = "보완 일괄 선택";
       options = [
-        _dialogBtn("부족", Colors.orange, () => _applyBatchInput(type, "부족")),
-        _dialogBtn("재작업", Colors.red, () => _applyBatchInput(type, "재작업")),
+        _batchOptionBtn("부족", Colors.orange, () => _applyBatchInput(type, "부족")),
+        _batchOptionBtn("재작업", Colors.red, () => _applyBatchInput(type, "재작업")),
         const Divider(),
-        _dialogBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
-        _dialogBtn("선택취소", Colors.blueGrey, () {}),
+        _batchOptionBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
+        _batchOptionBtn("선택취소", Colors.blueGrey, () => Navigator.pop(context)),
       ];
     } else if (type == "complete") {
       title = _isPackingMode ? "포장 여부 일괄 변경" : "완료 여부 일괄 변경";
       options = [
-        _dialogBtn(_isPackingMode ? "포장 완료 처리" : "완료 처리", _isPackingMode ? Colors.cyan : Colors.green, () => _applyBatchInput(type, true)),
-        _dialogBtn(_isPackingMode ? "미포장 처리 (체크해제)" : "미완료 처리 (체크해제)", Colors.blueGrey, () => _applyBatchInput(type, false)),
-        _dialogBtn("선택취소", Colors.blueGrey, () {}),
+        _batchOptionBtn(_isPackingMode ? "포장 완료 처리" : "완료 처리", _isPackingMode ? Colors.cyan : Colors.green, () => _applyBatchInput(type, true)),
+        _batchOptionBtn(_isPackingMode ? "미포장 처리 (체크해제)" : "미완료 처리 (체크해제)", Colors.blueGrey, () => _applyBatchInput(type, false)),
+        _batchOptionBtn("선택취소", Colors.blueGrey, () => Navigator.pop(context)),
       ];
     } else if (type == "remarks") {
       title = "비고 일괄 선택";
@@ -2858,10 +2894,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                         ),
                       ),
                       const SizedBox(height: 12),
-                      _dialogBtn("일괄 적용", Colors.purple, () => _applyBatchInput(type, combinedResult)),
+                      _batchOptionBtn("일괄 적용", Colors.purple, () => _applyBatchInput(type, combinedResult)),
                       const Divider(),
-                      _dialogBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
-                      _dialogBtn("선택취소", Colors.blueGrey, () {}),
+                      _batchOptionBtn("지우기 (초기화)", Colors.grey, () => _applyBatchInput(type, "")),
+                      _batchOptionBtn("선택취소", Colors.blueGrey, () => Navigator.pop(context)),
                     ],
                   ),
                 ),
@@ -2885,12 +2921,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
   }
 
   void _applyBatchInput(String type, dynamic value) async {
-    Navigator.pop(context); // 값 선택창 닫기
-
     final targets = _originalItems.where((i) => _selectedIndices.contains(i.realIndex) && !i.isSubheading).toList();
     if (targets.isEmpty) return;
 
-    // 덮어쓰기 확인이 필요한지 체크
     bool hasData = targets.any((i) {
       if (type == "process") return i.process.isNotEmpty;
       if (type == "complement") return i.complement.isNotEmpty;
@@ -2899,19 +2932,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       return false;
     });
 
-    if (hasData) {
-      bool confirm = await showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("데이터 덮어쓰기 확인"),
-          content: const Text("선택한 항목 중 이미 데이터가 있는 항목이 있습니다.\n기존 데이터를 무시하고 덮어쓰시겠습니까?"),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("덮어쓰기", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
-          ],
-        ),
-      ) ?? false;
-      if (!confirm) return;
+    String confirmMsg = hasData
+        ? "선택한 ${targets.length}개 항목 중 이미 데이터가 있는 항목이 포함되어 있습니다.\n기존 데이터를 무시하고 일괄 변경하시겠습니까?"
+        : "선택한 ${targets.length}개 항목에 일괄 변경을 실행하시겠습니까?";
+
+    bool confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("일괄 입력 확인"),
+        content: Text(confirmMsg),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("확인", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold))),
+        ],
+      ),
+    ) ?? false;
+
+    if (!confirm) return;
+
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
     }
 
     setState(() {
@@ -2946,6 +2986,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       }
     });
 
+    _applyFilterAndSort();
     if (_autoSave) _manualSave(silent: true);
     _showSnackBar("일괄 처리가 완료되었습니다.");
   }
