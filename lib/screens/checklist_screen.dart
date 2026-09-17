@@ -768,8 +768,43 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     final quantityController = TextEditingController(text: _quantitySearchQuery);
     final includeFocusNode = FocusNode();
     final excludeFocusNode = FocusNode();
+    final includeSectionKey = GlobalKey();
+    final excludeSectionKey = GlobalKey();
+    final dialogScrollController = ScrollController();
     String localIncludeLogic = _remarksIncludeLogic;
     String localExcludeLogic = _remarksExcludeLogic;
+
+    if (col == 'remarks') {
+      includeFocusNode.addListener(() {
+        if (includeFocusNode.hasFocus) {
+          Future.delayed(const Duration(milliseconds: 250), () {
+            if (includeSectionKey.currentContext != null) {
+              Scrollable.ensureVisible(
+                includeSectionKey.currentContext!,
+                alignment: 0.0,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+              );
+            }
+          });
+        }
+      });
+
+      excludeFocusNode.addListener(() {
+        if (excludeFocusNode.hasFocus) {
+          Future.delayed(const Duration(milliseconds: 250), () {
+            if (excludeSectionKey.currentContext != null) {
+              Scrollable.ensureVisible(
+                excludeSectionKey.currentContext!,
+                alignment: 0.0,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+              );
+            }
+          });
+        }
+      });
+    }
 
     // ❗ 비고 데이터에서 구분자(:, , 공백)로 키워드 추출
     final Set<String> remarkKeywordsSet = {};
@@ -856,7 +891,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
 
       return AlertDialog(
         title: Text(titleText, style: const TextStyle(fontWeight: FontWeight.bold)),
-      content: SizedBox(width: 400, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      content: SizedBox(width: 400, child: SingleChildScrollView(controller: dialogScrollController, child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text("정렬", style: TextStyle(fontWeight: FontWeight.bold)),
         RadioListTile<bool?>(title: const Text("오름차순"), value: true, groupValue: localIsSorted ? localIsAscending : null, onChanged: (val) => setModalState(() { localIsSorted = true; localIsAscending = true; }), contentPadding: EdgeInsets.zero, dense: true),
         RadioListTile<bool?>(title: const Text("내림차순"), value: false, groupValue: localIsSorted ? localIsAscending : null, onChanged: (val) => setModalState(() { localIsSorted = true; localIsAscending = false; }), contentPadding: EdgeInsets.zero, dense: true),
@@ -864,37 +899,53 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
         if (col != 'itemCode') ...[
           const Divider(),
           if (col == 'remarks') ...[
-            const Text("포함 필터", style: TextStyle(fontWeight: FontWeight.bold)), 
-            TextField(
-              controller: includeController,
-              focusNode: includeFocusNode,
-              scrollPadding: const EdgeInsets.only(bottom: 160),
-              decoration: InputDecoration(
-                isDense: true,
-                suffixIcon: includeController.text.isNotEmpty 
-                  ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => setModalState(() => includeController.clear())) 
-                  : null
+            Container(
+              key: includeSectionKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("포함 필터", style: TextStyle(fontWeight: FontWeight.bold)), 
+                  TextField(
+                    controller: includeController,
+                    focusNode: includeFocusNode,
+                    scrollPadding: const EdgeInsets.only(bottom: 160),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      suffixIcon: includeController.text.isNotEmpty 
+                        ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => setModalState(() => includeController.clear())) 
+                        : null
+                    ),
+                    onChanged: (v) => setModalState(() {}),
+                  ),
+                  buildKeywordChips(includeController, true),
+                  Row(children: [const Text("로직: "), Radio<String>(value: "AND", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)), const Text("AND"), Radio<String>(value: "OR", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)), const Text("OR")]),
+                ],
               ),
-              onChanged: (v) => setModalState(() {}),
             ),
-            buildKeywordChips(includeController, true),
-            Row(children: [const Text("로직: "), Radio<String>(value: "AND", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)), const Text("AND"), Radio<String>(value: "OR", groupValue: localIncludeLogic, onChanged: (v) => setModalState(() => localIncludeLogic = v!)), const Text("OR")]),
-            const SizedBox(height: 10), const Text("제외 필터", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)), 
-            TextField(
-              controller: excludeController,
-              focusNode: excludeFocusNode,
-              scrollPadding: const EdgeInsets.only(bottom: 160),
-              decoration: InputDecoration(
-                isDense: true,
-                suffixIcon: excludeController.text.isNotEmpty 
-                  ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => setModalState(() => excludeController.clear())) 
-                  : null
+            const SizedBox(height: 10),
+            Container(
+              key: excludeSectionKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("제외 필터", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)), 
+                  TextField(
+                    controller: excludeController,
+                    focusNode: excludeFocusNode,
+                    scrollPadding: const EdgeInsets.only(bottom: 160),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      suffixIcon: excludeController.text.isNotEmpty 
+                        ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => setModalState(() => excludeController.clear())) 
+                        : null
+                    ),
+                    onChanged: (v) => setModalState(() {}),
+                  ),
+                  buildKeywordChips(excludeController, false),
+                  Row(children: [const Text("로직: "), Radio<String>(value: "AND", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)), const Text("AND"), Radio<String>(value: "OR", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)), const Text("OR")]),
+                ],
               ),
-              onChanged: (v) => setModalState(() {}),
             ),
-            buildKeywordChips(excludeController, false),
-            Row(children: [const Text("로직: "), Radio<String>(value: "AND", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)), const Text("AND"), Radio<String>(value: "OR", groupValue: localExcludeLogic, onChanged: (v) => setModalState(() => localExcludeLogic = v!)), const Text("OR")]),
-          ] else ...[
             Row(children: [Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.addAll(options.where((o) => col == 'process' || col == 'quantity' || validOptions.contains(o)))), child: const Text("전체 선택", style: TextStyle(fontSize: 12)))), const SizedBox(width: 8), Expanded(child: OutlinedButton(onPressed: () => setModalState(() => localFilters.clear()), child: const Text("전체 해제", style: TextStyle(fontSize: 12))))]),
             const SizedBox(height: 10), 
             if (col == 'process') ...[
