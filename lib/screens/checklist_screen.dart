@@ -420,7 +420,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     FocusScope.of(context).requestFocus(_dummyFocusNode);
   }
 
+  Map<int, String> _batchUpdatedCells = {}; // { realIndex: "process" | "complete" | "complement" | "remarks" }
+
   void _applyFilterAndSort() {
+    if (_batchUpdatedCells.isNotEmpty) {
+      _batchUpdatedCells.clear();
+    }
     List<ItemModel> results = [];
     
     if (_isSubheadingViewMode) {
@@ -2956,8 +2961,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     }
 
     setState(() {
+      _batchUpdatedCells.clear();
       String now = DateTime.now().toString().substring(0, 16);
       for (var item in targets) {
+        _batchUpdatedCells[item.realIndex] = type;
         if (type == "process") {
           item.process = value.toString();
           item.processTime = value.toString().isEmpty ? "" : now;
@@ -2987,14 +2994,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       }
     });
 
-    _applyFilterAndSort();
     if (_autoSave) _manualSave(silent: true);
     _showSnackBar("일괄 처리가 완료되었습니다.");
+  }
+
+  Widget _wrapBatchHighlight({required int realIndex, required String colType, required Widget child}) {
+    bool isUpdated = _batchUpdatedCells[realIndex] == colType;
+    if (!isUpdated) return child;
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.blue, width: 2),
+      ),
+      child: child,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool hasActiveFilters = (_isSorted || _selectedSections.isNotEmpty || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _quantitySearchQuery.isNotEmpty || _isSubheadingViewMode || _noFilterMode != 0 || _searchQuery.isNotEmpty || _columnFilters.values.any((s) => s.isNotEmpty) || _isSelectionFiltered);
     return Listener(
       onPointerDown: (_) => _resetInactivityTimer(),
       child: Scaffold(
@@ -3009,7 +3028,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           TextButton(onPressed: () { setState(() { _originalItems = List.from(_preReorderItems); _isReorderMode = false; }); _applyFilterAndSort(); }, child: const Text("취소", style: TextStyle(color: Colors.white))),
           TextButton(onPressed: () => setState(() => _isReorderMode = false), child: const Text("완료", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
         ] : _isEditMode ? [
-          // ❗ 가로 폭 전체를 자동으로 균등 분배하는 Row 구조 적용
+          // ❗ 가로 폭 전체를 자동으로 균등 분배하는 8개 슬롯 Row 구조 적용
           SizedBox(
             width: MediaQuery.of(context).size.width,
             child: Padding(
@@ -3040,6 +3059,20 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                   const SizedBox(
                     height: 25,
                     child: VerticalDivider(color: Colors.white24, width: 6, thickness: 1),
+                  ),
+                  Expanded(
+                    child: hasActiveFilters ? TextButton(
+                      onPressed: _resetSort,
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      child: const FittedBox(child: Text("필터\n리셋", textAlign: TextAlign.center, style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
+                    ) : const SizedBox.shrink(),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: _handleRefresh,
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      child: const FittedBox(child: Text("새로\n고침", textAlign: TextAlign.center, style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
+                    ),
                   ),
                   Expanded(
                     child: TextButton(
@@ -3077,7 +3110,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             ),
           )
         ] : [
-          if (_isSorted || _selectedSections.isNotEmpty || _showUnfinishedOnly || _remarksFilterQuery.isNotEmpty || _remarksExcludeQuery.isNotEmpty || _quantitySearchQuery.isNotEmpty || _isSubheadingViewMode || _noFilterMode != 0 || _searchQuery.isNotEmpty || _columnFilters.values.any((s) => s.isNotEmpty) || _isSelectionFiltered) 
+          if (hasActiveFilters) 
             TextButton(onPressed: _resetSort, child: const Text("필터리셋", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold))),
           TextButton(onPressed: _handleRefresh, child: const Text("새로고침", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))),
           TextButton(onPressed: _handleClose, child: const Text("닫기", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
@@ -3701,32 +3734,44 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           // ❗ 5. 완료 체크
           _buildSelectionZone(
             item: item,
-            child: _cellCheck(
-              item, 
-              isDark, 
-              onTap: (_isEditMode || _completeMode == 1) ? null : () { 
-                if (_completeMode == 0) { // 클릭 (즉시)
+            child: _wrapBatchHighlight(
+              realIndex: item.realIndex,
+              colType: "complete",
+              child: _cellCheck(
+                item, 
+                isDark, 
+                onTap: (_isEditMode || _completeMode == 1) ? null : () { 
+                  if (_completeMode == 0) { // 클릭 (즉시)
+                    _toggleComplete(item);
+                  } else if (_completeMode == 2) { // 클릭 (확인창)
+                    _showCompleteConfirmDialog(item);
+                  }
+                },
+                onDoubleTap: (_isEditMode || _completeMode != 1) ? null : () {
                   _toggleComplete(item);
-                } else if (_completeMode == 2) { // 클릭 (확인창)
-                  _showCompleteConfirmDialog(item);
-                }
-              },
-              onDoubleTap: (_isEditMode || _completeMode != 1) ? null : () {
-                _toggleComplete(item);
-              },
+                },
+              ),
             ),
           ),
 
           // ❗ 6. 공정
           _buildSelectionZone(
             item: item,
-            child: _cellProcess(item.process, isDark, _isEditMode ? null : () => _showProcessDialog(item)),
+            child: _wrapBatchHighlight(
+              realIndex: item.realIndex,
+              colType: "process",
+              child: _cellProcess(item.process, isDark, _isEditMode ? null : () => _showProcessDialog(item)),
+            ),
           ),
 
           // ❗ 7. 보완
           _buildSelectionZone(
             item: item,
-            child: _cellComplement(item.complement, isDark, _isEditMode ? null : () => _showComplementDialog(item)),
+            child: _wrapBatchHighlight(
+              realIndex: item.realIndex,
+              colType: "complement",
+              child: _cellComplement(item.complement, isDark, _isEditMode ? null : () => _showComplementDialog(item)),
+            ),
           ),
 
           // ❗ 8. 비고 (flex: 3)
@@ -3734,15 +3779,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             flex: 3,
             child: _buildSelectionZone(
               item: item,
-              child: IgnorePointer(
-                ignoring: _isEditMode,
-                child: _RemarksCell(
-                  item: item,
-                  onSave: () { if (_autoSave) _manualSave(silent: true); },
-                  onForgetFocus: _forgetFocus
-                )
-              )
-            )
+              child: _wrapBatchHighlight(
+                realIndex: item.realIndex,
+                colType: "remarks",
+                child: IgnorePointer(
+                  ignoring: _isEditMode,
+                  child: _RemarksCell(
+                    item: item,
+                    onSave: () { if (_autoSave) _manualSave(silent: true); },
+                    onForgetFocus: _forgetFocus
+                  ),
+                ),
+              ),
+            ),
           ),
         ]
       ),
