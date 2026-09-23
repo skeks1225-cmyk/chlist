@@ -3069,9 +3069,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                   ),
                   Expanded(
                     child: TextButton(
-                      onPressed: _handleRefresh,
+                      onPressed: _applyFilterAndSort,
                       style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                      child: const FittedBox(child: Text("새로\n고침", textAlign: TextAlign.center, style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
+                      child: const FittedBox(child: Text("필터\n갱신", textAlign: TextAlign.center, style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11, height: 1.2)))
                     ),
                   ),
                   Expanded(
