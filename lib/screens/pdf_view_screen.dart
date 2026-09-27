@@ -788,7 +788,26 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         if (widget.isPackingMode) ...[
-                          // ❗ 포장모드일 때 완료 버튼 표시 여부 판단 (0: 미완료 시만 스마트 노출, 1: 상시 4개 노출)
+                          // ❗ 1. [포장] 버튼 (포장모드 핵심 - 항상 최좌측 1번째 배치)
+                          _statusBtn(
+                            "포장",
+                            Colors.cyan,
+                            item.packed,
+                            () {
+                              if (widget.completeMode == 0) { // 클릭 (즉시)
+                                widget.onStatusUpdate(item, 'toggle_packed'); setState(() {});
+                              } else if (widget.completeMode == 2) { // 클릭 (확인창)
+                                _showCompleteConfirmDialog(item, targetType: 'packed');
+                              }
+                            },
+                            onDoubleTap: () {
+                              if (widget.completeMode == 1) { // 더블클릭 (즉시)
+                                widget.onStatusUpdate(item, 'toggle_packed'); setState(() {});
+                              }
+                            },
+                            onLongPress: () => _showCompleteTimeDialog(item, targetType: 'packed'),
+                          ),
+                          // ❗ 2. [완료] 버튼 (조건 만족 시 2번째 자리에 동적 삽입)
                           if (widget.pdfPackingShowCompleteMode == 1 || (widget.pdfPackingShowCompleteMode == 0 && !_itemInitialCompleteState))
                             _statusBtn(
                               "완료",
@@ -808,24 +827,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                               },
                               onLongPress: () => _showCompleteTimeDialog(item, targetType: 'complete'),
                             ),
-                          _statusBtn(
-                            "포장",
-                            Colors.cyan,
-                            item.packed,
-                            () {
-                              if (widget.completeMode == 0) { // 클릭 (즉시)
-                                widget.onStatusUpdate(item, 'toggle_packed'); setState(() {});
-                              } else if (widget.completeMode == 2) { // 클릭 (확인창)
-                                _showCompleteConfirmDialog(item, targetType: 'packed');
-                              }
-                            },
-                            onDoubleTap: () {
-                              if (widget.completeMode == 1) { // 더블클릭 (즉시)
-                                widget.onStatusUpdate(item, 'toggle_packed'); setState(() {});
-                              }
-                            },
-                            onLongPress: () => _showCompleteTimeDialog(item, targetType: 'packed'),
-                          ),
                         ] else ...[
                           _statusBtn(
                             "완료",
