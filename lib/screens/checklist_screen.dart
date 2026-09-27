@@ -202,21 +202,41 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     if (!baseDir.existsSync()) baseDir.createSync(recursive: true);
   }
 
+  double _getDouble(SharedPreferences prefs, String key, double defaultValue) {
+    try {
+      return prefs.getDouble(key) ?? defaultValue;
+    } catch (_) {
+      final val = prefs.get(key);
+      if (val is num) return val.toDouble();
+      return defaultValue;
+    }
+  }
+
+  int _getInt(SharedPreferences prefs, String key, int defaultValue) {
+    try {
+      return prefs.getInt(key) ?? defaultValue;
+    } catch (_) {
+      final val = prefs.get(key);
+      if (val is num) return val.toInt();
+      return defaultValue;
+    }
+  }
+
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _excelPath = prefs.getString('excelPath') ?? "";
       _pdfFolderPath = prefs.getString('pdfFolderPath') ?? "";
       _autoSave = prefs.getBool('autoSave') ?? true;
-      _completeMode = prefs.getInt('completeMode') ?? (prefs.getBool('confirmComplete') ?? false ? 2 : 0);
-      _scannerZoom = prefs.getDouble('scannerZoom') ?? 0.0;
-      _qrScanActionMode = prefs.getInt('qrScanActionMode') ?? 0;
-      _swipeSensitivity = prefs.getDouble('swipeSensitivity') ?? 0.2;
-      _pdfDoubleTapZoom = prefs.getDouble('pdfDoubleTapZoom') ?? 3.0;
+      _completeMode = _getInt(prefs, 'completeMode', prefs.getBool('confirmComplete') ?? false ? 2 : 0);
+      _scannerZoom = _getDouble(prefs, 'scannerZoom', 0.0);
+      _qrScanActionMode = _getInt(prefs, 'qrScanActionMode', 0);
+      _swipeSensitivity = _getDouble(prefs, 'swipeSensitivity', 0.2);
+      _pdfDoubleTapZoom = _getDouble(prefs, 'pdfDoubleTapZoom', 3.0);
       _enableLongPressEdit = prefs.getBool('enableLongPressEdit') ?? false;
-      _keepScreenMode = prefs.getInt('keepScreenMode') ?? 0;
-      _keepScreenMinutes = prefs.getDouble('keepScreenMinutes') ?? 5.0;
-      _pdfPackingShowCompleteMode = prefs.getInt('pdfPackingShowCompleteMode') ?? 0;
+      _keepScreenMode = _getInt(prefs, 'keepScreenMode', 0);
+      _keepScreenMinutes = _getDouble(prefs, 'keepScreenMinutes', 5.0);
+      _pdfPackingShowCompleteMode = _getInt(prefs, 'pdfPackingShowCompleteMode', 0);
       WidgetsBinding.instance.addPostFrameCallback((_) => _resetInactivityTimer());
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
@@ -241,13 +261,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       _isSorted = prefs.getBool('filter_isSorted') ?? false;
       _showUnfinishedOnly = prefs.getBool('filter_showUnfinishedOnly') ?? false;
       _isSubheadingViewMode = prefs.getBool('filter_isSubheadingViewMode') ?? false;
-      _noFilterMode = prefs.getInt('filter_noFilterMode') ?? 0;
+      _noFilterMode = _getInt(prefs, 'filter_noFilterMode', 0);
       _remarksFilterQuery = prefs.getString('filter_remarksFilterQuery') ?? "";
       _remarksExcludeQuery = prefs.getString('filter_remarksExcludeQuery') ?? "";
       _remarksIncludeLogic = prefs.getString('filter_remarksIncludeLogic') ?? "AND";
       _remarksExcludeLogic = prefs.getString('filter_remarksExcludeLogic') ?? "OR";
       _quantitySearchQuery = prefs.getString('filter_quantitySearchQuery') ?? "";
 
+      _columnFilters.forEach((key, value) => value.clear());
       String? colFilterJson = prefs.getString('filter_columnFilters');
       if (colFilterJson != null) {
         try {
@@ -261,7 +282,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       }
 
       List<String>? selSections = prefs.getStringList('filter_selectedSections');
-      if (selSections != null) _selectedSections = selSections.toSet();
+      if (selSections != null) {
+        _selectedSections = selSections.toSet();
+      } else {
+        _selectedSections = {};
+      }
     });
     if (_excelPath.isNotEmpty && File(_excelPath).existsSync()) _loadExcelData(_excelPath, keepFilters: true);
   }
@@ -312,6 +337,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
   // ❗ 설정 백업 내보내기 (안 2)
   Future<void> _exportSettings() async {
     try {
+      await _saveSettings(); // 내보내기 전 현재 메모리 상의 설정을 SharedPreferences에 먼저 100% 저장
       final prefs = await SharedPreferences.getInstance();
       final Map<String, dynamic> settingsMap = {};
       final keys = prefs.getKeys();
@@ -344,19 +370,31 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       
       // 기존 설정 완전히 클리어 후 복원
       await prefs.clear();
+
+      const doubleKeys = {'scannerZoom', 'swipeSensitivity', 'pdfDoubleTapZoom', 'keepScreenMinutes'};
+      const intKeys = {'completeMode', 'qrScanActionMode', 'keepScreenMode', 'pdfPackingShowCompleteMode', 'filter_noFilterMode'};
+      const boolKeys = {'autoSave', 'enableLongPressEdit', 'filter_isAscending', 'filter_isSorted', 'filter_showUnfinishedOnly', 'filter_isSubheadingViewMode', 'confirmComplete'};
       
       for (String key in settingsMap.keys) {
         final val = settingsMap[key];
-        if (val is String) {
-          await prefs.setString(key, val);
-        } else if (val is bool) {
+        if (val == null) continue;
+
+        if (doubleKeys.contains(key) && val is num) {
+          await prefs.setDouble(key, val.toDouble());
+        } else if (intKeys.contains(key) && val is num) {
+          await prefs.setInt(key, val.toInt());
+        } else if (boolKeys.contains(key) && val is bool) {
           await prefs.setBool(key, val);
-        } else if (val is int) {
-          await prefs.setInt(key, val);
-        } else if (val is double) {
-          await prefs.setDouble(key, val);
+        } else if (val is String) {
+          await prefs.setString(key, val);
         } else if (val is List) {
           await prefs.setStringList(key, val.map((e) => e.toString()).toList());
+        } else if (val is double) {
+          await prefs.setDouble(key, val);
+        } else if (val is int) {
+          await prefs.setInt(key, val);
+        } else if (val is bool) {
+          await prefs.setBool(key, val);
         }
       }
       _showSnackBar("설정이 복구되었습니다. 리스트를 다시 불러옵니다.");
