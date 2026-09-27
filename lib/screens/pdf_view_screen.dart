@@ -19,6 +19,7 @@ class PdfViewerScreen extends StatefulWidget {
   final double swipeSensitivity; // ❗ 슬라이드 감도 (0.05 ~ 0.50)
   final double pdfDoubleTapZoom; // ❗ 더블탭 확대 배율 (기본 3.0)
   final bool isPackingMode; // ❗ 포장모드 여부 추가
+  final int pdfPackingShowCompleteMode; // ❗ 포장모드 완료버튼 표시 방식 (0: 미완료 시만 스마트 노출, 1: 상시 4개 노출)
   final Function(ItemModel, String) onStatusUpdate;
 
   const PdfViewerScreen({
@@ -34,6 +35,7 @@ class PdfViewerScreen extends StatefulWidget {
     required this.swipeSensitivity,
     this.pdfDoubleTapZoom = 3.0,
     required this.isPackingMode,
+    this.pdfPackingShowCompleteMode = 0,
     required this.onStatusUpdate,
   });
 
@@ -53,6 +55,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   bool _isLoading = false;
   double? _fitZoomLevel;      // PDF 로드 시 실제 FIT 배율 저장
   Offset? _doubleTapPosition; // 더블탭 위치 저장 (확대 중심점)
+  bool _itemInitialCompleteState = false; // ❗ 뷰어 로드 시점의 완료 상태 (버튼 위치 튐 방지용)
 
   // ❗ 슬라이드 제스처 관련 변수
   double _swipeStartX = 0;
@@ -95,6 +98,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
 
     _remarksController.text = item.remarks;
+    _itemInitialCompleteState = item.complete;
     if (mounted) {
       setState(() {
         _currentPdfPath = File(localPath).existsSync() ? localPath : "";
@@ -164,8 +168,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
   }
 
-  void _showCompleteTimeDialog(ItemModel item) {
-    String record = widget.isPackingMode 
+  void _showCompleteTimeDialog(ItemModel item, {String targetType = 'default'}) {
+    bool isPackingTarget = (targetType == 'packed') || (targetType == 'default' && widget.isPackingMode);
+    String record = isPackingTarget
         ? (item.packedTime.isEmpty ? "기록 없음" : item.packedTime)
         : (item.completeTime.isEmpty ? "기록 없음" : item.completeTime);
     showDialog(
@@ -176,7 +181,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           children: [
             FittedBox(fit: BoxFit.scaleDown, child: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.blue))),
             const SizedBox(height: 8),
-            Text(widget.isPackingMode ? "포장 입력 시간" : "완료 입력 시간", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(isPackingTarget ? "포장 입력 시간" : "완료 입력 시간", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text("입력시간 : $record", style: const TextStyle(fontSize: 16)),
@@ -397,15 +402,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   @override
   void dispose() { _remarksController.dispose(); _searchController.dispose(); _searchFocusNode.dispose(); super.dispose(); }
 
-  Future<void> _showCompleteConfirmDialog(ItemModel item) async {
-    bool isChecking = widget.isPackingMode ? !item.packed : !item.complete;
+  Future<void> _showCompleteConfirmDialog(ItemModel item, {String targetType = 'default'}) async {
+    bool isPackingTarget = (targetType == 'packed') || (targetType == 'default' && widget.isPackingMode);
+    bool isChecking = isPackingTarget ? !item.packed : !item.complete;
     bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(widget.isPackingMode 
+        title: Text(isPackingTarget 
             ? (isChecking ? "포장 체크 확인" : "포장 체크 해제 확인")
             : (isChecking ? "완료 체크 확인" : "완료 체크 해제 확인")),
-        content: Text("[${item.itemCode}]\n항목을 ${isChecking ? (widget.isPackingMode ? '포장 처리' : '완료 처리') : (widget.isPackingMode ? '미포장 처리' : '미완료 처리')}하시겠습니까?"),
+        content: Text("[${item.itemCode}]\n항목을 ${isChecking ? (isPackingTarget ? '포장 처리' : '완료 처리') : (isPackingTarget ? '미포장 처리' : '미완료 처리')}하시겠습니까?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold))),
@@ -413,7 +419,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       ),
     );
     if (confirm == true) {
-      widget.onStatusUpdate(item, 'complete');
+      widget.onStatusUpdate(item, isPackingTarget ? 'toggle_packed' : 'toggle_complete');
       setState(() {});
     }
   }
@@ -777,28 +783,69 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    // 줄 2: 완료, 공정, 보완 상태 버튼들
+                    // 줄 2: 완료, 포장, 공정, 보완 상태 버튼들
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _statusBtn(
-                          widget.isPackingMode ? "포장" : "완료",
-                          widget.isPackingMode ? Colors.cyan : Colors.green,
-                          widget.isPackingMode ? item.packed : item.complete,
-                          () {
-                            if (widget.completeMode == 0) { // 클릭 (즉시)
-                              widget.onStatusUpdate(item, 'complete'); setState(() {});
-                            } else if (widget.completeMode == 2) { // 클릭 (확인창)
-                              _showCompleteConfirmDialog(item);
-                            }
-                          },
-                          onDoubleTap: () {
-                            if (widget.completeMode == 1) { // 더블클릭 (즉시)
-                              widget.onStatusUpdate(item, 'complete'); setState(() {});
-                            }
-                          },
-                          onLongPress: () => _showCompleteTimeDialog(item),
-                        ),
+                        if (widget.isPackingMode) ...[
+                          // ❗ 포장모드일 때 완료 버튼 표시 여부 판단 (0: 미완료 시만 스마트 노출, 1: 상시 4개 노출)
+                          if (widget.pdfPackingShowCompleteMode == 1 || (widget.pdfPackingShowCompleteMode == 0 && !_itemInitialCompleteState))
+                            _statusBtn(
+                              "완료",
+                              Colors.green,
+                              item.complete,
+                              () {
+                                if (widget.completeMode == 0) { // 클릭 (즉시)
+                                  widget.onStatusUpdate(item, 'toggle_complete'); setState(() {});
+                                } else if (widget.completeMode == 2) { // 클릭 (확인창)
+                                  _showCompleteConfirmDialog(item, targetType: 'complete');
+                                }
+                              },
+                              onDoubleTap: () {
+                                if (widget.completeMode == 1) { // 더블클릭 (즉시)
+                                  widget.onStatusUpdate(item, 'toggle_complete'); setState(() {});
+                                }
+                              },
+                              onLongPress: () => _showCompleteTimeDialog(item, targetType: 'complete'),
+                            ),
+                          _statusBtn(
+                            "포장",
+                            Colors.cyan,
+                            item.packed,
+                            () {
+                              if (widget.completeMode == 0) { // 클릭 (즉시)
+                                widget.onStatusUpdate(item, 'toggle_packed'); setState(() {});
+                              } else if (widget.completeMode == 2) { // 클릭 (확인창)
+                                _showCompleteConfirmDialog(item, targetType: 'packed');
+                              }
+                            },
+                            onDoubleTap: () {
+                              if (widget.completeMode == 1) { // 더블클릭 (즉시)
+                                widget.onStatusUpdate(item, 'toggle_packed'); setState(() {});
+                              }
+                            },
+                            onLongPress: () => _showCompleteTimeDialog(item, targetType: 'packed'),
+                          ),
+                        ] else ...[
+                          _statusBtn(
+                            "완료",
+                            Colors.green,
+                            item.complete,
+                            () {
+                              if (widget.completeMode == 0) { // 클릭 (즉시)
+                                widget.onStatusUpdate(item, 'complete'); setState(() {});
+                              } else if (widget.completeMode == 2) { // 클릭 (확인창)
+                                _showCompleteConfirmDialog(item);
+                              }
+                            },
+                            onDoubleTap: () {
+                              if (widget.completeMode == 1) { // 더블클릭 (즉시)
+                                widget.onStatusUpdate(item, 'complete'); setState(() {});
+                              }
+                            },
+                            onLongPress: () => _showCompleteTimeDialog(item),
+                          ),
+                        ],
                         _statusBtn("공정", Colors.blueGrey, item.process.isNotEmpty, () => _showProcessDialog(item)),
                         _statusBtn("보완", Colors.orange, item.complement.isNotEmpty, () => _showComplementDialog(item))
                       ],

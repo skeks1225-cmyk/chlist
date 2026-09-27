@@ -79,6 +79,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
 
   bool _isEditMode = false;
   bool _isPackingMode = false; // ❗ 포장모드 여부
+  int _pdfPackingShowCompleteMode = 0; // ❗ 포장모드 PDF 뷰어 완료 버튼 표시 방식 (0: 미완료 시만 스마트 노출, 1: 상시 4개 노출)
   bool _isSelectionFiltered = false; // ❗ 선택 필터 활성화 여부
   final Set<int> _selectedIndices = {}; 
   bool _isSelecting = false; // ❗ 드래그 선택 중인지 여부
@@ -215,6 +216,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       _enableLongPressEdit = prefs.getBool('enableLongPressEdit') ?? false;
       _keepScreenMode = prefs.getInt('keepScreenMode') ?? 0;
       _keepScreenMinutes = prefs.getDouble('keepScreenMinutes') ?? 5.0;
+      _pdfPackingShowCompleteMode = prefs.getInt('pdfPackingShowCompleteMode') ?? 0;
       WidgetsBinding.instance.addPostFrameCallback((_) => _resetInactivityTimer());
       _smbService.setConfig(
         prefs.getString('smbIp') ?? "",
@@ -277,6 +279,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     await prefs.setBool('enableLongPressEdit', _enableLongPressEdit);
     await prefs.setInt('keepScreenMode', _keepScreenMode);
     await prefs.setDouble('keepScreenMinutes', _keepScreenMinutes);
+    await prefs.setInt('pdfPackingShowCompleteMode', _pdfPackingShowCompleteMode);
     await prefs.setStringList('processList', _processList);
     await prefs.setString('processColors', jsonEncode(_processColors));
 
@@ -1363,6 +1366,33 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             ]),
           ),
           const SizedBox(height: 10),
+          // ❗ 포장모드 뷰어 완료 버튼 표시 방식 설정 추가
+          const Align(alignment: Alignment.centerLeft, child: Text("포장모드 PDF 뷰어 완료 버튼 표시", style: TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(height: 5),
+          Container(
+            decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blueGrey.withOpacity(0.2))),
+            child: Column(children: [
+              RadioListTile<int>(
+                title: const Text("미완료 시 노출 (화면 이동 시 반영)", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                subtitle: const Text("미완료 항목만 완료 버튼 표시. 현재 화면 조작 중에는 자리가 유지되며 이동 시 제거됩니다.", style: TextStyle(fontSize: 10)),
+                value: 0,
+                groupValue: _pdfPackingShowCompleteMode,
+                onChanged: (v) => setDialogState(() => _pdfPackingShowCompleteMode = v!),
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              RadioListTile<int>(
+                title: const Text("항상 4개 버튼 노출", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                subtitle: const Text("완료 여부와 관계없이 항상 완료, 포장, 공정, 보완 4개 버튼을 표시합니다.", style: TextStyle(fontSize: 10)),
+                value: 1,
+                groupValue: _pdfPackingShowCompleteMode,
+                onChanged: (v) => setDialogState(() => _pdfPackingShowCompleteMode = v!),
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 10),
           // ❗ 부분제목 / 수량 롱프레스 편집 설정 추가
           const Align(alignment: Alignment.centerLeft, child: Text("롱프레스 편집 설정", style: TextStyle(fontWeight: FontWeight.bold))),
           const SizedBox(height: 5),
@@ -2244,7 +2274,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
 
   Future<void> _handleItemClick(ItemModel item) async {
     _forgetFocus(); if (_autoSave) _manualSave(silent: true); if (_pdfFolderPath.startsWith("smb://")) { setState(() => _isLoading = true); try { String shareWithRest = _pdfFolderPath.replaceFirst("smb://", ""); int firstSlash = shareWithRest.indexOf("/"); String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest; String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : ""; String remoteFilePath = folderPath.isEmpty ? "${item.itemCode}.pdf" : "$folderPath/${item.itemCode}.pdf"; await _smbService.downloadFile(share, remoteFilePath, "$_baseDownloadPath/CheckSheet/${item.itemCode}.pdf"); } catch (_) {} finally { setState(() => _isLoading = false); } }
-    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, completeMode: _completeMode, swipeSensitivity: _swipeSensitivity, pdfDoubleTapZoom: _pdfDoubleTapZoom, isPackingMode: _isPackingMode, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { if (_isPackingMode) { it.packed = !it.packed; if (it.packed) { it.packedTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.packedTime = ""; } } else { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
+    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, completeMode: _completeMode, swipeSensitivity: _swipeSensitivity, pdfDoubleTapZoom: _pdfDoubleTapZoom, isPackingMode: _isPackingMode, pdfPackingShowCompleteMode: _pdfPackingShowCompleteMode, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { if (_isPackingMode) { it.packed = !it.packed; if (it.packed) { it.packedTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.packedTime = ""; } } else { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } } }); } else if (type == 'toggle_complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } }); } else if (type == 'toggle_packed') { setState(() { it.packed = !it.packed; if (it.packed) { it.packedTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.packedTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
     if (lastItemCode != null) { 
       // ❗ 추적 메모리에 기록
       setState(() {
