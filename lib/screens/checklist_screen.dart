@@ -357,7 +357,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
   }
 
   // ❗ 설정 복구 불러오기 (안 2)
-  Future<void> _importSettings() async {
+  Future<void> _importSettings({VoidCallback? onSuccess}) async {
     try {
       final file = File("$_baseDownloadPath/CheckSheet/app_settings.json");
       if (!await file.exists()) {
@@ -399,6 +399,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       }
       _showSnackBar("설정이 복구되었습니다. 리스트를 다시 불러옵니다.");
       await _loadSettings();
+      if (onSuccess != null) onSuccess();
     } catch (e) {
       _showError("복구 실패", "설정을 복구하는 중 오류가 발생했습니다: $e");
     }
@@ -1581,7 +1582,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                             onPressed: () {
                               Navigator.pop(c);
-                              _importSettings();
+                              _importSettings(onSuccess: () async {
+                                final p = await SharedPreferences.getInstance();
+                                setDialogState(() {
+                                  ipController.text = p.getString('smbIp') ?? "";
+                                  userController.text = p.getString('smbUser') ?? "";
+                                  passController.text = p.getString('smbPass') ?? "";
+                                });
+                              });
                             },
                             child: const Text("불러오기", style: TextStyle(color: Colors.white)),
                           ),
