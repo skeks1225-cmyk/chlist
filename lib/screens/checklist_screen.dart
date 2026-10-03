@@ -82,6 +82,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
   int _pdfPackingShowCompleteMode = 0; // ❗ 포장모드 PDF 뷰어 완료 버튼 표시 방식 (0: 미완료 시만 스마트 노출, 1: 상시 4개 노출)
   bool _isSelectionFiltered = false; // ❗ 선택 필터 활성화 여부
   final Set<int> _selectedIndices = {}; 
+  bool _showMissingPdfOnly = false; // ❗ PDF 누락 항목만 표시 여부
+  Set<int> _missingPdfIndices = {}; // ❗ PDF 누락 항목의 realIndex 집합
   bool _isSelecting = false; // ❗ 드래그 선택 중인지 여부
   final GlobalKey _scrollKey = GlobalKey(); // ❗ 스크롤 영역 좌표 계산용
   Timer? _scrollTimer; // ❗ 자동 스크롤 타이머
@@ -562,6 +564,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
         sectionItems = sectionItems.where((item) => _selectedIndices.contains(item.realIndex)).toList();
       }
 
+      if (_showMissingPdfOnly) {
+        sectionItems = sectionItems.where((item) => _missingPdfIndices.contains(item.realIndex)).toList();
+      }
+
       if (_noFilterMode == 1) {
         sectionItems = sectionItems.where((item) => item.no.isNotEmpty).toList();
       } else if (_noFilterMode == 2) {
@@ -653,6 +659,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       _searchController.clear();
       _isSelectionFiltered = false;
       _selectedIndices.clear();
+      _showMissingPdfOnly = false;
+      _missingPdfIndices.clear();
       // ❗ _isPackingMode는 유지 (각 모드 내에서 필터 리셋 동작)
     });
     _applyFilterAndSort();
@@ -1172,11 +1180,145 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           children: [
             ListTile(leading: const Icon(Icons.phone_android), title: const Text("내 휴대폰"), onTap: () { Navigator.pop(ctx); _openCustomPicker(mode); }),
             ListTile(leading: const Icon(Icons.computer), title: const Text("PC 공유폴더 (SMB)"), onTap: () { Navigator.pop(ctx); _openSmbShares(mode); }),
+            if (mode == 'dir' && _pdfFolderPath.isNotEmpty) ...[
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.fact_check, color: Colors.deepOrange),
+                title: const Text("리스트 PDF 매칭 (누락 검사)", style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text("QR 매칭 규칙(-S, -01 등)으로 PDF 도면 존재 여부를 검사하고 누락 항목만 표시합니다.", style: TextStyle(fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _checkPdfMatching();
+                },
+              ),
+            ],
             const SizedBox(height: 10),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _checkPdfMatching() async {
+    _forgetFocus();
+    if (_originalItems.isEmpty) {
+      _showSnackBar("매칭할 엑셀 데이터가 없습니다.");
+      return;
+    }
+    if (_pdfFolderPath.isEmpty) {
+      _showSnackBar("PDF 폴더가 선택되어 있지 않습니다.");
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      Set<String> pdfFileNames = {};
+      if (_pdfFolderPath.startsWith("smb://")) {
+        String shareWithRest = _pdfFolderPath.replaceFirst("smb://", "");
+        if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
+        int firstSlash = shareWithRest.indexOf("/");
+        String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
+        String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
+        List<Map<String, dynamic>> files = await _smbService.listFiles(share, folderPath);
+        pdfFileNames = files
+            .map((f) => (f['name'] as String? ?? "").toLowerCase())
+            .where((n) => n.endsWith('.pdf'))
+            .toSet();
+
+        // 로컬 다운로드 캐시 디렉토리 파일도 포함
+        final localDir = Directory("$_baseDownloadPath/CheckSheet");
+        if (localDir.existsSync()) {
+          for (var entity in localDir.listSync()) {
+            if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
+              pdfFileNames.add(p.basename(entity.path).toLowerCase());
+            }
+          }
+        }
+      } else {
+        final dir = Directory(_pdfFolderPath);
+        if (dir.existsSync()) {
+          for (var entity in dir.listSync()) {
+            if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
+              pdfFileNames.add(p.basename(entity.path).toLowerCase());
+            }
+          }
+        }
+      }
+
+      Set<int> missingIndices = {};
+      for (var item in _originalItems) {
+        if (item.isSubheading) continue;
+        bool hasPdf = _isPdfMatched(item.itemCode, pdfFileNames);
+        if (!hasPdf) {
+          missingIndices.add(item.realIndex);
+        }
+      }
+
+      // 기존 필터 전체 초기화
+      _searchController.clear();
+      _searchQuery = "";
+      _columnFilters.forEach((key, value) => value.clear());
+      _remarksFilterQuery = "";
+      _remarksExcludeQuery = "";
+      _quantitySearchQuery = "";
+      _showUnfinishedOnly = false;
+      _selectedSections.clear();
+      _isSubheadingViewMode = false;
+      _noFilterMode = 0;
+      _isSelectionFiltered = false;
+      _selectedIndices.clear();
+
+      if (missingIndices.isEmpty) {
+        _showMissingPdfOnly = false;
+        _missingPdfIndices.clear();
+        _showSnackBar("✅ 모든 항목의 PDF 파일이 존재합니다. (누락 항목 없음)");
+      } else {
+        _showMissingPdfOnly = true;
+        _missingPdfIndices = missingIndices;
+        _showSnackBar("⚠️ 총 ${missingIndices.length}개 항목의 PDF 파일이 누락되었습니다.");
+      }
+      _applyFilterAndSort();
+    } catch (e) {
+      _showError("매칭 검사 오류", "$e");
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  bool _isPdfMatched(String rawCode, Set<String> pdfFileNames) {
+    String cleaned = rawCode.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
+    cleaned = cleaned.replaceAll(RegExp(r'[\x00-\x1F]'), '');
+    if (cleaned.isEmpty) return true; // 빈 품목코드는 누락 대상에서 제외
+
+    // 1. 정확한 매칭
+    String name1 = cleaned.toLowerCase().endsWith('.pdf') ? cleaned.toLowerCase() : "${cleaned.toLowerCase()}.pdf";
+    if (pdfFileNames.contains(name1)) return true;
+
+    // 2. -S 제거 매칭
+    String codeNoS = cleaned;
+    if (cleaned.toUpperCase().endsWith('-S')) {
+      codeNoS = cleaned.substring(0, cleaned.length - 2).trim();
+      String name2 = codeNoS.toLowerCase().endsWith('.pdf') ? codeNoS.toLowerCase() : "${codeNoS.toLowerCase()}.pdf";
+      if (pdfFileNames.contains(name2)) return true;
+    }
+
+    // 3. -01, -02 등 -## 제거 매칭
+    if (codeNoS.contains(RegExp(r'-[0-9]{2}$'))) {
+      String strippedCode = codeNoS.substring(0, codeNoS.lastIndexOf('-')).trim();
+      String name3 = strippedCode.toLowerCase().endsWith('.pdf') ? strippedCode.toLowerCase() : "${strippedCode.toLowerCase()}.pdf";
+      if (pdfFileNames.contains(name3)) return true;
+    }
+
+    // 4. 역방향 접미사 매칭 (PDF 파일명에 -S 또는 -##가 붙은 경우)
+    String baseLower = codeNoS.toLowerCase();
+    bool reverseMatch = pdfFileNames.any((pdf) {
+      String pdfBase = pdf.endsWith('.pdf') ? pdf.substring(0, pdf.length - 4) : pdf;
+      if (pdfBase == baseLower) return true;
+      if (pdfBase.startsWith("$baseLower-")) return true;
+      return false;
+    });
+
+    return reverseMatch;
   }
 
   void _createNewFile(String currentPath) {
