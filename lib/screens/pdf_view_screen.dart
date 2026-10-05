@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; 
 import 'package:pdfrx/pdfrx.dart'; 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path/path.dart' as p;
 import '../models/item_model.dart';
 import '../services/smb_service.dart';
 import '../widgets/qr_scanner_dialog.dart';
@@ -81,32 +81,106 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
-    String localPath = "";
-    if (widget.pdfFolderPath.startsWith("smb://")) {
-      try {
-        String shareWithRest = widget.pdfFolderPath.replaceFirst("smb://", "");
-        if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
-        int firstSlash = shareWithRest.indexOf("/");
-        String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
-        String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
-        String remoteFilePath = folderPath.isEmpty ? "$cleanCode.pdf" : "$folderPath/$cleanCode.pdf";
-        localPath = "/storage/emulated/0/Download/CheckSheet/$cleanCode.pdf";
-        await widget.smbService.downloadFile(share, remoteFilePath, localPath);
-      } catch (e) { debugPrint("SMB Sync Error: $e"); }
-    } else {
-      localPath = "${widget.pdfFolderPath}/$cleanCode.pdf";
-    }
+    String localPath = await _resolvePdfPath(widget.pdfFolderPath, cleanCode);
 
     _remarksController.text = item.remarks;
     _itemInitialCompleteState = item.complete;
     if (mounted) {
       setState(() {
-        _currentPdfPath = File(localPath).existsSync() ? localPath : "";
+        _currentPdfPath = localPath;
         _viewerKey = UniqueKey();
         _isLoading = false;
         _fitZoomLevel = null; // 새 PDF 로드 시 FIT 배율 초기화
       });
     }
+  }
+
+  Future<String> _resolvePdfPath(String pdfFolderPath, String rawCode) async {
+    String cleanCode = rawCode.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
+    cleanCode = cleanCode.replaceAll(RegExp(r'[\x00-\x1F]'), '');
+    if (cleanCode.isEmpty) return "";
+
+    if (pdfFolderPath.startsWith("smb://")) {
+      try {
+        String shareWithRest = pdfFolderPath.replaceFirst("smb://", "");
+        if (shareWithRest.endsWith("/")) shareWithRest = shareWithRest.substring(0, shareWithRest.length - 1);
+        int firstSlash = shareWithRest.indexOf("/");
+        String share = firstSlash != -1 ? shareWithRest.substring(0, firstSlash) : shareWithRest;
+        String folderPath = firstSlash != -1 ? shareWithRest.substring(firstSlash + 1) : "";
+        List<Map<String, dynamic>> files = await widget.smbService.listFiles(share, folderPath);
+        
+        List<String> fileNames = files.map((f) => f['name'] as String? ?? "").toList();
+        String matchedRemoteName = _findMatchedPdfFileName(cleanCode, fileNames);
+        if (matchedRemoteName.isEmpty) matchedRemoteName = "$cleanCode.pdf";
+
+        String remoteFilePath = folderPath.isEmpty ? matchedRemoteName : "$folderPath/$matchedRemoteName";
+        String localPath = "/storage/emulated/0/Download/CheckSheet/$cleanCode.pdf";
+        await widget.smbService.downloadFile(share, remoteFilePath, localPath);
+        return File(localPath).existsSync() ? localPath : "";
+      } catch (e) {
+        debugPrint("SMB Sync Error: $e");
+        String fallbackLocal = "/storage/emulated/0/Download/CheckSheet/$cleanCode.pdf";
+        return File(fallbackLocal).existsSync() ? fallbackLocal : "";
+      }
+    } else {
+      final dir = Directory(pdfFolderPath);
+      if (!dir.existsSync()) return "";
+
+      List<FileSystemEntity> entities = [];
+      try {
+        entities = dir.listSync().where((e) => e is File && e.path.toLowerCase().endsWith('.pdf')).toList();
+      } catch (_) {}
+
+      List<String> fileNames = entities.map((e) => p.basename(e.path)).toList();
+      String matchedName = _findMatchedPdfFileName(cleanCode, fileNames);
+
+      if (matchedName.isNotEmpty) {
+        String matchedPath = p.join(pdfFolderPath, matchedName);
+        if (File(matchedPath).existsSync()) return matchedPath;
+      }
+      
+      String directPath = p.join(pdfFolderPath, "$cleanCode.pdf");
+      return File(directPath).existsSync() ? directPath : "";
+    }
+  }
+
+  String _findMatchedPdfFileName(String cleanCode, List<String> availableFileNames) {
+    if (availableFileNames.isEmpty) return "";
+
+    String baseLower = cleanCode.toLowerCase();
+    if (baseLower.endsWith('.pdf')) baseLower = baseLower.substring(0, baseLower.length - 4);
+
+    String baseNoS = baseLower.endsWith('-s') ? baseLower.substring(0, baseLower.length - 2).trim() : baseLower;
+    String baseStripped = baseNoS.contains(RegExp(r'-[0-9]{2}$')) ? baseNoS.substring(0, baseNoS.lastIndexOf('-')).trim() : baseNoS;
+
+    // 1차: 정확한 일치
+    for (String name in availableFileNames) {
+      String nameWithoutExt = name.toLowerCase().endsWith('.pdf') ? name.substring(0, name.length - 4) : name;
+      if (nameWithoutExt.toLowerCase() == baseLower) return name;
+    }
+
+    // 2차: -S 제거 일치
+    for (String name in availableFileNames) {
+      String nameWithoutExt = name.toLowerCase().endsWith('.pdf') ? name.substring(0, name.length - 4) : name;
+      if (nameWithoutExt.toLowerCase() == baseNoS) return name;
+    }
+
+    // 3차: -01, -02 등 -## 제거 일치
+    for (String name in availableFileNames) {
+      String nameWithoutExt = name.toLowerCase().endsWith('.pdf') ? name.substring(0, name.length - 4) : name;
+      if (nameWithoutExt.toLowerCase() == baseStripped) return name;
+    }
+
+    // 4차: 접두사 일치 (PDF 파일명 측에 -01, -S 등이 붙은 경우)
+    for (String name in availableFileNames) {
+      String nameWithoutExt = name.toLowerCase().endsWith('.pdf') ? name.substring(0, name.length - 4) : name;
+      String lowerName = nameWithoutExt.toLowerCase();
+      if (lowerName.startsWith("$baseLower-") || lowerName.startsWith("$baseNoS-") || lowerName.startsWith("$baseStripped-")) {
+        return name;
+      }
+    }
+
+    return "";
   }
 
   void _resetFit() {
