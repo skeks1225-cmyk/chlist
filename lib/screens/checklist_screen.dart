@@ -1191,6 +1191,20 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                   _checkPdfMatching();
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+                title: const Text("미매칭 PDF 파일 정리 (삭제)", style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(
+                  _pdfFolderPath.startsWith("smb://")
+                      ? "리스트에 없는 로컬 임시 다운로드 PDF를 삭제합니다. (SMB 원본 보호)"
+                      : "리스트에 없는 불필요한 PDF 파일을 폴더에서 검색하여 삭제합니다.",
+                  style: const TextStyle(fontSize: 11),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _cleanUnmatchedPdfFiles();
+                },
+              ),
             ],
             const SizedBox(height: 10),
           ],
@@ -1319,6 +1333,178 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     });
 
     return reverseMatch;
+  }
+
+  bool _isPdfFileMatchedToList(String fileName) {
+    final singlePdfSet = {fileName.toLowerCase()};
+    for (var item in _originalItems) {
+      if (item.isSubheading) continue;
+      if (item.itemCode.trim().isEmpty) continue;
+      if (_isPdfMatched(item.itemCode, singlePdfSet)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<void> _cleanUnmatchedPdfFiles() async {
+    _forgetFocus();
+    if (_originalItems.isEmpty) {
+      _showSnackBar("매칭할 엑셀 데이터가 없습니다.");
+      return;
+    }
+    if (_pdfFolderPath.isEmpty) {
+      _showSnackBar("PDF 폴더가 선택되어 있지 않습니다.");
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      List<File> targetPdfFiles = [];
+      String folderDesc = "";
+
+      if (_pdfFolderPath.startsWith("smb://")) {
+        // ❗ 옵션 B: SMB 네트워크 공유 원본은 읽기 전용으로 안전하게 보호하고 로컬 다운로드 캐시 폴더 내 파일만 정리
+        final localDir = Directory("$_baseDownloadPath/CheckSheet");
+        if (localDir.existsSync()) {
+          for (var entity in localDir.listSync()) {
+            if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
+              targetPdfFiles.add(entity);
+            }
+          }
+        }
+        folderDesc = "로컬 다운로드 캐시 ($_baseDownloadPath/CheckSheet)";
+      } else {
+        final dir = Directory(_pdfFolderPath);
+        if (dir.existsSync()) {
+          for (var entity in dir.listSync()) {
+            if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
+              targetPdfFiles.add(entity);
+            }
+          }
+        }
+        folderDesc = _pdfFolderPath;
+      }
+
+      if (targetPdfFiles.isEmpty) {
+        _showSnackBar("검사할 PDF 파일이 대상 경로에 존재하지 않습니다.");
+        return;
+      }
+
+      List<File> unmatchedFiles = [];
+      for (var file in targetPdfFiles) {
+        String fileName = p.basename(file.path);
+        if (!_isPdfFileMatchedToList(fileName)) {
+          unmatchedFiles.add(file);
+        }
+      }
+
+      if (unmatchedFiles.isEmpty) {
+        _showSnackBar("✅ 모든 PDF 파일이 리스트 항목과 일치합니다. (미매칭 파일 없음)");
+        return;
+      }
+
+      if (!mounted) return;
+      _showUnmatchedPdfDeleteDialog(unmatchedFiles, folderDesc);
+    } catch (e) {
+      _showError("미매칭 PDF 검사 오류", "$e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showUnmatchedPdfDeleteDialog(List<File> filesToDelete, String folderDesc) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.delete_sweep, color: Colors.redAccent),
+            const SizedBox(width: 8),
+            Text("미매칭 PDF 삭제 (${filesToDelete.length}개)"),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "현재 엑셀 리스트에 없는 PDF 도면 ${filesToDelete.length}개를 발견했습니다.\n"
+                "대상 경로: $folderDesc\n\n"
+                "⚠️ 삭제된 파일은 영구히 제거됩니다. 정말 삭제하시겠습니까?",
+                style: const TextStyle(fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                height: 160,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(4),
+                  color: Colors.grey.shade50,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: filesToDelete.length,
+                  itemBuilder: (_, idx) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    child: Text(
+                      "${idx + 1}. ${p.basename(filesToDelete[idx].path)}",
+                      style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("취소", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.delete_forever, size: 18),
+            label: const Text("삭제 실행"),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _executeDeleteUnmatchedFiles(filesToDelete);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _executeDeleteUnmatchedFiles(List<File> filesToDelete) async {
+    setState(() => _isLoading = true);
+    int successCount = 0;
+    int failCount = 0;
+
+    for (var file in filesToDelete) {
+      try {
+        if (file.existsSync()) {
+          file.deleteSync();
+          successCount++;
+        }
+      } catch (e) {
+        failCount++;
+      }
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (failCount == 0) {
+        _showSnackBar("🗑️ 총 $successCount개의 미매칭 PDF 파일이 삭제되었습니다.");
+      } else {
+        _showSnackBar("⚠️ $successCount개 파일 삭제 완료 (실패: $failCount개)");
+      }
+    }
   }
 
   void _createNewFile(String currentPath) {
