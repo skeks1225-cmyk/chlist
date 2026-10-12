@@ -1416,68 +1416,115 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
   void _showUnmatchedPdfDeleteDialog(List<File> filesToDelete, String folderDesc) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.delete_sweep, color: Colors.redAccent),
-            const SizedBox(width: 8),
-            Text("미매칭 PDF 삭제 (${filesToDelete.length}개)"),
-          ],
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (ctx) {
+        final bool isDark = Theme.of(ctx).brightness == Brightness.dark;
+        final Color textColor = isDark ? Colors.white : Colors.black87;
+        final Color subTextColor = isDark ? Colors.white70 : Colors.black54;
+        final Color boxBgColor = isDark ? const Color(0xFF1E1E1E) : Colors.grey.shade100;
+        final Color boxBorderColor = isDark ? Colors.grey.shade700 : Colors.grey.shade400;
+
+        return AlertDialog(
+          title: Row(
             children: [
-              Text(
-                "현재 엑셀 리스트에 없는 PDF 도면 ${filesToDelete.length}개를 발견했습니다.\n"
-                "대상 경로: $folderDesc\n\n"
-                "⚠️ 삭제된 파일은 영구히 제거됩니다. 정말 삭제하시겠습니까?",
-                style: const TextStyle(fontSize: 13, height: 1.4),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                height: 160,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(4),
-                  color: Colors.grey.shade50,
-                ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: filesToDelete.length,
-                  itemBuilder: (_, idx) => Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    child: Text(
-                      "${idx + 1}. ${p.basename(filesToDelete[idx].path)}",
-                      style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                    ),
-                  ),
+              const Icon(Icons.delete_sweep, color: Colors.redAccent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "미매칭 PDF 삭제 (${filesToDelete.length}개)",
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: textColor),
                 ),
               ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("취소", style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RichText(
+                  text: TextSpan(
+                    style: TextStyle(fontSize: 13, height: 1.4, color: textColor),
+                    children: [
+                      const TextSpan(text: "현재 엑셀 리스트에 없는 PDF 도면 "),
+                      TextSpan(
+                        text: "${filesToDelete.length}개",
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent),
+                      ),
+                      const TextSpan(text: "를 발견했습니다.\n"),
+                      TextSpan(
+                        text: "대상 경로: $folderDesc\n\n",
+                        style: TextStyle(fontSize: 11, color: subTextColor),
+                      ),
+                      const TextSpan(
+                        text: "⚠️ 삭제된 파일은 영구히 제거됩니다. 정말 삭제하시겠습니까?",
+                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  height: 160,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: boxBorderColor),
+                    borderRadius: BorderRadius.circular(6),
+                    color: boxBgColor,
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: filesToDelete.length,
+                    itemBuilder: (_, idx) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        border: idx < filesToDelete.length - 1
+                            ? Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300, width: 0.5))
+                            : null,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.picture_as_pdf, size: 16, color: Colors.red.shade400),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              "${idx + 1}. ${p.basename(filesToDelete[idx].path)}",
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            icon: const Icon(Icons.delete_forever, size: 18),
-            label: const Text("삭제 실행"),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _executeDeleteUnmatchedFiles(filesToDelete);
-            },
           ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text("취소", style: TextStyle(color: isDark ? Colors.white70 : Colors.grey.shade700)),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.delete_forever, size: 18),
+              label: const Text("삭제 실행"),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _executeDeleteUnmatchedFiles(filesToDelete);
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
