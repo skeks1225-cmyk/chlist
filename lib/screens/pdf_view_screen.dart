@@ -6,6 +6,7 @@ import '../models/item_model.dart';
 import '../services/smb_service.dart';
 import '../widgets/qr_scanner_dialog.dart';
 import 'dart:io';
+import 'dart:async';
 
 class PdfViewerScreen extends StatefulWidget {
   final List<ItemModel> allItems; // 전체 품목 (검색용)
@@ -62,6 +63,26 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   double _swipeStartY = 0;
   int _pointerCount = 0;
   bool _isSwipeActionTriggered = false;
+
+  // ❗ 뷰어 스크린 전용 QR 토스트 알림 변수
+  String? _qrToastMessage;
+  Timer? _qrToastTimer;
+
+  void _showViewerToast(String message) {
+    _qrToastTimer?.cancel();
+    if (mounted) {
+      setState(() {
+        _qrToastMessage = message;
+      });
+    }
+    _qrToastTimer = Timer(const Duration(milliseconds: 2200), () {
+      if (mounted) {
+        setState(() {
+          _qrToastMessage = null;
+        });
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -474,7 +495,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   @override
-  void dispose() { _remarksController.dispose(); _searchController.dispose(); _searchFocusNode.dispose(); super.dispose(); }
+  void dispose() {
+    _qrToastTimer?.cancel();
+    _remarksController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
 
   Future<void> _showCompleteConfirmDialog(ItemModel item, {String targetType = 'default'}) async {
     bool isPackingTarget = (targetType == 'packed') || (targetType == 'default' && widget.isPackingMode);
@@ -724,7 +751,44 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                               ),
                             )),
                   Positioned(left: 5, bottom: 5, child: Row(children: [_navArrowBtn(Icons.arrow_back, hasPrev ? _prev : () {}, isDark), _navArrowBtn(Icons.arrow_forward, hasNext ? _next : () {}, isDark)])),
-                  if (_searchResults.isNotEmpty) Positioned(left: 8, bottom: 2, child: Container(width: MediaQuery.of(context).size.width * 0.45, constraints: BoxConstraints(maxHeight: constraints.maxHeight - 5), decoration: BoxDecoration(color: isDark ? Colors.grey[850] : Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, -2))]), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ListView.separated(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: _searchResults.length, separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]), itemBuilder: (ctx, idx) { final res = _searchResults[idx]; return ListTile(dense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0), title: Text(res.itemCode, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)), trailing: res == item ? const Icon(Icons.check_circle, size: 14, color: Colors.blue) : null, onTap: () => _jumpToItem(res)); }))))
+                  if (_searchResults.isNotEmpty) Positioned(left: 8, bottom: 2, child: Container(width: MediaQuery.of(context).size.width * 0.45, constraints: BoxConstraints(maxHeight: constraints.maxHeight - 5), decoration: BoxDecoration(color: isDark ? Colors.grey[850] : Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, -2))]), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ListView.separated(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: _searchResults.length, separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]), itemBuilder: (ctx, idx) { final res = _searchResults[idx]; return ListTile(dense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0), title: Text(res.itemCode, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)), trailing: res == item ? const Icon(Icons.check_circle, size: 14, color: Colors.blue) : null, onTap: () => _jumpToItem(res)); })))),
+                  if (_qrToastMessage != null)
+                    Positioned(
+                      left: 115,
+                      right: 15,
+                      bottom: 8,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xEE2A2A2A) : const Color(0xEE1E1E1E),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.blueAccent, width: 1.2),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2)),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.qr_code_scanner, size: 18, color: Colors.blueAccent),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  _qrToastMessage!,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ]);
               }),
             ),
@@ -805,7 +869,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                           if (matches.length == 1) {
                                             // 단일 항목 폴백 매칭 성공 시 토스트 알림
                                             if (mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("품목 ${matches.first.itemCode}(으)로 연결되었습니다."), duration: const Duration(seconds: 2)));
+                                              _showViewerToast("품목 ${matches.first.itemCode}(으)로 연결되었습니다.");
                                             }
                                           } else {
                                             // 3. 중복이나 유사 항목 안내 알림 (중복일 때만 알림창)
