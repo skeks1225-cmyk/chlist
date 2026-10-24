@@ -2998,6 +2998,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           allItems: viewerAllItems,
           filteredItems: viewerFilteredItems,
           rawOriginalItems: rawNonSubheadings,
+          subheadingTitles: _originalItems.where((i) => i.isSubheading).map((i) => i.itemCode).toList(),
           isMergeDuplicateMode: _isMergeDuplicateMode,
           initialIndex: initialIdx,
           pdfFolderPath: _pdfFolderPath,

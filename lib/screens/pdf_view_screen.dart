@@ -22,6 +22,7 @@ class PdfViewerScreen extends StatefulWidget {
   final bool isPackingMode; // ❗ 포장모드 여부 추가
   final int pdfPackingShowCompleteMode; // ❗ 포장모드 완료버튼 표시 방식 (0: 미완료 시만 스마트 노출, 1: 상시 4개 노출)
   final List<ItemModel>? rawOriginalItems; // ❗ 원본 항목 전체 목록 (중복 탐색용)
+  final List<String>? subheadingTitles; // ❗ 전체 부분제목 목록 (순번 매핑용)
   final bool isMergeDuplicateMode; // ❗ 합산모드 여부
   final Function(ItemModel, String) onStatusUpdate;
 
@@ -40,6 +41,7 @@ class PdfViewerScreen extends StatefulWidget {
     required this.isPackingMode,
     this.pdfPackingShowCompleteMode = 0,
     this.rawOriginalItems,
+    this.subheadingTitles,
     this.isMergeDuplicateMode = true,
     required this.onStatusUpdate,
   });
@@ -833,6 +835,25 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     );
   }
 
+  int _getSectionSeq(String subheadingTitle) {
+    if (subheadingTitle.isEmpty) return -1;
+    final list = widget.subheadingTitles ?? [];
+    if (list.isNotEmpty) {
+      final idx = list.indexOf(subheadingTitle);
+      return idx != -1 ? idx + 1 : -1;
+    }
+    final pool = widget.rawOriginalItems ?? widget.allItems;
+    final uniqueSections = <String>[];
+    for (final it in pool) {
+      final s = it.subheadingTitle.trim();
+      if (s.isNotEmpty && !uniqueSections.contains(s)) {
+        uniqueSections.add(s);
+      }
+    }
+    final idx = uniqueSections.indexOf(subheadingTitle.trim());
+    return idx != -1 ? idx + 1 : -1;
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = _allItems[_currentIndex];
@@ -859,12 +880,43 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 final parts = item.subheadingTitle.split('_');
                 final line1 = parts.length > 3 ? parts.sublist(0, 3).join('_') : item.subheadingTitle;
                 final line2 = parts.length > 3 ? parts.sublist(3).join('_') : "";
+                final secSeq = _getSectionSeq(item.subheadingTitle);
+                final secNoStr = secSeq > 0 ? "[${secSeq.toString().padLeft(2, '0')}] " : "";
                 return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(line1, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue), overflow: TextOverflow.ellipsis),
-                  if (line2.isNotEmpty) Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: Text(line2, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue), overflow: TextOverflow.ellipsis),
+                  Text.rich(
+                    TextSpan(children: [
+                      if (secNoStr.isNotEmpty)
+                        TextSpan(
+                          text: secNoStr,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue[300],
+                          ),
+                        ),
+                      TextSpan(
+                        text: line1,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ]),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
+                  if (line2.isNotEmpty)
+                    Text(
+                      line2,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
                 ]);
               }),
             ],
