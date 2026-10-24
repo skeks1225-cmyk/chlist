@@ -143,8 +143,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
   }
 
   void _clearHighlight() {
+    bool needUpdate = false;
     if (_highlightedRealIndex != null) {
-      setState(() => _highlightedRealIndex = null);
+      _highlightedRealIndex = null;
+      needUpdate = true;
+    }
+    if (_batchUpdatedCells.isNotEmpty) {
+      _batchUpdatedCells.clear();
+      needUpdate = true;
+    }
+    if (needUpdate) {
+      setState(() {});
     }
   }
 
@@ -994,48 +1003,57 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       });
     }
 
-    // ❗ 비고 데이터에서 구분자(:, , 공백)로 키워드 추출
-    final Set<String> remarkKeywordsSet = {};
+    // ❗ 비고 데이터에서 구분자(:, , 공백)로 키워드 추출 (현재 화면 기준 vs 전체 엑셀 기준)
+    final Set<String> currentDisplayKeywordsSet = {};
+    final Set<String> allOriginalKeywordsSet = {};
     if (col == 'remarks') {
+      for (var item in _displayItems) {
+        if (item.isSubheading || item.remarks.trim().isEmpty) continue;
+        final tokens = item.remarks.split(RegExp(r'[:,\s]+')).where((t) => t.trim().isNotEmpty);
+        for (var token in tokens) {
+          currentDisplayKeywordsSet.add(token.trim());
+        }
+      }
       for (var item in _originalItems) {
         if (item.isSubheading || item.remarks.trim().isEmpty) continue;
         final tokens = item.remarks.split(RegExp(r'[:,\s]+')).where((t) => t.trim().isNotEmpty);
         for (var token in tokens) {
-          remarkKeywordsSet.add(token.trim());
+          allOriginalKeywordsSet.add(token.trim());
         }
       }
     }
-    final List<String> remarkKeywords = remarkKeywordsSet.toList()..sort();
+    final List<String> currentDisplayKeywords = currentDisplayKeywordsSet.toList()..sort();
+    final List<String> allOriginalKeywords = allOriginalKeywordsSet.toList()..sort();
+    final bool hasMoreKeywords = allOriginalKeywords.length > currentDisplayKeywords.length;
+
+    // ❗ StatefulBuilder 리빌드 시 상태 유지를 위해 dialog 바깥에 선언
+    bool showAllIncludeKeywords = false;
+    bool showAllExcludeKeywords = false;
 
     showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (context, setModalState) {
       final bool isDark = Theme.of(context).brightness == Brightness.dark;
-      bool showAllInclude = false;
-      bool showAllExclude = false;
 
       Widget buildKeywordChips(TextEditingController ctrl, bool isInclude) {
-        if (remarkKeywords.isEmpty) return const SizedBox.shrink();
+        final bool showAll = isInclude ? showAllIncludeKeywords : showAllExcludeKeywords;
+        final List<String> keywordsToShow = showAll ? allOriginalKeywords : currentDisplayKeywords;
+        if (keywordsToShow.isEmpty && allOriginalKeywords.isEmpty) return const SizedBox.shrink();
+
         final List<String> currentWords = ctrl.text.split(' ').where((w) => w.trim().isNotEmpty).toList();
         final Color activeColor = isInclude ? Colors.blue : Colors.redAccent;
-        final bool showAll = isInclude ? showAllInclude : showAllExclude;
-        final bool hasSelected = currentWords.isNotEmpty;
-
-        final List<String> displayKeywords = (hasSelected && !showAll)
-            ? remarkKeywords.where((kw) => currentWords.contains(kw)).toList()
-            : remarkKeywords;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (hasSelected)
+            if (hasMoreKeywords)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: InkWell(
                   onTap: () => setModalState(() {
                     if (isInclude) {
-                      showAllInclude = !showAllInclude;
+                      showAllIncludeKeywords = !showAllIncludeKeywords;
                     } else {
-                      showAllExclude = !showAllExclude;
+                      showAllExcludeKeywords = !showAllExcludeKeywords;
                     }
                   }),
                   child: Row(
@@ -1044,7 +1062,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                       Icon(showAll ? Icons.unfold_less : Icons.unfold_more, size: 14, color: activeColor),
                       const SizedBox(width: 4),
                       Text(
-                        showAll ? "선택 키워드만 보기 (접기)" : "+ 전체 키워드 보기 (${remarkKeywords.length}개)",
+                        showAll ? "현재 화면 키워드만 보기 (${currentDisplayKeywords.length}개)" : "+ 전체 키워드 보기 (${allOriginalKeywords.length}개)",
                         style: TextStyle(fontSize: 11, color: activeColor, fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -1062,7 +1080,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
               child: Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: displayKeywords.map((kw) {
+                children: keywordsToShow.map((kw) {
                   final bool isSel = currentWords.contains(kw);
                   return InkWell(
                     onTap: () {
@@ -2683,7 +2701,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           item.complementTime = DateTime.now().toString().substring(0, 16);
           _syncDuplicateItemsStatus(item);
           setState(() {
-            _highlightedRealIndex = item.realIndex;
+            _batchUpdatedCells = { item.realIndex: "complement" };
           });
           if (_autoSave) _manualSave(silent: true);
         }), 
@@ -2693,7 +2711,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           item.complementTime = DateTime.now().toString().substring(0, 16);
           _syncDuplicateItemsStatus(item);
           setState(() {
-            _highlightedRealIndex = item.realIndex;
+            _batchUpdatedCells = { item.realIndex: "complement" };
           });
           if (_autoSave) _manualSave(silent: true);
         }), 
@@ -2703,7 +2721,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           item.complementTime = "";
           _syncDuplicateItemsStatus(item);
           setState(() {
-            _highlightedRealIndex = item.realIndex;
+            _batchUpdatedCells = { item.realIndex: "complement" };
           });
           if (_autoSave) _manualSave(silent: true);
         }), 
@@ -2765,7 +2783,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                         item.process = p; 
                         item.processTime = DateTime.now().toString().substring(0, 16);
                         _syncDuplicateItemsStatus(item);
-                        _highlightedRealIndex = item.realIndex;
+                        _batchUpdatedCells = { item.realIndex: "process" };
                       }); 
                       if (_autoSave) _manualSave(silent: true); 
                       Navigator.pop(context);
@@ -3827,8 +3845,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     _showSnackBar("일괄 처리가 완료되었습니다.");
   }
 
-  Widget _wrapBatchHighlight({required int realIndex, required String colType, required Widget child}) {
-    bool isUpdated = _batchUpdatedCells[realIndex] == colType;
+  Widget _wrapBatchHighlight({required int realIndex, required String colType, required Widget child, List<int>? mergedRealIndices}) {
+    bool isUpdated = _batchUpdatedCells[realIndex] == colType ||
+        (mergedRealIndices != null && mergedRealIndices.any((r) => _batchUpdatedCells[r] == colType));
     if (!isUpdated) return child;
 
     return Container(
@@ -4252,7 +4271,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
         }
       }
       _syncDuplicateItemsStatus(item);
-      _highlightedRealIndex = item.realIndex;
+      _batchUpdatedCells = { item.realIndex: "complete" };
     });
     if (_autoSave) _manualSave(silent: true);
   }
@@ -4396,7 +4415,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                                 final selectedRemark = target.remarks;
                                 item.remarks = selectedRemark;
                                 _syncDuplicateItemsStatus(item);
-                                _highlightedRealIndex = item.realIndex;
+                                _batchUpdatedCells = { item.realIndex: "remarks" };
                               });
                               if (_autoSave) _manualSave(silent: true);
                               Navigator.pop(ctx);
@@ -4494,7 +4513,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                     final newQty = controllers[i].text.trim();
                     targets[i].quantity = newQty;
                   }
-                  _highlightedRealIndex = targets.isNotEmpty ? targets.first.realIndex : item.realIndex;
+                  final targetReal = targets.isNotEmpty ? targets.first.realIndex : item.realIndex;
+                  _batchUpdatedCells = { targetReal: "quantity" };
                 });
                 if (_autoSave) _manualSave(silent: true);
                 Navigator.pop(ctx);
@@ -4536,7 +4556,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                   if (targetIdx != -1) {
                     _originalItems[targetIdx].quantity = newQty;
                   }
-                  _highlightedRealIndex = item.realIndex;
+                  _batchUpdatedCells = { item.realIndex: "quantity" };
                 });
                 if (_autoSave) {
                   _manualSave(silent: true);
@@ -4795,21 +4815,26 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           // ❗ 4. 수량
           _buildSelectionZone(
             item: item,
-            child: GestureDetector(
-              onLongPress: (_enableLongPressEdit && !_isEditMode) ? () => _showEditQuantityDialog(item) : null,
-              behavior: HitTestBehavior.opaque,
-              child: SizedBox(
-                width: 40,
-                child: Center(
-                  child: Text(
-                    item.quantity,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: item.isMerged
-                          ? Colors.orange
-                          : (isDark ? Colors.white : Colors.black87),
-                      fontWeight: item.isMerged ? FontWeight.bold : FontWeight.normal,
+            child: _wrapBatchHighlight(
+              realIndex: item.realIndex,
+              colType: "quantity",
+              mergedRealIndices: item.isMerged ? item.mergedRealIndices : null,
+              child: GestureDetector(
+                onLongPress: (_enableLongPressEdit && !_isEditMode) ? () => _showEditQuantityDialog(item) : null,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 40,
+                  child: Center(
+                    child: Text(
+                      item.quantity,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: item.isMerged
+                            ? Colors.orange
+                            : (isDark ? Colors.white : Colors.black87),
+                        fontWeight: item.isMerged ? FontWeight.bold : FontWeight.normal,
+                      ),
                     ),
                   ),
                 ),
@@ -4823,6 +4848,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             child: _wrapBatchHighlight(
               realIndex: item.realIndex,
               colType: "complete",
+              mergedRealIndices: item.isMerged ? item.mergedRealIndices : null,
               child: _cellCheck(
                 item, 
                 isDark, 
@@ -4846,6 +4872,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             child: _wrapBatchHighlight(
               realIndex: item.realIndex,
               colType: "process",
+              mergedRealIndices: item.isMerged ? item.mergedRealIndices : null,
               child: _cellProcess(item.process, isDark, _isEditMode ? null : () => _showProcessDialog(item)),
             ),
           ),
@@ -4856,6 +4883,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             child: _wrapBatchHighlight(
               realIndex: item.realIndex,
               colType: "complement",
+              mergedRealIndices: item.isMerged ? item.mergedRealIndices : null,
               child: _cellComplement(item.complement, isDark, _isEditMode ? null : () => _showComplementDialog(item)),
             ),
           ),
@@ -4868,6 +4896,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
               child: _wrapBatchHighlight(
                 realIndex: item.realIndex,
                 colType: "remarks",
+                mergedRealIndices: item.isMerged ? item.mergedRealIndices : null,
                 child: IgnorePointer(
                   ignoring: _isEditMode,
                   child: _RemarksCell(
@@ -4878,7 +4907,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                     onSyncDuplicates: () {
                       setState(() {
                         _syncDuplicateItemsStatus(item);
-                        _highlightedRealIndex = item.realIndex;
+                        _batchUpdatedCells = { item.realIndex: "remarks" };
                       });
                     },
                   ),
