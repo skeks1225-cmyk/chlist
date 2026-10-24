@@ -21,6 +21,8 @@ class PdfViewerScreen extends StatefulWidget {
   final double pdfDoubleTapZoom; // ❗ 더블탭 확대 배율 (기본 3.0)
   final bool isPackingMode; // ❗ 포장모드 여부 추가
   final int pdfPackingShowCompleteMode; // ❗ 포장모드 완료버튼 표시 방식 (0: 미완료 시만 스마트 노출, 1: 상시 4개 노출)
+  final List<ItemModel>? rawOriginalItems; // ❗ 원본 항목 전체 목록 (중복 탐색용)
+  final bool isMergeDuplicateMode; // ❗ 합산모드 여부
   final Function(ItemModel, String) onStatusUpdate;
 
   const PdfViewerScreen({
@@ -37,6 +39,8 @@ class PdfViewerScreen extends StatefulWidget {
     this.pdfDoubleTapZoom = 3.0,
     required this.isPackingMode,
     this.pdfPackingShowCompleteMode = 0,
+    this.rawOriginalItems,
+    this.isMergeDuplicateMode = true,
     required this.onStatusUpdate,
   });
 
@@ -57,6 +61,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   double? _fitZoomLevel;      // PDF 로드 시 실제 FIT 배율 저장
   Offset? _doubleTapPosition; // 더블탭 위치 저장 (확대 중심점)
   bool _itemInitialCompleteState = false; // ❗ 뷰어 로드 시점의 완료 상태 (버튼 위치 튐 방지용)
+  int? _overrideTargetRealIndex; // ❗ 중복 시트에서 특정 행 선택 시 해당 realIndex 기억용
 
   // ❗ 슬라이드 제스처 관련 변수
   double _swipeStartX = 0;
@@ -255,8 +260,106 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     setState(() { _searchResults = widget.allItems.where((item) => item.itemCode.toLowerCase().contains(q)).take(15).toList(); });
   }
 
+  void _showDuplicateItemsSheet(ItemModel currentItem) {
+    final searchPool = widget.rawOriginalItems ?? widget.allItems;
+    final duplicates = searchPool.where((i) =>
+      !i.isSubheading &&
+      i.itemCode.trim() == currentItem.itemCode.trim() &&
+      i.subheadingTitle.trim() == currentItem.subheadingTitle.trim()
+    ).toList();
+
+    if (duplicates.length <= 1) return;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? Colors.grey[900] : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "[${currentItem.itemCode}] 중복 항목 선택",
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                Text(
+                  "선택 시 해당 항목으로 뷰어 포커스가 전환되며, 리스트 복귀 시 해당 위치로 이동합니다.",
+                  style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54),
+                ),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: duplicates.length,
+                    separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey[300]),
+                    itemBuilder: (context, idx) {
+                      final dup = duplicates[idx];
+                      final isSelected = (_overrideTargetRealIndex != null && dup.realIndex == _overrideTargetRealIndex) ||
+                          (_overrideTargetRealIndex == null && dup.realIndex == currentItem.realIndex);
+                      final noText = dup.displayNo.isNotEmpty ? dup.displayNo : (dup.no.isNotEmpty ? dup.no : "${idx + 1}");
+
+                      return ListTile(
+                        selected: isSelected,
+                        selectedTileColor: Colors.orange.withOpacity(0.15),
+                        leading: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isSelected ? Colors.orange : Colors.blueGrey,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            "NO. $noText",
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                        title: Text(
+                          "수량: ${dup.quantity}개  |  비고: ${dup.remarks.isEmpty ? '(없음)' : dup.remarks}",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.orange) : null,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _jumpToItem(dup);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _jumpToItem(ItemModel target) {
-    int index = widget.allItems.indexOf(target);
+    _overrideTargetRealIndex = target.realIndex;
+    int index = widget.allItems.indexWhere((i) =>
+        i.realIndex == target.realIndex ||
+        (i.isMerged && i.mergedRealIndices.contains(target.realIndex)));
     if (index != -1) {
       setState(() { _currentIndex = index; _searchResults = []; _searchController.clear(); });
       _searchFocusNode.unfocus(); _loadPdf();
@@ -625,7 +728,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) { if (didPop) return; Navigator.pop(context, item.itemCode); },
+      onPopInvokedWithResult: (didPop, result) { if (didPop) return; Navigator.pop(context, {'itemCode': item.itemCode, 'realIndex': _overrideTargetRealIndex ?? item.realIndex}); },
       child: Scaffold(
         appBar: AppBar(
           title: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
@@ -646,7 +749,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             ],
           ]),
           backgroundColor: isDark ? Colors.black : Colors.blueGrey[900], foregroundColor: Colors.white,
-          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context, item.itemCode)),
+          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context, {'itemCode': item.itemCode, 'realIndex': _overrideTargetRealIndex ?? item.realIndex})),
           actions: [TextButton(onPressed: _resetFit, child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16)))],
         ),
         backgroundColor: isDark ? Colors.black : Colors.grey[200],
@@ -1023,14 +1126,22 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Flexible(
-                                        child: Text(
-                                          displayTitle,
-                                          style: TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.bold,
-                                            color: item.isCrossDuplicate ? Colors.redAccent : Colors.blue,
+                                        child: GestureDetector(
+                                          onTap: () => _showDuplicateItemsSheet(item),
+                                          behavior: HitTestBehavior.opaque,
+                                          child: Text(
+                                            displayTitle,
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.bold,
+                                              color: item.isCrossDuplicate
+                                                  ? Colors.redAccent
+                                                  : (!widget.isMergeDuplicateMode && item.isSectionDuplicate
+                                                      ? Colors.orange
+                                                      : Colors.blue),
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                       const SizedBox(width: 4),

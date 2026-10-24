@@ -19,6 +19,7 @@ class ItemModel {
   List<int> mergedRealIndices; // ❗ 합산된 원본 항목들의 realIndex 목록
   bool hasDifferentRemarks; // ❗ 중복 항목들 간 비고 내용 상이 여부
   bool isCrossDuplicate; // ❗ 서로 다른 부분제목에 동일 품목코드 존재 여부 (붉은색 경고용)
+  bool isSectionDuplicate; // ❗ 동일 부분제목 내 중복 품목코드 존재 여부 (원본모드 주황색용)
 
   ItemModel({
     required this.realIndex,
@@ -41,6 +42,7 @@ class ItemModel {
     List<int>? mergedRealIndices,
     this.hasDifferentRemarks = false,
     this.isCrossDuplicate = false,
+    this.isSectionDuplicate = false,
   }) : mergedRealIndices = mergedRealIndices ?? [] {
     // ❗ "null" 문자열 방어 코드 (생성 시점에 빈값으로 치환)
     if (this.no.toLowerCase() == "null") this.no = "";
@@ -63,6 +65,7 @@ class ItemModel {
     List<int>? mergedRealIndices,
     bool? hasDifferentRemarks,
     bool? isCrossDuplicate,
+    bool? isSectionDuplicate,
   }) {
     return ItemModel(
       realIndex: realIndex,
@@ -85,6 +88,7 @@ class ItemModel {
       mergedRealIndices: mergedRealIndices ?? List.from(this.mergedRealIndices),
       hasDifferentRemarks: hasDifferentRemarks ?? this.hasDifferentRemarks,
       isCrossDuplicate: isCrossDuplicate ?? this.isCrossDuplicate,
+      isSectionDuplicate: isSectionDuplicate ?? this.isSectionDuplicate,
     );
   }
 }

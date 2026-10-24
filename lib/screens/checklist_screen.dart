@@ -145,17 +145,27 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     }
   }
 
-  void _scrollToItem(String itemCode) {
+  void _scrollToItem(String itemCode, {int? targetRealIndex}) {
     int targetIndex = -1;
     double offset = 0.0;
     int? foundRealIndex;
 
     for (int i = 0; i < _displayItems.length; i++) {
       final item = _displayItems[i];
-      if (!item.isSubheading && item.itemCode == itemCode) {
-        targetIndex = i;
-        foundRealIndex = item.realIndex;
-        break;
+      if (!item.isSubheading) {
+        bool match = false;
+        if (targetRealIndex != null) {
+          match = (item.realIndex == targetRealIndex || (item.isMerged && item.mergedRealIndices.contains(targetRealIndex)));
+        } else {
+          match = (item.itemCode == itemCode);
+        }
+        if (match) {
+          targetIndex = i;
+          foundRealIndex = (targetRealIndex != null && item.realIndex == targetRealIndex)
+              ? targetRealIndex
+              : item.realIndex;
+          break;
+        }
       }
       offset += item.isSubheading ? _subheadingHeight : _itemHeight;
     }
@@ -414,7 +424,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       final items = await _excelService.loadExcel(path);
       setState(() {
         _originalItems = items;
-        _updateCrossSectionDuplicates();
+        _updateDuplicateFlags();
         _displayItems = List.from(items);
         _currentFileName = p.basename(path);
         _excelPath = path;
@@ -455,13 +465,18 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     }
   }
 
-  void _updateCrossSectionDuplicates() {
+  void _updateDuplicateFlags() {
     final Map<String, Set<String>> codeToSections = {};
+    final Map<String, int> sectionCodeCounts = {};
+
     for (var item in _originalItems) {
       if (item.isSubheading || item.itemCode.trim().isEmpty) continue;
       final cleanCode = item.itemCode.trim();
       final sec = item.subheadingTitle.trim();
       codeToSections.putIfAbsent(cleanCode, () => {}).add(sec);
+
+      final key = "$sec|||$cleanCode";
+      sectionCodeCounts[key] = (sectionCodeCounts[key] ?? 0) + 1;
     }
 
     final Set<String> crossSectionDupCodes = {};
@@ -473,7 +488,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
 
     for (var item in _originalItems) {
       if (!item.isSubheading) {
-        item.isCrossDuplicate = crossSectionDupCodes.contains(item.itemCode.trim());
+        final cleanCode = item.itemCode.trim();
+        final sec = item.subheadingTitle.trim();
+        item.isCrossDuplicate = crossSectionDupCodes.contains(cleanCode);
+        final count = sectionCodeCounts["$sec|||$cleanCode"] ?? 0;
+        item.isSectionDuplicate = count > 1;
       }
     }
   }
@@ -2878,16 +2897,34 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
   Future<void> _handleItemClick(ItemModel item) async {
     _forgetFocus(); if (_autoSave) _manualSave(silent: true);
     if (!mounted) return;
-    final allNonSubheadings = _originalItems.where((i) => !i.isSubheading).toList();
-    int initialIdx = allNonSubheadings.indexWhere((i) => i.realIndex == item.realIndex);
-    if (initialIdx == -1) initialIdx = 0;
 
-    final String? lastItemCode = await Navigator.push<String>(
+    final rawNonSubheadings = _originalItems.where((i) => !i.isSubheading).toList();
+    final List<ItemModel> viewerAllItems;
+    final List<ItemModel> viewerFilteredItems;
+    int initialIdx;
+
+    if (_isMergeDuplicateMode) {
+      // ❗ 합산모드: 합산된 대표 항목들을 전달 (수량이 합산값이며 isMerged = true)
+      viewerAllItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList();
+      viewerFilteredItems = List.from(viewerAllItems);
+      initialIdx = viewerAllItems.indexWhere((i) => i.realIndex == item.realIndex || (i.isMerged && i.mergedRealIndices.contains(item.realIndex)));
+      if (initialIdx == -1) initialIdx = 0;
+    } else {
+      // ❗ 원본모드: 개별 항목 전체 전달
+      viewerAllItems = rawNonSubheadings;
+      viewerFilteredItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList();
+      initialIdx = viewerAllItems.indexWhere((i) => i.realIndex == item.realIndex);
+      if (initialIdx == -1) initialIdx = 0;
+    }
+
+    final dynamic popResult = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => PdfViewerScreen(
-          allItems: allNonSubheadings,
-          filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(),
+          allItems: viewerAllItems,
+          filteredItems: viewerFilteredItems,
+          rawOriginalItems: rawNonSubheadings,
+          isMergeDuplicateMode: _isMergeDuplicateMode,
           initialIndex: initialIdx,
           pdfFolderPath: _pdfFolderPath,
           smbService: _smbService,
@@ -2960,19 +2997,31 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
         ),
       ),
     );
-    if (lastItemCode != null) { 
-      // ❗ 추적 메모리에 기록
-      setState(() {
-        _trackedItemCode = lastItemCode;
-      });
-      
-      bool isDisplayed = _displayItems.any((i) => !i.isSubheading && i.itemCode == lastItemCode); 
-      if (!isDisplayed) { 
-        final targetItem = _originalItems.firstWhere((i) => !i.isSubheading && i.itemCode == lastItemCode); 
-        setState(() { _temporaryVisibleItem = targetItem; }); 
-        _applyFilterAndSort(); 
-      } 
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(lastItemCode)); 
+    if (popResult != null) {
+      String? lastItemCode;
+      int? targetRealIndex;
+
+      if (popResult is Map) {
+        lastItemCode = popResult['itemCode'] as String?;
+        targetRealIndex = popResult['realIndex'] as int?;
+      } else if (popResult is String) {
+        lastItemCode = popResult;
+      }
+
+      if (lastItemCode != null) {
+        // ❗ 추적 메모리에 기록
+        setState(() {
+          _trackedItemCode = lastItemCode;
+        });
+
+        bool isDisplayed = _displayItems.any((i) => !i.isSubheading && i.itemCode == lastItemCode);
+        if (!isDisplayed) {
+          final targetItem = _originalItems.firstWhere((i) => !i.isSubheading && i.itemCode == lastItemCode);
+          setState(() { _temporaryVisibleItem = targetItem; });
+          _applyFilterAndSort();
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(lastItemCode!, targetRealIndex: targetRealIndex));
+      }
     }
   }
 
@@ -4608,7 +4657,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                       fontSize: 13,
                       color: item.isCrossDuplicate
                           ? Colors.redAccent
-                          : (isDark ? Colors.blue[300] : Colors.blue[700]),
+                          : (!_isMergeDuplicateMode && item.isSectionDuplicate
+                              ? Colors.orange
+                              : (isDark ? Colors.blue[300] : Colors.blue[700])),
                       fontWeight: FontWeight.bold
                     )
                   )
