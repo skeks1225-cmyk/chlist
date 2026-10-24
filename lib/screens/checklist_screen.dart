@@ -447,6 +447,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           _quantitySearchQuery = "";
           _isSubheadingViewMode = false;
           _columnFilters.forEach((key, value) => value.clear());
+          _isSelectionFiltered = false;
+          _selectedIndices.clear();
+          _trackedItemCode = null;
+          _highlightedRealIndex = null;
+          _isMergeDuplicateMode = true; // ❗ 기본모드: 합산모드
+          _isPackingMode = false; // ❗ 기본모드: 완료모드
         }
         
         _isEditMode = false;
@@ -2525,7 +2531,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     }));
   }
 
-  void _handleClose() { _forgetFocus(); if (_originalItems.isEmpty) return; showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("리스트 닫기"), content: const Text("현재 리스트를 닫으시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")), TextButton(onPressed: () { setState(() { _originalItems = []; _displayItems = []; _currentFileName = "파일을 선택하세요"; _excelPath = ""; _isSorted = false; _currentSortCol = ""; _searchController.clear(); _searchQuery = ""; _showUnfinishedOnly = false; _selectedSections.clear(); }); _saveSettings(); Navigator.pop(ctx); _showSnackBar("리스트가 닫혔습니다."); }, child: const Text("예", style: TextStyle(color: Colors.red)))])); }
+  void _handleClose() { _forgetFocus(); if (_originalItems.isEmpty) return; showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("리스트 닫기"), content: const Text("현재 리스트를 닫으시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")), TextButton(onPressed: () { setState(() { _originalItems = []; _displayItems = []; _currentFileName = "파일을 선택하세요"; _excelPath = ""; _isSorted = false; _currentSortCol = ""; _searchController.clear(); _searchQuery = ""; _showUnfinishedOnly = false; _selectedSections.clear(); _noFilterMode = 0; _remarksFilterQuery = ""; _remarksExcludeQuery = ""; _remarksIncludeLogic = "AND"; _remarksExcludeLogic = "OR"; _quantitySearchQuery = ""; _isSubheadingViewMode = false; _columnFilters.forEach((key, value) => value.clear()); _isEditMode = false; _isReorderMode = false; _selectedIndices.clear(); _isSelectionFiltered = false; _temporaryVisibleItem = null; _trackedItemCode = null; _highlightedRealIndex = null; _isMergeDuplicateMode = true; _isPackingMode = false; }); _saveSettings(); Navigator.pop(ctx); _showSnackBar("리스트가 닫혔습니다."); }, child: const Text("예", style: TextStyle(color: Colors.red)))])); }
 
   void _handleRefresh() { _forgetFocus(); if (_excelPath.isEmpty) return; if (File(_excelPath).existsSync()) { _loadExcelData(_excelPath, keepFilters: true); _showSnackBar("🔄 리스트를 새로고침했습니다."); } }
 
@@ -4001,47 +4007,53 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             }),
           ])), onChanged: (v) { if (_searchQuery.isEmpty && v.isNotEmpty) _preSearchScrollOffset = _scrollController.offset; setState(() => _searchQuery = v); _applyFilterAndSort(); if (v.isEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); })),
           Expanded(flex: 2, child: _buildSummaryWidget(isDark)),
-          child: Stack(
-            children: [
-              Listener(onPointerDown: (_) {
+        ])),
         if (!_isReorderMode) _buildHeader(isDark),
         Expanded(
-          child: Listener(onPointerDown: (_) { 
-            // ❗ 리스트 영역 터치 시에만 포커스 해제 (상단 버튼 영역 보호)
-            _clearHighlight(); 
-            _forgetFocus(); 
-            setState(() {
-              _trackedItemCode = null; 
-            });
-            if (_temporaryVisibleItem != null) { 
-              setState(() { _temporaryVisibleItem = null; }); 
-              _applyFilterAndSort(); 
-            } 
-          }, behavior: HitTestBehavior.translucent, child: Container(
-            key: _scrollKey,
-            child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
-            onReorder: _reorderSubheading, 
-            buildDefaultDragHandles: false, // ❗ 기본 핸들 비활성화
-            children: _originalItems.where((i) => i.isSubheading).toList().asMap().entries.map((entry) {
-              final idx = entry.key;
-              final item = entry.value;
-              return ListTile(
-                key: ValueKey("reorder-${item.itemCode}"), 
-                title: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold)), 
-                trailing: ReorderableDragStartListener(index: idx, child: const Icon(Icons.drag_handle)), // ❗ 즉시 드래그 핸들 적용
-                tileColor: isDark ? Colors.white10 : Colors.grey[200]
-              );
-            }).toList()) : ListView.builder(
-              controller: _scrollController, 
-              physics: const AlwaysScrollableScrollPhysics(), // ❗ 부드러운 스크롤 보장
-              itemCount: _displayItems.length, 
-              itemBuilder: (ctx, idx) {
-            final item = _displayItems[idx];
-            if (item.isSubheading) {
-              return _buildSubheadingWidget(item, isDark);
-            }
-            return _buildDataRow(item, isDark);
-          ))),
+          child: Stack(
+            children: [
+              Listener(
+                onPointerDown: (_) { 
+                  // ❗ 리스트 영역 터치 시에만 포커스 해제 (상단 버튼 영역 보호)
+                  _clearHighlight(); 
+                  _forgetFocus(); 
+                  setState(() {
+                    _trackedItemCode = null; 
+                  });
+                  if (_temporaryVisibleItem != null) { 
+                    setState(() { _temporaryVisibleItem = null; }); 
+                    _applyFilterAndSort(); 
+                  } 
+                }, 
+                behavior: HitTestBehavior.translucent, 
+                child: Container(
+                  key: _scrollKey,
+                  child: _isLoading ? const Center(child: CircularProgressIndicator()) : _isReorderMode ? ReorderableListView(
+                    onReorder: _reorderSubheading, 
+                    buildDefaultDragHandles: false, // ❗ 기본 핸들 비활성화
+                    children: _originalItems.where((i) => i.isSubheading).toList().asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final item = entry.value;
+                      return ListTile(
+                        key: ValueKey("reorder-${item.itemCode}"), 
+                        title: Text(item.itemCode, style: const TextStyle(fontWeight: FontWeight.bold)), 
+                        trailing: ReorderableDragStartListener(index: idx, child: const Icon(Icons.drag_handle)), // ❗ 즉시 드래그 핸들 적용
+                        tileColor: isDark ? Colors.white10 : Colors.grey[200]
+                      );
+                    }).toList()) : ListView.builder(
+                      controller: _scrollController, 
+                      physics: const AlwaysScrollableScrollPhysics(), // ❗ 부드러운 스크롤 보장
+                      itemCount: _displayItems.length, 
+                      itemBuilder: (ctx, idx) {
+                        final item = _displayItems[idx];
+                        if (item.isSubheading) {
+                          return _buildSubheadingWidget(item, isDark);
+                        }
+                        return _buildDataRow(item, isDark);
+                      },
+                    ),
+                ),
+              ),
               if (!_isReorderMode && !_isSubheadingViewMode)
                 Builder(
                   builder: (context) {
@@ -4061,6 +4073,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                 ),
             ],
           ),
+        ),
         if (_isSubheadingViewMode && _selectedSections.isNotEmpty) Container(color: isDark ? Colors.blueGrey[900] : Colors.blueGrey[100], padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: Row(children: [
             Text("선택됨: ${_selectedSections.length}개", style: const TextStyle(fontWeight: FontWeight.bold)), const Spacer(),
             TextButton(onPressed: () { setState(() { _selectedSections.clear(); _isSubheadingViewMode = false; }); _applyFilterAndSort(); }, child: const Text("모두보기", style: TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold))),

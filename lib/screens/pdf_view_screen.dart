@@ -233,33 +233,51 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   void _prev() {
     final currentItem = _allItems[_currentIndex];
-    int prevTargetIdx = -1;
-    for (int i = _filteredItems.length - 1; i >= 0; i--) {
-      if (_filteredItems[i].realIndex < currentItem.realIndex) {
-        prevTargetIdx = i;
-        break;
-      }
+    int curFilteredIdx = _filteredItems.indexWhere((i) =>
+        i.realIndex == currentItem.realIndex ||
+        (i.isMerged && i.mergedRealIndices.contains(currentItem.realIndex)));
+    if (curFilteredIdx == -1) {
+      curFilteredIdx = _filteredItems.indexWhere((i) => i.itemCode == currentItem.itemCode);
     }
-    if (prevTargetIdx != -1) {
-      final targetItem = _filteredItems[prevTargetIdx];
-      final newIdx = _allItems.indexOf(targetItem);
-      if (newIdx != -1) { setState(() { _currentIndex = newIdx; _loadPdf(); }); }
+    if (curFilteredIdx > 0) {
+      final targetItem = _filteredItems[curFilteredIdx - 1];
+      int newAllIdx = _allItems.indexWhere((i) =>
+          i.realIndex == targetItem.realIndex ||
+          (i.isMerged && i.mergedRealIndices.contains(targetItem.realIndex)));
+      if (newAllIdx == -1) {
+        newAllIdx = _allItems.indexWhere((i) => i.itemCode == targetItem.itemCode);
+      }
+      if (newAllIdx != -1) {
+        setState(() {
+          _currentIndex = newAllIdx;
+          _loadPdf();
+        });
+      }
     }
   }
 
   void _next() {
     final currentItem = _allItems[_currentIndex];
-    int nextTargetIdx = -1;
-    for (int i = 0; i < _filteredItems.length; i++) {
-      if (_filteredItems[i].realIndex > currentItem.realIndex) {
-        nextTargetIdx = i;
-        break;
-      }
+    int curFilteredIdx = _filteredItems.indexWhere((i) =>
+        i.realIndex == currentItem.realIndex ||
+        (i.isMerged && i.mergedRealIndices.contains(currentItem.realIndex)));
+    if (curFilteredIdx == -1) {
+      curFilteredIdx = _filteredItems.indexWhere((i) => i.itemCode == currentItem.itemCode);
     }
-    if (nextTargetIdx != -1) {
-      final targetItem = _filteredItems[nextTargetIdx];
-      final newIdx = _allItems.indexOf(targetItem);
-      if (newIdx != -1) { setState(() { _currentIndex = newIdx; _loadPdf(); }); }
+    if (curFilteredIdx != -1 && curFilteredIdx < _filteredItems.length - 1) {
+      final targetItem = _filteredItems[curFilteredIdx + 1];
+      int newAllIdx = _allItems.indexWhere((i) =>
+          i.realIndex == targetItem.realIndex ||
+          (i.isMerged && i.mergedRealIndices.contains(targetItem.realIndex)));
+      if (newAllIdx == -1) {
+        newAllIdx = _allItems.indexWhere((i) => i.itemCode == targetItem.itemCode);
+      }
+      if (newAllIdx != -1) {
+        setState(() {
+          _currentIndex = newAllIdx;
+          _loadPdf();
+        });
+      }
     }
   }
 
@@ -820,8 +838,14 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     final item = _allItems[_currentIndex];
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color viewerBgColor = isDark ? Colors.black : Colors.grey[300]!;
-    bool hasPrev = _filteredItems.any((i) => i.realIndex < item.realIndex);
-    bool hasNext = _filteredItems.any((i) => i.realIndex > item.realIndex);
+    int curFilteredIdx = _filteredItems.indexWhere((i) =>
+        i.realIndex == item.realIndex ||
+        (i.isMerged && i.mergedRealIndices.contains(item.realIndex)));
+    if (curFilteredIdx == -1) {
+      curFilteredIdx = _filteredItems.indexWhere((i) => i.itemCode == item.itemCode);
+    }
+    bool hasPrev = curFilteredIdx > 0;
+    bool hasNext = curFilteredIdx != -1 && curFilteredIdx < _filteredItems.length - 1;
 
     return PopScope(
       canPop: false,
