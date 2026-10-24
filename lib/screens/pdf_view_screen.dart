@@ -62,6 +62,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   Offset? _doubleTapPosition; // 더블탭 위치 저장 (확대 중심점)
   bool _itemInitialCompleteState = false; // ❗ 뷰어 로드 시점의 완료 상태 (버튼 위치 튐 방지용)
   int? _overrideTargetRealIndex; // ❗ 중복 시트에서 특정 행 선택 시 해당 realIndex 기억용
+  late bool _isMergeDuplicateMode;
+  List<ItemModel> _currentAllItems = [];
+  List<ItemModel> _currentFilteredItems = [];
+
+  List<ItemModel> get _allItems => _currentAllItems.isNotEmpty ? _currentAllItems : widget.allItems;
+  List<ItemModel> get _filteredItems => _currentFilteredItems.isNotEmpty ? _currentFilteredItems : widget.filteredItems;
 
   // ❗ 슬라이드 제스처 관련 변수
   double _swipeStartX = 0;
@@ -92,6 +98,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   @override
   void initState() {
     super.initState();
+    _isMergeDuplicateMode = widget.isMergeDuplicateMode;
+    _currentAllItems = List.from(widget.allItems);
+    _currentFilteredItems = List.from(widget.filteredItems);
     _currentIndex = widget.initialIndex;
     _loadPdf();
     _searchFocusNode.addListener(() {
@@ -102,7 +111,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   Future<void> _loadPdf() async {
-    final item = widget.allItems[_currentIndex];
+    final item = _allItems[_currentIndex];
     final String cleanCode = item.itemCode.trim();
     if (!mounted) return;
     setState(() => _isLoading = true);
@@ -223,33 +232,33 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   void _prev() {
-    final currentItem = widget.allItems[_currentIndex];
+    final currentItem = _allItems[_currentIndex];
     int prevTargetIdx = -1;
-    for (int i = widget.filteredItems.length - 1; i >= 0; i--) {
-      if (widget.filteredItems[i].realIndex < currentItem.realIndex) {
+    for (int i = _filteredItems.length - 1; i >= 0; i--) {
+      if (_filteredItems[i].realIndex < currentItem.realIndex) {
         prevTargetIdx = i;
         break;
       }
     }
     if (prevTargetIdx != -1) {
-      final targetItem = widget.filteredItems[prevTargetIdx];
-      final newIdx = widget.allItems.indexOf(targetItem);
+      final targetItem = _filteredItems[prevTargetIdx];
+      final newIdx = _allItems.indexOf(targetItem);
       if (newIdx != -1) { setState(() { _currentIndex = newIdx; _loadPdf(); }); }
     }
   }
 
   void _next() {
-    final currentItem = widget.allItems[_currentIndex];
+    final currentItem = _allItems[_currentIndex];
     int nextTargetIdx = -1;
-    for (int i = 0; i < widget.filteredItems.length; i++) {
-      if (widget.filteredItems[i].realIndex > currentItem.realIndex) {
+    for (int i = 0; i < _filteredItems.length; i++) {
+      if (_filteredItems[i].realIndex > currentItem.realIndex) {
         nextTargetIdx = i;
         break;
       }
     }
     if (nextTargetIdx != -1) {
-      final targetItem = widget.filteredItems[nextTargetIdx];
-      final newIdx = widget.allItems.indexOf(targetItem);
+      final targetItem = _filteredItems[nextTargetIdx];
+      final newIdx = _allItems.indexOf(targetItem);
       if (newIdx != -1) { setState(() { _currentIndex = newIdx; _loadPdf(); }); }
     }
   }
@@ -257,7 +266,95 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   void _onSearchChanged(String query) {
     if (query.isEmpty) { setState(() => _searchResults = []); return; }
     final q = query.toLowerCase();
-    setState(() { _searchResults = widget.allItems.where((item) => item.itemCode.toLowerCase().contains(q)).take(15).toList(); });
+    setState(() { _searchResults = _allItems.where((item) => item.itemCode.toLowerCase().contains(q)).take(15).toList(); });
+  }
+
+  void _toggleMergeMode() {
+    final currentTarget = _allItems[_currentIndex];
+    final bool newMode = !_isMergeDuplicateMode;
+
+    final rawList = widget.rawOriginalItems ?? widget.allItems;
+
+    if (newMode) {
+      // ❗ 합산모드로 전환: 동일 부분제목 내 중복 합산
+      Map<String, List<ItemModel>> sectionMap = {};
+      List<String> secOrder = [];
+      for (var it in rawList) {
+        final sec = it.subheadingTitle.trim();
+        if (!sectionMap.containsKey(sec)) {
+          sectionMap[sec] = [];
+          secOrder.add(sec);
+        }
+        sectionMap[sec]!.add(it);
+      }
+
+      List<ItemModel> mergedAll = [];
+      for (var sec in secOrder) {
+        final items = sectionMap[sec]!;
+        Map<String, List<ItemModel>> dupMap = {};
+        List<String> codeOrder = [];
+        for (var it in items) {
+          final code = it.itemCode.trim();
+          if (!dupMap.containsKey(code)) {
+            dupMap[code] = [];
+            codeOrder.add(code);
+          }
+          dupMap[code]!.add(it);
+        }
+
+        for (var code in codeOrder) {
+          final group = dupMap[code]!;
+          if (group.length == 1) {
+            mergedAll.add(group.first.copy(
+              isMerged: false,
+              mergedRealIndices: [group.first.realIndex],
+              hasDifferentRemarks: false,
+            ));
+          } else {
+            int totalQty = 0;
+            final List<int> realIndices = [];
+            final Set<String> distinctRemarks = {};
+            for (var it in group) {
+              totalQty += int.tryParse(it.quantity.trim()) ?? 0;
+              realIndices.add(it.realIndex);
+              if (it.remarks.trim().isNotEmpty) distinctRemarks.add(it.remarks.trim());
+            }
+            mergedAll.add(group.first.copy(
+              quantity: totalQty.toString(),
+              isMerged: true,
+              mergedRealIndices: realIndices,
+              hasDifferentRemarks: distinctRemarks.length > 1,
+            ));
+          }
+        }
+      }
+
+      _currentAllItems = mergedAll;
+      _currentFilteredItems = List.from(mergedAll);
+    } else {
+      // ❗ 원본모드로 전환: 원본 리스트 복원
+      _currentAllItems = rawList.map((it) => it.copy(
+        isMerged: false,
+        mergedRealIndices: [it.realIndex],
+        hasDifferentRemarks: false,
+      )).toList();
+      _currentFilteredItems = List.from(_currentAllItems);
+    }
+
+    // 현재 보고 있던 품목으로 index 복원
+    int newIndex = _currentAllItems.indexWhere((i) =>
+        i.realIndex == currentTarget.realIndex ||
+        (i.isMerged && i.mergedRealIndices.contains(currentTarget.realIndex)) ||
+        (i.itemCode == currentTarget.itemCode && i.subheadingTitle == currentTarget.subheadingTitle));
+    if (newIndex == -1) newIndex = 0;
+
+    setState(() {
+      _isMergeDuplicateMode = newMode;
+      _currentIndex = newIndex;
+    });
+
+    _showViewerToast(_isMergeDuplicateMode ? "합산모드로 전환되었습니다." : "원본모드로 전환되었습니다.");
+    _loadPdf();
   }
 
   void _showDuplicateItemsSheet(ItemModel currentItem) {
@@ -357,7 +454,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   void _jumpToItem(ItemModel target) {
     _overrideTargetRealIndex = target.realIndex;
-    int index = widget.allItems.indexWhere((i) =>
+    int index = _allItems.indexWhere((i) =>
         i.realIndex == target.realIndex ||
         (i.isMerged && i.mergedRealIndices.contains(target.realIndex)));
     if (index != -1) {
@@ -560,7 +657,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       child: GestureDetector(
         onTap: () {
           setState(onSelected);
-          widget.onStatusUpdate(widget.allItems[_currentIndex], 'update');
+          widget.onStatusUpdate(_allItems[_currentIndex], 'update');
           Navigator.pop(context);
         },
         child: Container(
@@ -629,7 +726,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   Widget _statusBtn(String label, Color color, bool active, VoidCallback onTap, {VoidCallback? onLongPress, VoidCallback? onDoubleTap}) {
-    final item = widget.allItems[_currentIndex];
+    final item = _allItems[_currentIndex];
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     String subText = "";
     if (label == "보완") {
@@ -720,15 +817,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.allItems[_currentIndex];
+    final item = _allItems[_currentIndex];
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color viewerBgColor = isDark ? Colors.black : Colors.grey[300]!;
-    bool hasPrev = widget.filteredItems.any((i) => i.realIndex < item.realIndex);
-    bool hasNext = widget.filteredItems.any((i) => i.realIndex > item.realIndex);
+    bool hasPrev = _filteredItems.any((i) => i.realIndex < item.realIndex);
+    bool hasNext = _filteredItems.any((i) => i.realIndex > item.realIndex);
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) { if (didPop) return; Navigator.pop(context, {'itemCode': item.itemCode, 'realIndex': _overrideTargetRealIndex ?? item.realIndex}); },
+      onPopInvokedWithResult: (didPop, result) { if (didPop) return; Navigator.pop(context, {'itemCode': item.itemCode, 'realIndex': _overrideTargetRealIndex ?? item.realIndex, 'isMergeDuplicateMode': _isMergeDuplicateMode}); },
       child: Scaffold(
         appBar: AppBar(
           title: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
@@ -749,8 +846,24 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             ],
           ]),
           backgroundColor: isDark ? Colors.black : Colors.blueGrey[900], foregroundColor: Colors.white,
-          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context, {'itemCode': item.itemCode, 'realIndex': _overrideTargetRealIndex ?? item.realIndex})),
-          actions: [TextButton(onPressed: _resetFit, child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16)))],
+          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context, {'itemCode': item.itemCode, 'realIndex': _overrideTargetRealIndex ?? item.realIndex, 'isMergeDuplicateMode': _isMergeDuplicateMode})),
+          actions: [
+            TextButton(
+              onPressed: _toggleMergeMode,
+              child: Text(
+                _isMergeDuplicateMode ? "원본모드" : "합산모드",
+                style: TextStyle(
+                  color: _isMergeDuplicateMode ? Colors.purpleAccent : Colors.lightGreenAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: _resetFit,
+              child: const Text("FIT", style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ],
         ),
         backgroundColor: isDark ? Colors.black : Colors.grey[200],
         body: Column(
@@ -953,7 +1066,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
                                         // 1. 완벽 일치 우선 검색
                                         List<ItemModel> matches = [];
-                                        ItemModel? target = widget.allItems.firstWhere(
+                                        ItemModel? target = _allItems.firstWhere(
                                           (i) => i.itemCode == cleaned,
                                           orElse: () => ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "", quantity: "", isSubheading: false)
                                         );
@@ -963,7 +1076,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                         } else if (cleaned.contains(RegExp(r'-[0-9]{2}$'))) {
                                           // 2. 일치 항목이 없으면 스마트 폴백 매칭 (-## 제거)
                                           String strippedCode = cleaned.substring(0, cleaned.lastIndexOf('-'));
-                                          matches = widget.allItems.where((i) => i.itemCode.startsWith(strippedCode)).toList();
+                                          matches = _allItems.where((i) => i.itemCode.startsWith(strippedCode)).toList();
                                         }
 
                                         if (matches.isNotEmpty) {
@@ -1113,10 +1226,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                               final String displayTitle = item.displayNo.isNotEmpty
                                   ? "[${item.displayNo}] ${item.itemCode}"
                                   : item.itemCode;
-                              int currentFilteredIdx = widget.filteredItems.indexOf(item);
+                              int currentFilteredIdx = _filteredItems.indexOf(item);
                               String pageText = (currentFilteredIdx != -1)
                                   ? "${currentFilteredIdx + 1} / ${widget.filteredItems.length}"
-                                  : "${_currentIndex + 1} / ${widget.allItems.length}";
+                                  : "${_currentIndex + 1} / ${_allItems.length}";
 
                               return Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -1127,18 +1240,30 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                     children: [
                                       Flexible(
                                         child: GestureDetector(
-                                          onTap: () => _showDuplicateItemsSheet(item),
+                                          onTap: () {
+                                            if (_isMergeDuplicateMode) {
+                                              _showViewerToast("현재 [합산모드]입니다. 원본 항목을 확인하려면 상단의 [원본모드]로 전환하세요.");
+                                            } else {
+                                              _showDuplicateItemsSheet(item);
+                                            }
+                                          },
                                           behavior: HitTestBehavior.opaque,
                                           child: Text(
                                             displayTitle,
                                             style: TextStyle(
                                               fontSize: 15,
                                               fontWeight: FontWeight.bold,
-                                              color: item.isCrossDuplicate
-                                                  ? Colors.redAccent
-                                                  : (!widget.isMergeDuplicateMode && item.isSectionDuplicate
-                                                      ? Colors.orange
-                                                      : Colors.blue),
+                                              color: (() {
+                                                if (item.isCrossDuplicate && item.isSectionDuplicate) {
+                                                  return Colors.purpleAccent;
+                                                } else if (item.isCrossDuplicate && !item.isSectionDuplicate) {
+                                                  return Colors.redAccent;
+                                                } else if (!_isMergeDuplicateMode && item.isSectionDuplicate) {
+                                                  return Colors.orange;
+                                                } else {
+                                                  return Colors.blue;
+                                                }
+                                              })(),
                                             ),
                                             overflow: TextOverflow.ellipsis,
                                           ),
@@ -1150,7 +1275,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                         style: TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.bold,
-                                          color: item.isMerged
+                                          color: (_isMergeDuplicateMode && item.isMerged)
                                               ? Colors.orange
                                               : (isDark ? Colors.yellowAccent : Colors.orange[800]),
                                         ),

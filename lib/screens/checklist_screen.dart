@@ -101,6 +101,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     WidgetsBinding.instance.addObserver(this);
     _initApp();
     _searchFocusNode.addListener(() => setState(() {})); 
+    _scrollController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -452,9 +455,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
         _temporaryVisibleItem = null;
       });
 
-      if (keepFilters) {
-        _applyFilterAndSort();
-      } else {
+      _applyFilterAndSort();
+      if (!keepFilters) {
         _saveSettings(); // 초기화된 상태 저장
       }
       _saveLastDir(path);
@@ -3004,6 +3006,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       if (popResult is Map) {
         lastItemCode = popResult['itemCode'] as String?;
         targetRealIndex = popResult['realIndex'] as int?;
+        if (popResult.containsKey('isMergeDuplicateMode')) {
+          final bool viewerMode = popResult['isMergeDuplicateMode'] as bool;
+          if (_isMergeDuplicateMode != viewerMode) {
+            setState(() {
+              _isMergeDuplicateMode = viewerMode;
+            });
+            _applyFilterAndSort();
+          }
+        }
       } else if (popResult is String) {
         lastItemCode = popResult;
       }
@@ -3990,7 +4001,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             }),
           ])), onChanged: (v) { if (_searchQuery.isEmpty && v.isNotEmpty) _preSearchScrollOffset = _scrollController.offset; setState(() => _searchQuery = v); _applyFilterAndSort(); if (v.isEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _scrollController.jumpTo(_preSearchScrollOffset)); })),
           Expanded(flex: 2, child: _buildSummaryWidget(isDark)),
-        ])),
+          child: Stack(
+            children: [
+              Listener(onPointerDown: (_) {
         if (!_isReorderMode) _buildHeader(isDark),
         Expanded(
           child: Listener(onPointerDown: (_) { 
@@ -4025,157 +4038,29 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
               itemBuilder: (ctx, idx) {
             final item = _displayItems[idx];
             if (item.isSubheading) {
-              bool isSectionSel = _selectedSections.contains(item.itemCode);
-              
-              // 해당 섹션의 요약 정보 계산
-              int totalItems = 0;
-              int completedItems = 0;
-              int startIdx = _originalItems.indexOf(item);
-              int sectionSeq = _originalItems.where((i) => i.isSubheading).toList().indexOf(item) + 1;
-              
-              if (startIdx != -1) {
-                for (int j = startIdx + 1; j < _originalItems.length; j++) {
-                  if (_originalItems[j].isSubheading) break;
-                  
-                  // ❗ 포장모드인 경우 displayNo에 '-'가 붙은 하위 항목은 모수 및 완료 통계에서 완전히 제외
-                  if (_isPackingMode && _originalItems[j].displayNo.contains('-')) {
-                    continue;
-                  }
-                  
-                  totalItems++;
-                  if (_isPackingMode) {
-                    if (_originalItems[j].packed) completedItems++;
-                  } else {
-                    if (_originalItems[j].complete) completedItems++;
-                  }
-                }
-              }
-              double percent = totalItems > 0 ? (completedItems / totalItems * 100) : 0;
-              bool isAllDone = totalItems > 0 && totalItems == completedItems;
-
-              // ❗ 제목 3단 분리 로직 (3번째 언더바 기준)
-              String rawTitle = item.itemCode;
-              List<String> parts = rawTitle.split('_');
-              String line1 = "";
-              String line2 = "";
-              if (parts.length > 3) {
-                line1 = parts.sublist(0, 3).join('_');
-                line2 = parts.sublist(3).join('_');
-              } else {
-                line1 = rawTitle;
-                line2 = "";
-              }
-
-              return GestureDetector(
-                onTap: () {
-                  if (_isEditMode) { _toggleSectionSelection(item.itemCode); } 
-                  else if (_isSubheadingViewMode) { if (item.realIndex != -1) { setState(() { _selectedSections = {item.itemCode}; _isSubheadingViewMode = false; }); _applyFilterAndSort(); } else setState(() => _isSubheadingViewMode = false); } 
-                  else { setState(() { if (_selectedSections.contains(item.itemCode)) _selectedSections.remove(item.itemCode); else _selectedSections.add(item.itemCode); }); _applyFilterAndSort(); }
-                }, 
-                onLongPress: (_enableLongPressEdit && !_isEditMode) ? () => _showEditSubheadingDialog(item) : null,
-                child: Container(
-                  height: _subheadingHeight, 
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), 
-                  alignment: Alignment.centerLeft, 
-                  decoration: BoxDecoration(
-                    color: isAllDone 
-                      ? (_isPackingMode
-                        ? (isDark ? Colors.cyan.withOpacity(0.2) : Colors.cyan[100]) // ❗ 포장모드 100% 완료 시 하늘색
-                        : (isDark ? Colors.green.withOpacity(0.15) : Colors.green[100])) // ❗ 완료모드 100% 완료 시 녹색
-                      : (_selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300])),
-                    border: Border(bottom: BorderSide(color: isDark ? Colors.white24 : Colors.grey[400]!, width: 0.5)),
-                  ),
-                  child: Row(children: [
-                    if (_isSubheadingViewMode && !_isEditMode) Checkbox(value: isSectionSel, onChanged: (v) { setState(() { if (v!) _selectedSections.add(item.itemCode); else _selectedSections.remove(item.itemCode); }); }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // 1행: [순번] + 상위 정보 (Fit 적용)
-                          Row(
-                            children: [
-                              Text(
-                                "[${sectionSeq.toString().padLeft(2, '0')}]",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.blue[300] : Colors.blue[800],
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: SizedBox(
-                                  height: 20,
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      line1,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          // 2행: 하위 상세 정보 (모델명 등 - Fit 적용 및 들여쓰기)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 36),
-                            child: SizedBox(
-                              height: 20,
-                              width: double.infinity,
-                              child: line2.isNotEmpty ? FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  line2,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold, 
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ) : const SizedBox.shrink(),
-                            ),
-                          ),
-                          // 3행: 통계 정보 (들여쓰기)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 36),
-                            child: Row(
-                              children: [
-                                Icon(Icons.list_alt, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[700]),
-                                const SizedBox(width: 3),
-                                Text("$totalItems개", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[700])),
-                                const SizedBox(width: 10),
-                                Icon(Icons.check_circle_outline, size: 12, color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[600])),
-                                const SizedBox(width: 3),
-                                Text(
-                                  "${_isPackingMode ? '포장' : '완료'} $completedItems개 (${percent.toStringAsFixed(1)}%)",
-                                  style: TextStyle(
-                                    fontSize: 11, 
-                                    color: isAllDone ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                                    fontWeight: isAllDone ? FontWeight.bold : FontWeight.normal,
-                                  ),
-                                ),
-                                if (isAllDone) ...[
-                                  const SizedBox(width: 6),
-                                  const Text("🏆", style: TextStyle(fontSize: 11)),
-                                ]
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ), 
-                    if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
-                    if (_isSubheadingViewMode && !_isEditMode) IconButton(icon: const Icon(Icons.reorder, size: 20, color: Colors.blue), onPressed: () => setState(() { _preReorderItems = List.from(_originalItems); _isReorderMode = true; }), tooltip: "순서 변경"),
-                  ])
-                )
-              );
+              return _buildSubheadingWidget(item, isDark);
             }
             return _buildDataRow(item, isDark);
-          })),
-        )),
+          ))),
+              if (!_isReorderMode && !_isSubheadingViewMode)
+                Builder(
+                  builder: (context) {
+                    final stickyItem = _getCurrentStickySubheading();
+                    if (stickyItem == null) return const SizedBox.shrink();
+                    return Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: Material(
+                        elevation: 4,
+                        shadowColor: Colors.black54,
+                        child: _buildSubheadingWidget(stickyItem, isDark, isSticky: true),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
         if (_isSubheadingViewMode && _selectedSections.isNotEmpty) Container(color: isDark ? Colors.blueGrey[900] : Colors.blueGrey[100], padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: Row(children: [
             Text("선택됨: ${_selectedSections.length}개", style: const TextStyle(fontWeight: FontWeight.bold)), const Spacer(),
             TextButton(onPressed: () { setState(() { _selectedSections.clear(); _isSubheadingViewMode = false; }); _applyFilterAndSort(); }, child: const Text("모두보기", style: TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold))),
@@ -4605,6 +4490,177 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     );
   }
 
+  ItemModel? _getCurrentStickySubheading() {
+    if (_displayItems.isEmpty || _isReorderMode || _isSubheadingViewMode) return null;
+    if (!_scrollController.hasClients) return null;
+    final double currentOffset = _scrollController.offset;
+    if (currentOffset < _subheadingHeight) return null;
+    double accumulated = 0.0;
+    ItemModel? currentSectionSubheading;
+    for (int i = 0; i < _displayItems.length; i++) {
+      final item = _displayItems[i];
+      final double h = item.isSubheading ? _subheadingHeight : _itemHeight;
+      if (item.isSubheading) {
+        currentSectionSubheading = item;
+      }
+      accumulated += h;
+      if (accumulated > currentOffset) {
+        return currentSectionSubheading;
+      }
+    }
+    return currentSectionSubheading;
+  }
+
+  Widget _buildSubheadingWidget(ItemModel item, bool isDark, {bool isSticky = false}) {
+    bool isSectionSel = _selectedSections.contains(item.itemCode);
+    
+    // 해당 섹션의 요약 정보 계산
+    int totalItems = 0;
+    int completedItems = 0;
+    int startIdx = _originalItems.indexOf(item);
+    int sectionSeq = _originalItems.where((i) => i.isSubheading).toList().indexOf(item) + 1;
+    
+    if (startIdx != -1) {
+      for (int j = startIdx + 1; j < _originalItems.length; j++) {
+        if (_originalItems[j].isSubheading) break;
+        
+        // ❗ 포장모드인 경우 displayNo에 '-'가 붙은 하위 항목은 모수 및 완료 통계에서 완전히 제외
+        if (_isPackingMode && _originalItems[j].displayNo.contains('-')) {
+          continue;
+        }
+        
+        totalItems++;
+        if (_isPackingMode) {
+          if (_originalItems[j].packed) completedItems++;
+        } else {
+          if (_originalItems[j].complete) completedItems++;
+        }
+      }
+    }
+    double percent = totalItems > 0 ? (completedItems / totalItems * 100) : 0;
+    bool isAllDone = totalItems > 0 && totalItems == completedItems;
+
+    // ❗ 제목 3단 분리 로직 (3번째 언더바 기준)
+    String rawTitle = item.itemCode;
+    List<String> parts = rawTitle.split('_');
+    String line1 = "";
+    String line2 = "";
+    if (parts.length > 3) {
+      line1 = parts.sublist(0, 3).join('_');
+      line2 = parts.sublist(3).join('_');
+    } else {
+      line1 = rawTitle;
+      line2 = "";
+    }
+
+    return GestureDetector(
+      onTap: () {
+        if (_isEditMode) { _toggleSectionSelection(item.itemCode); } 
+        else if (_isSubheadingViewMode) { if (item.realIndex != -1) { setState(() { _selectedSections = {item.itemCode}; _isSubheadingViewMode = false; }); _applyFilterAndSort(); } else setState(() => _isSubheadingViewMode = false); } 
+        else { setState(() { if (_selectedSections.contains(item.itemCode)) _selectedSections.remove(item.itemCode); else _selectedSections.add(item.itemCode); }); _applyFilterAndSort(); }
+      }, 
+      onLongPress: (_enableLongPressEdit && !_isEditMode) ? () => _showEditSubheadingDialog(item) : null,
+      child: Container(
+        height: _subheadingHeight, 
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), 
+        alignment: Alignment.centerLeft, 
+        decoration: BoxDecoration(
+          color: isAllDone 
+  ? (_isPackingMode
+    ? (isDark ? Colors.cyan.withOpacity(0.2) : Colors.cyan[100]) // ❗ 포장모드 100% 완료 시 하늘색
+    : (isDark ? Colors.green.withOpacity(0.15) : Colors.green[100])) // ❗ 완료모드 100% 완료 시 녹색
+  : (_selectedSections.contains(item.itemCode) ? Colors.blueGrey : (isDark ? Colors.white10 : Colors.grey[300])),
+          border: Border(bottom: BorderSide(color: isDark ? Colors.white24 : Colors.grey[400]!, width: 0.5)),
+        ),
+        child: Row(children: [
+          if (_isSubheadingViewMode && !_isEditMode) Checkbox(value: isSectionSel, onChanged: (v) { setState(() { if (v!) _selectedSections.add(item.itemCode); else _selectedSections.remove(item.itemCode); }); }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: VisualDensity.compact),
+          Expanded(
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      // 1행: [순번] + 상위 정보 (Fit 적용)
+      Row(
+        children: [
+          Text(
+  "[${sectionSeq.toString().padLeft(2, '0')}]",
+  style: TextStyle(
+    fontWeight: FontWeight.bold,
+    color: isDark ? Colors.blue[300] : Colors.blue[800],
+    fontSize: 13,
+  ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+  child: SizedBox(
+    height: 20,
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        line1,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+      ),
+    ),
+  ),
+          ),
+        ],
+      ),
+      // 2행: 하위 상세 정보 (모델명 등 - Fit 적용 및 들여쓰기)
+      Padding(
+        padding: const EdgeInsets.only(left: 36),
+        child: SizedBox(
+          height: 20,
+          width: double.infinity,
+          child: line2.isNotEmpty ? FittedBox(
+  fit: BoxFit.scaleDown,
+  alignment: Alignment.centerLeft,
+  child: Text(
+    line2,
+    style: const TextStyle(
+      fontWeight: FontWeight.bold, 
+      fontSize: 14,
+    ),
+  ),
+          ) : const SizedBox.shrink(),
+        ),
+      ),
+      // 3행: 통계 정보 (들여쓰기)
+      Padding(
+        padding: const EdgeInsets.only(left: 36),
+        child: Row(
+          children: [
+  Icon(Icons.list_alt, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[700]),
+  const SizedBox(width: 3),
+  Text("$totalItems개", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+  const SizedBox(width: 10),
+  Icon(Icons.check_circle_outline, size: 12, color: isAllDone ? Colors.green : (isDark ? Colors.grey[400] : Colors.grey[600])),
+  const SizedBox(width: 3),
+  Text(
+    "${_isPackingMode ? '포장' : '완료'} $completedItems개 (${percent.toStringAsFixed(1)}%)",
+    style: TextStyle(
+      fontSize: 11, 
+      color: isAllDone ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.grey[400] : Colors.grey[700]),
+      fontWeight: isAllDone ? FontWeight.bold : FontWeight.normal,
+    ),
+  ),
+  if (isAllDone) ...[
+    const SizedBox(width: 6),
+    const Text("🏆", style: TextStyle(fontSize: 11)),
+  ]
+          ],
+        ),
+      ),
+    ],
+  ),
+          ), 
+          if (_isEditMode) Icon(_isSectionSelected(item.itemCode) ? Icons.check_box : Icons.check_box_outline_blank, color: Colors.blue, size: 20),
+          if (_isSubheadingViewMode && !_isEditMode) IconButton(icon: const Icon(Icons.reorder, size: 20, color: Colors.blue), onPressed: () => setState(() { _preReorderItems = List.from(_originalItems); _isReorderMode = true; }), tooltip: "순서 변경"),
+        ])
+      )
+    );
+  }
+
   Widget _buildDataRow(ItemModel item, bool isDark) {
     bool isSel = _selectedIndices.contains(item.realIndex);
     bool isHigh = item.realIndex == _highlightedRealIndex;
@@ -4655,11 +4711,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                     item.itemCode,
                     style: TextStyle(
                       fontSize: 13,
-                      color: item.isCrossDuplicate
-                          ? Colors.redAccent
-                          : (!_isMergeDuplicateMode && item.isSectionDuplicate
-                              ? Colors.orange
-                              : (isDark ? Colors.blue[300] : Colors.blue[700])),
+                      color: (() {
+                        if (item.isCrossDuplicate && item.isSectionDuplicate) {
+                          return Colors.purpleAccent;
+                        } else if (item.isCrossDuplicate && !item.isSectionDuplicate) {
+                          return Colors.redAccent;
+                        } else if (!_isMergeDuplicateMode && item.isSectionDuplicate) {
+                          return Colors.orange;
+                        } else {
+                          return isDark ? Colors.blue[300] : Colors.blue[700];
+                        }
+                      })(),
                       fontWeight: FontWeight.bold
                     )
                   )
