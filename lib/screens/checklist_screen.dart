@@ -79,6 +79,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
 
   bool _isEditMode = false;
   bool _isPackingMode = false; // ❗ 포장모드 여부
+  bool _isMergeDuplicateMode = true; // ❗ 기본 합산모드 여부 (기본값: true)
   int _pdfPackingShowCompleteMode = 0; // ❗ 포장모드 PDF 뷰어 완료 버튼 표시 방식 (0: 미완료 시만 스마트 노출, 1: 상시 4개 노출)
   bool _isSelectionFiltered = false; // ❗ 선택 필터 활성화 여부
   final Set<int> _selectedIndices = {}; 
@@ -413,6 +414,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       final items = await _excelService.loadExcel(path);
       setState(() {
         _originalItems = items;
+        _updateCrossSectionDuplicates();
         _displayItems = List.from(items);
         _currentFileName = p.basename(path);
         _excelPath = path;
@@ -450,6 +452,51 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       _showError("로드 오류", "엑셀 파일을 읽을 수 없습니다.");
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  void _updateCrossSectionDuplicates() {
+    final Map<String, Set<String>> codeToSections = {};
+    for (var item in _originalItems) {
+      if (item.isSubheading || item.itemCode.trim().isEmpty) continue;
+      final cleanCode = item.itemCode.trim();
+      final sec = item.subheadingTitle.trim();
+      codeToSections.putIfAbsent(cleanCode, () => {}).add(sec);
+    }
+
+    final Set<String> crossSectionDupCodes = {};
+    codeToSections.forEach((code, sections) {
+      if (sections.length > 1) {
+        crossSectionDupCodes.add(code);
+      }
+    });
+
+    for (var item in _originalItems) {
+      if (!item.isSubheading) {
+        item.isCrossDuplicate = crossSectionDupCodes.contains(item.itemCode.trim());
+      }
+    }
+  }
+
+  void _syncDuplicateItemsStatus(ItemModel sourceItem) {
+    if (sourceItem.isSubheading || sourceItem.itemCode.trim().isEmpty) return;
+    final targetCode = sourceItem.itemCode.trim();
+    final targetSection = sourceItem.subheadingTitle.trim();
+
+    for (var item in _originalItems) {
+      if (!item.isSubheading && 
+          item.itemCode.trim() == targetCode && 
+          item.subheadingTitle.trim() == targetSection) {
+        item.complete = sourceItem.complete;
+        item.completeTime = sourceItem.completeTime;
+        item.packed = sourceItem.packed;
+        item.packedTime = sourceItem.packedTime;
+        item.process = sourceItem.process;
+        item.processTime = sourceItem.processTime;
+        item.complement = sourceItem.complement;
+        item.complementTime = sourceItem.complementTime;
+        item.remarks = sourceItem.remarks;
+      }
     }
   }
 
@@ -604,6 +651,66 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             sectionItems.sort((a, b) => a.realIndex.compareTo(b.realIndex));
           }
         }
+      }
+
+      if (_isMergeDuplicateMode && sectionItems.isNotEmpty) {
+        // ❗ 부분제목 범위 내 중복 품목코드 자동 합산
+        Map<String, List<ItemModel>> dupMap = {};
+        List<String> codeOrder = [];
+        for (var item in sectionItems) {
+          final code = item.itemCode.trim();
+          if (!dupMap.containsKey(code)) {
+            dupMap[code] = [];
+            codeOrder.add(code);
+          }
+          dupMap[code]!.add(item);
+        }
+
+        List<ItemModel> mergedSectionItems = [];
+        for (var code in codeOrder) {
+          final group = dupMap[code]!;
+          if (group.length == 1) {
+            final single = group.first.copy(
+              isMerged: false,
+              mergedRealIndices: [group.first.realIndex],
+              hasDifferentRemarks: false,
+            );
+            mergedSectionItems.add(single);
+          } else {
+            // ❗ 2개 이상 중복: 제일 상위 항목을 대표로 하여 수량 합산
+            final firstItem = group.first;
+            int totalQty = 0;
+            final Set<String> distinctRemarks = {};
+            final List<int> realIndices = [];
+
+            for (var it in group) {
+              final parsed = int.tryParse(it.quantity.trim()) ?? 0;
+              totalQty += parsed;
+              realIndices.add(it.realIndex);
+              if (it.remarks.trim().isNotEmpty) {
+                distinctRemarks.add(it.remarks.trim());
+              }
+            }
+
+            final bool hasDiffRemarks = distinctRemarks.length > 1;
+
+            final mergedItem = firstItem.copy(
+              quantity: totalQty.toString(),
+              isMerged: true,
+              mergedRealIndices: realIndices,
+              hasDifferentRemarks: hasDiffRemarks,
+            );
+            mergedSectionItems.add(mergedItem);
+          }
+        }
+        sectionItems = mergedSectionItems;
+      } else if (!_isMergeDuplicateMode && sectionItems.isNotEmpty) {
+        // ❗ 원본 모드: 개별 항목 그대로 표시
+        sectionItems = sectionItems.map((it) => it.copy(
+          isMerged: false,
+          mergedRealIndices: [it.realIndex],
+          hasDifferentRemarks: false,
+        )).toList();
       }
 
       if (sectionItems.isNotEmpty) {
@@ -1168,6 +1275,71 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
         ));
       }).toList());
     });
+  }
+
+  Future<void> _pickPathSource() async {
+    _forgetFocus();
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.table_chart, color: Colors.green),
+              title: const Text("엑셀 파일 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(
+                _currentFileName.isNotEmpty ? "현재: $_currentFileName" : "휴대폰 또는 SMB 공유폴더에서 엑셀 선택",
+                style: const TextStyle(fontSize: 11),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickSource('file');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
+              title: const Text("PDF 도면 폴더 선택", style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(
+                _pdfFolderPath.isNotEmpty ? "현재: $_pdfFolderPath" : "휴대폰 또는 SMB 도면 폴더 지정",
+                style: const TextStyle(fontSize: 11),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickSource('dir');
+              },
+            ),
+            if (_pdfFolderPath.isNotEmpty) ...[
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.fact_check, color: Colors.deepOrange),
+                title: const Text("리스트 PDF 매칭 (누락 검사)", style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text("QR 매칭 규칙(-S, -01 등)으로 도면 누락 항목만 표시합니다.", style: TextStyle(fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _checkPdfMatching();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+                title: const Text("미매칭 PDF 파일 정리 (삭제)", style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(
+                  _pdfFolderPath.startsWith("smb://")
+                      ? "리스트에 없는 로컬 임시 다운로드 PDF를 삭제합니다. (SMB 원본 보호)"
+                      : "리스트에 없는 불필요한 PDF 파일을 폴더에서 검색하여 삭제합니다.",
+                  style: const TextStyle(fontSize: 11),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _cleanUnmatchedPdfFiles();
+                },
+              ),
+            ],
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _pickSource(String mode) async {
@@ -2444,16 +2616,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           item.complement = "부족"; 
           item.complete = false; 
           item.complementTime = DateTime.now().toString().substring(0, 16);
+          _syncDuplicateItemsStatus(item);
+          _applyFilterAndSort();
         }), 
         _dialogBtn("재작업", Colors.red, () { 
           item.complement = "재작업"; 
           item.complete = false; 
           item.complementTime = DateTime.now().toString().substring(0, 16);
+          _syncDuplicateItemsStatus(item);
+          _applyFilterAndSort();
         }), 
         const Divider(), 
         _dialogBtn("지우기", Colors.grey, () { 
           item.complement = ""; 
           item.complementTime = "";
+          _syncDuplicateItemsStatus(item);
+          _applyFilterAndSort();
         }), 
         _dialogBtn("선택취소", Colors.blueGrey, () {}),
       ]),
@@ -2512,7 +2690,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                       setState(() { 
                         item.process = p; 
                         item.processTime = DateTime.now().toString().substring(0, 16);
+                        _syncDuplicateItemsStatus(item);
                       }); 
+                      _applyFilterAndSort();
                       if (_autoSave) _manualSave(silent: true); Navigator.pop(context);
                     },
                     child: Container(
@@ -2548,6 +2728,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                 const Divider(), _dialogBtn("지우기", Colors.grey, () { 
                   item.process = ""; 
                   item.processTime = "";
+                  _syncDuplicateItemsStatus(item);
+                  _applyFilterAndSort();
                 }), 
                 _dialogBtn("선택취소", Colors.blueGrey, () {}),
               ])))));
@@ -2695,7 +2877,89 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
 
   Future<void> _handleItemClick(ItemModel item) async {
     _forgetFocus(); if (_autoSave) _manualSave(silent: true);
-    if (!mounted) return; final String? lastItemCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(allItems: _originalItems.where((i) => !i.isSubheading).toList(), filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(), initialIndex: _originalItems.where((i) => !i.isSubheading).toList().indexOf(item), pdfFolderPath: _pdfFolderPath, smbService: _smbService, processList: _processList, processColors: _processColors, completeMode: _completeMode, swipeSensitivity: _swipeSensitivity, pdfDoubleTapZoom: _pdfDoubleTapZoom, isPackingMode: _isPackingMode, pdfPackingShowCompleteMode: _pdfPackingShowCompleteMode, onStatusUpdate: (it, type) { if (type == 'complete') { setState(() { if (_isPackingMode) { it.packed = !it.packed; if (it.packed) { it.packedTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.packedTime = ""; } } else { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } } }); } else if (type == 'toggle_complete') { setState(() { it.complete = !it.complete; if (it.complete) { it.completeTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.completeTime = ""; } }); } else if (type == 'toggle_packed') { setState(() { it.packed = !it.packed; if (it.packed) { it.packedTime = DateTime.now().toString().substring(0, 16); it.complement = ""; it.complementTime = ""; } else { it.packedTime = ""; } }); } else setState(() {}); if (_autoSave) _manualSave(silent: true); })));
+    if (!mounted) return;
+    final allNonSubheadings = _originalItems.where((i) => !i.isSubheading).toList();
+    int initialIdx = allNonSubheadings.indexWhere((i) => i.realIndex == item.realIndex);
+    if (initialIdx == -1) initialIdx = 0;
+
+    final String? lastItemCode = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PdfViewerScreen(
+          allItems: allNonSubheadings,
+          filteredItems: _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList(),
+          initialIndex: initialIdx,
+          pdfFolderPath: _pdfFolderPath,
+          smbService: _smbService,
+          processList: _processList,
+          processColors: _processColors,
+          completeMode: _completeMode,
+          swipeSensitivity: _swipeSensitivity,
+          pdfDoubleTapZoom: _pdfDoubleTapZoom,
+          isPackingMode: _isPackingMode,
+          pdfPackingShowCompleteMode: _pdfPackingShowCompleteMode,
+          onStatusUpdate: (it, type) {
+            if (type == 'complete') {
+              setState(() {
+                if (_isPackingMode) {
+                  it.packed = !it.packed;
+                  if (it.packed) {
+                    it.packedTime = DateTime.now().toString().substring(0, 16);
+                    it.complement = "";
+                    it.complementTime = "";
+                  } else {
+                    it.packedTime = "";
+                  }
+                } else {
+                  it.complete = !it.complete;
+                  if (it.complete) {
+                    it.completeTime = DateTime.now().toString().substring(0, 16);
+                    it.complement = "";
+                    it.complementTime = "";
+                  } else {
+                    it.completeTime = "";
+                  }
+                }
+                _syncDuplicateItemsStatus(it);
+              });
+              _applyFilterAndSort();
+            } else if (type == 'toggle_complete') {
+              setState(() {
+                it.complete = !it.complete;
+                if (it.complete) {
+                  it.completeTime = DateTime.now().toString().substring(0, 16);
+                  it.complement = "";
+                  it.complementTime = "";
+                } else {
+                  it.completeTime = "";
+                }
+                _syncDuplicateItemsStatus(it);
+              });
+              _applyFilterAndSort();
+            } else if (type == 'toggle_packed') {
+              setState(() {
+                it.packed = !it.packed;
+                if (it.packed) {
+                  it.packedTime = DateTime.now().toString().substring(0, 16);
+                  it.complement = "";
+                  it.complementTime = "";
+                } else {
+                  it.packedTime = "";
+                }
+                _syncDuplicateItemsStatus(it);
+              });
+              _applyFilterAndSort();
+            } else {
+              setState(() {
+                _syncDuplicateItemsStatus(it);
+              });
+              _applyFilterAndSort();
+            }
+            if (_autoSave) _manualSave(silent: true);
+          },
+        ),
+      ),
+    );
     if (lastItemCode != null) { 
       // ❗ 추적 메모리에 기록
       setState(() {
@@ -3570,7 +3834,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       ),
       body: SafeArea(child: Column(children: [
         if (!_isEditMode && !_isReorderMode) Padding(padding: const EdgeInsets.all(8.0), child: Row(children: [
-          _topBtn("설정", _openSettings), const SizedBox(width: 4), _topBtn("엑셀\n선택", () => _pickSource('file')), const SizedBox(width: 4), _topBtn("PDF\n선택", () => _pickSource('dir')), const SizedBox(width: 4),
+          _topBtn("설정", _openSettings), const SizedBox(width: 4),
+          _topBtn("경로\n선택", _pickPathSource), const SizedBox(width: 4),
+          _topBtn(_isMergeDuplicateMode ? "원본\n모드" : "합산\n모드", () {
+            setState(() {
+              _isMergeDuplicateMode = !_isMergeDuplicateMode;
+            });
+            _applyFilterAndSort();
+          }, bgColor: _isMergeDuplicateMode ? Colors.deepPurple[700] : Colors.blueGrey[700]), const SizedBox(width: 4),
           _topBtn(_isPackingMode ? "완료\n모드" : "포장\n모드", () {
             setState(() {
               _isPackingMode = !_isPackingMode;
@@ -3985,7 +4256,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           item.completeTime = "";
         }
       }
+      _syncDuplicateItemsStatus(item);
     });
+    _applyFilterAndSort();
     if (_autoSave) _manualSave(silent: true);
   }
 
@@ -4068,7 +4341,177 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     );
   }
 
+  void _showMergeRemarksDialog(ItemModel item) {
+    final List<ItemModel> targets = [];
+    if (item.isMerged && item.mergedRealIndices.length > 1) {
+      for (int rIdx in item.mergedRealIndices) {
+        final found = _originalItems.where((e) => !e.isSubheading && e.realIndex == rIdx);
+        if (found.isNotEmpty) targets.add(found.first);
+      }
+    } else {
+      targets.add(item);
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("[${item.itemCode}] 비고 통합 및 동기화"),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "동일 부분제목 내 중복 항목들의 비고 내용이 서로 다릅니다.\n어느 비고 내용으로 통합할지 선택하세요:",
+                style: TextStyle(fontSize: 13, color: Colors.blueGrey),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: targets.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, idx) {
+                    final target = targets[idx];
+                    final noLabel = target.displayNo.isNotEmpty ? target.displayNo : (target.no.isNotEmpty ? target.no : "${idx + 1}");
+                    final rmkText = target.remarks.trim().isEmpty ? "(빈칸)" : target.remarks.trim();
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(color: Colors.blueGrey.shade100, borderRadius: BorderRadius.circular(4)),
+                            child: Text("NO. $noLabel", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87)),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(rmkText, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                final selectedRemark = target.remarks;
+                                item.remarks = selectedRemark;
+                                _syncDuplicateItemsStatus(item);
+                              });
+                              _applyFilterAndSort();
+                              if (_autoSave) _manualSave(silent: true);
+                              Navigator.pop(ctx);
+                              _showSnackBar("비고가 '${target.remarks}'(으)로 통합되었습니다.");
+                            },
+                            child: const Text("이 비고로 통합", style: TextStyle(fontSize: 11)),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("닫기"),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showEditQuantityDialog(ItemModel item) {
+    if (item.isMerged && item.mergedRealIndices.length > 1) {
+      final List<ItemModel> targets = [];
+      for (int rIdx in item.mergedRealIndices) {
+        final found = _originalItems.where((e) => !e.isSubheading && e.realIndex == rIdx);
+        if (found.isNotEmpty) targets.add(found.first);
+      }
+
+      final List<TextEditingController> controllers = targets
+          .map((t) => TextEditingController(text: t.quantity))
+          .toList();
+
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text("[${item.itemCode}] 수량 개별 수정"),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(targets.length, (idx) {
+                  final target = targets[idx];
+                  final noLabel = target.displayNo.isNotEmpty ? target.displayNo : (target.no.isNotEmpty ? target.no : "${idx + 1}");
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.blueGrey,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            "NO. $noLabel",
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: controllers[idx],
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: "수량",
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("취소"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  for (int i = 0; i < targets.length; i++) {
+                    final newQty = controllers[i].text.trim();
+                    targets[i].quantity = newQty;
+                  }
+                });
+                _applyFilterAndSort();
+                if (_autoSave) _manualSave(silent: true);
+                Navigator.pop(ctx);
+              },
+              child: const Text("저장"),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final controller = TextEditingController(text: item.quantity);
     showDialog(
       context: context,
@@ -4163,7 +4606,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                     item.itemCode,
                     style: TextStyle(
                       fontSize: 13,
-                      color: isDark ? Colors.blue[300] : Colors.blue[700],
+                      color: item.isCrossDuplicate
+                          ? Colors.redAccent
+                          : (isDark ? Colors.blue[300] : Colors.blue[700]),
                       fontWeight: FontWeight.bold
                     )
                   )
@@ -4178,7 +4623,22 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             child: GestureDetector(
               onLongPress: (_enableLongPressEdit && !_isEditMode) ? () => _showEditQuantityDialog(item) : null,
               behavior: HitTestBehavior.opaque,
-              child: SizedBox(width: 40, child: Center(child: Text(item.quantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)))),
+              child: SizedBox(
+                width: 40,
+                child: Center(
+                  child: Text(
+                    item.quantity,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: item.isMerged
+                          ? Colors.orange
+                          : (isDark ? Colors.white : Colors.black87),
+                      fontWeight: item.isMerged ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
 
@@ -4238,7 +4698,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                   child: _RemarksCell(
                     item: item,
                     onSave: () { if (_autoSave) _manualSave(silent: true); },
-                    onForgetFocus: _forgetFocus
+                    onForgetFocus: _forgetFocus,
+                    onTapDifferentRemarks: () => _showMergeRemarksDialog(item),
+                    onSyncDuplicates: () {
+                      setState(() {
+                        _syncDuplicateItemsStatus(item);
+                      });
+                      _applyFilterAndSort();
+                    },
                   ),
                 ),
               ),
@@ -4320,16 +4787,129 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
 }
 
 class _RemarksCell extends StatefulWidget {
-  final ItemModel item; final VoidCallback onSave; final VoidCallback onForgetFocus;
-  const _RemarksCell({required this.item, required this.onSave, required this.onForgetFocus});
+  final ItemModel item;
+  final VoidCallback onSave;
+  final VoidCallback onForgetFocus;
+  final VoidCallback? onTapDifferentRemarks;
+  final VoidCallback? onSyncDuplicates;
+
+  const _RemarksCell({
+    required this.item,
+    required this.onSave,
+    required this.onForgetFocus,
+    this.onTapDifferentRemarks,
+    this.onSyncDuplicates,
+  });
+
   @override State<_RemarksCell> createState() => _RemarksCellState();
 }
+
 class _RemarksCellState extends State<_RemarksCell> {
-  late TextEditingController _ctrl; late FocusNode _node;
-  @override void initState() { super.initState(); _ctrl = TextEditingController(text: widget.item.remarks); _node = FocusNode(); _node.addListener(() { if (!_node.hasFocus) { widget.item.remarks = _ctrl.text; widget.onSave(); } }); }
-  @override void didUpdateWidget(_RemarksCell old) { super.didUpdateWidget(old); if (!_node.hasFocus) _ctrl.text = widget.item.remarks; }
-  @override void dispose() { _node.dispose(); _ctrl.dispose(); super.dispose(); }
-  @override Widget build(BuildContext context) { return Stack(alignment: Alignment.centerRight, children: [TextField(focusNode: _node, controller: _ctrl, style: const TextStyle(fontSize: 12), decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 4)), onSubmitted: (v) { widget.item.remarks = v; widget.onSave(); widget.onForgetFocus(); }), if (_ctrl.text.isNotEmpty) IconButton(icon: const Icon(Icons.cancel, size: 14), onPressed: () async { bool? confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text("비고 삭제"), content: const Text("비고 내용을 삭제하시겠습니까?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("삭제", style: TextStyle(color: Colors.red)))])); if (confirm == true) { setState(() => _ctrl.clear()); widget.item.remarks = ""; widget.onSave(); } })]); }
+  late TextEditingController _ctrl;
+  late FocusNode _node;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.item.remarks);
+    _node = FocusNode();
+    _node.addListener(() {
+      if (!_node.hasFocus) {
+        if (widget.item.remarks != _ctrl.text) {
+          widget.item.remarks = _ctrl.text;
+          widget.onSyncDuplicates?.call();
+          widget.onSave();
+        }
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(_RemarksCell old) {
+    super.didUpdateWidget(old);
+    if (!_node.hasFocus) _ctrl.text = widget.item.remarks;
+  }
+
+  @override
+  void dispose() {
+    _node.dispose();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.item.hasDifferentRemarks) {
+      return InkWell(
+        onTap: widget.onTapDifferentRemarks,
+        child: Container(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.item.remarks.isEmpty ? "(비고 상이 - 클릭하여 통합)" : widget.item.remarks,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.orange,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Icon(Icons.call_merge, size: 14, color: Colors.orange),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Stack(
+      alignment: Alignment.centerRight,
+      children: [
+        TextField(
+          focusNode: _node,
+          controller: _ctrl,
+          style: const TextStyle(fontSize: 12),
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 4),
+          ),
+          onSubmitted: (v) {
+            widget.item.remarks = v;
+            widget.onSyncDuplicates?.call();
+            widget.onSave();
+            widget.onForgetFocus();
+          },
+        ),
+        if (_ctrl.text.isNotEmpty)
+          IconButton(
+            icon: const Icon(Icons.cancel, size: 14),
+            onPressed: () async {
+              bool? confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text("비고 삭제"),
+                  content: const Text("비고 내용을 삭제하시겠습니까?"),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
+                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("삭제", style: TextStyle(color: Colors.red))),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                setState(() => _ctrl.clear());
+                widget.item.remarks = "";
+                widget.onSyncDuplicates?.call();
+                widget.onSave();
+              }
+            },
+          ),
+      ],
+    );
+  }
 }
 
 class _DottedCircleBorderPainter extends CustomPainter {

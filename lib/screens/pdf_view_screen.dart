@@ -1025,10 +1025,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                       Flexible(
                                         child: Text(
                                           displayTitle,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.bold,
-                                            color: Colors.blue,
+                                            color: item.isCrossDuplicate ? Colors.redAccent : Colors.blue,
                                           ),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -1039,7 +1039,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                         style: TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.bold,
-                                          color: isDark ? Colors.yellowAccent : Colors.orange[800],
+                                          color: item.isMerged
+                                              ? Colors.orange
+                                              : (isDark ? Colors.yellowAccent : Colors.orange[800]),
                                         ),
                                       ),
                                     ],
