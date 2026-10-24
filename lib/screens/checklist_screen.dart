@@ -1009,83 +1009,113 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
 
     showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (context, setModalState) {
       final bool isDark = Theme.of(context).brightness == Brightness.dark;
+      bool showAllInclude = false;
+      bool showAllExclude = false;
 
       Widget buildKeywordChips(TextEditingController ctrl, bool isInclude) {
         if (remarkKeywords.isEmpty) return const SizedBox.shrink();
         final List<String> currentWords = ctrl.text.split(' ').where((w) => w.trim().isNotEmpty).toList();
         final Color activeColor = isInclude ? Colors.blue : Colors.redAccent;
+        final bool showAll = isInclude ? showAllInclude : showAllExclude;
+        final bool hasSelected = currentWords.isNotEmpty;
 
-        return Container(
-          constraints: const BoxConstraints(maxHeight: 75),
-          margin: const EdgeInsets.only(top: 4, bottom: 6),
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.grey[850] : Colors.grey[100],
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: isDark ? Colors.white12 : Colors.grey[300]!),
-          ),
-          child: SingleChildScrollView(
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: remarkKeywords.map((kw) {
-                final bool isSel = currentWords.contains(kw);
-                return InkWell(
-                  onTap: () {
-                    setModalState(() {
-                      List<String> words = ctrl.text.split(' ').where((w) => w.trim().isNotEmpty).toList();
-                      if (words.contains(kw)) {
-                        words.removeWhere((w) => w == kw);
-                      } else {
-                        words.add(kw);
-                      }
-                      ctrl.text = words.join(' ');
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isSel ? activeColor : (isDark ? Colors.grey[800] : Colors.white),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSel ? activeColor : (isDark ? Colors.white24 : Colors.grey[400]!),
-                        width: isSel ? 1.5 : 1.0,
+        final List<String> displayKeywords = (hasSelected && !showAll)
+            ? remarkKeywords.where((kw) => currentWords.contains(kw)).toList()
+            : remarkKeywords;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasSelected)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: InkWell(
+                  onTap: () => setModalState(() {
+                    if (isInclude) {
+                      showAllInclude = !showAllInclude;
+                    } else {
+                      showAllExclude = !showAllExclude;
+                    }
+                  }),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(showAll ? Icons.unfold_less : Icons.unfold_more, size: 14, color: activeColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        showAll ? "선택 키워드만 보기 (접기)" : "+ 전체 키워드 보기 (${remarkKeywords.length}개)",
+                        style: TextStyle(fontSize: 11, color: activeColor, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            Container(
+              margin: const EdgeInsets.only(top: 4, bottom: 6),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[850] : Colors.grey[100],
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: isDark ? Colors.white12 : Colors.grey[300]!),
+              ),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: displayKeywords.map((kw) {
+                  final bool isSel = currentWords.contains(kw);
+                  return InkWell(
+                    onTap: () {
+                      setModalState(() {
+                        List<String> words = ctrl.text.split(' ').where((w) => w.trim().isNotEmpty).toList();
+                        if (words.contains(kw)) {
+                          words.removeWhere((w) => w == kw);
+                        } else {
+                          words.add(kw);
+                        }
+                        ctrl.text = words.join(' ');
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isSel ? activeColor : (isDark ? Colors.grey[800] : Colors.white),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSel ? activeColor : (isDark ? Colors.white24 : Colors.grey[400]!),
+                          width: isSel ? 1.5 : 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            kw,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                              color: isSel ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                            ),
+                          ),
+                          if (isSel) ...[
+                            const SizedBox(width: 3),
+                            const Icon(Icons.check, size: 12, color: Colors.white),
+                          ],
+                        ],
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          kw,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                            color: isSel ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
-                          ),
-                        ),
-                        if (isSel) ...[
-                          const SizedBox(width: 3),
-                          const Icon(Icons.check, size: 12, color: Colors.white),
-                        ],
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
+                  );
+                }).toList(),
+              ),
             ),
-          ),
+          ],
         );
       }
 
       return AlertDialog(
         title: Text(titleText, style: const TextStyle(fontWeight: FontWeight.bold)),
       content: SizedBox(width: 400, child: SingleChildScrollView(controller: dialogScrollController, child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text("정렬", style: TextStyle(fontWeight: FontWeight.bold)),
-        RadioListTile<bool?>(title: const Text("오름차순"), value: true, groupValue: localIsSorted ? localIsAscending : null, onChanged: (val) => setModalState(() { localIsSorted = true; localIsAscending = true; }), contentPadding: EdgeInsets.zero, dense: true),
-        RadioListTile<bool?>(title: const Text("내림차순"), value: false, groupValue: localIsSorted ? localIsAscending : null, onChanged: (val) => setModalState(() { localIsSorted = true; localIsAscending = false; }), contentPadding: EdgeInsets.zero, dense: true),
-        RadioListTile<bool?>(title: const Text("정렬 안함"), value: null, groupValue: localIsSorted ? localIsAscending : null, onChanged: (val) => setModalState(() { localIsSorted = false; }), contentPadding: EdgeInsets.zero, dense: true),
         if (col != 'itemCode') ...[
-          const Divider(),
           if (col == 'remarks') ...[
             Container(
               key: includeSectionKey,
@@ -1244,23 +1274,81 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             const Text("항목 선택", style: TextStyle(fontWeight: FontWeight.bold)), _buildFilterGrid(options, localFilters, col, setModalState, validOptions: (col == 'complete' || col == 'complement') ? validOptions : null),
           ],
         ],
-        if (['complete', 'process', 'complement'].contains(col)) ...[
-          const Divider(height: 30),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _resetFilteredItemsColumn(col);
-              },
-              icon: const Icon(Icons.restart_alt, size: 18),
-              label: const Text("현재 리스트 항목 리셋", style: TextStyle(fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[50], foregroundColor: Colors.red[800], side: BorderSide(color: Colors.red[200]!)),
-            ),
+        const Divider(),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              const Text("정렬: ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Radio<bool?>(
+                value: true,
+                groupValue: localIsSorted ? localIsAscending : null,
+                onChanged: (val) => setModalState(() { localIsSorted = true; localIsAscending = true; }),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              const Text("오름차순", style: TextStyle(fontSize: 12)),
+              const SizedBox(width: 4),
+              Radio<bool?>(
+                value: false,
+                groupValue: localIsSorted ? localIsAscending : null,
+                onChanged: (val) => setModalState(() { localIsSorted = true; localIsAscending = false; }),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              const Text("내림차순", style: TextStyle(fontSize: 12)),
+              const SizedBox(width: 4),
+              Radio<bool?>(
+                value: null,
+                groupValue: localIsSorted ? localIsAscending : null,
+                onChanged: (val) => setModalState(() { localIsSorted = false; }),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              const Text("정렬안함", style: TextStyle(fontSize: 12)),
+            ],
           ),
-        ],
+        ),
       ]))),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")), TextButton(onPressed: () { setState(() { _isSorted = localIsSorted; if (localIsSorted) { _currentSortCol = col; _isAscending = localIsAscending; } else if (_currentSortCol == col) _currentSortCol = ""; if (_columnFilters.containsKey(col)) _columnFilters[col] = localFilters; if (col == 'remarks') { _remarksFilterQuery = includeController.text; _remarksExcludeQuery = excludeController.text; _remarksIncludeLogic = localIncludeLogic; _remarksExcludeLogic = localExcludeLogic; } if (col == 'quantity') _quantitySearchQuery = quantityController.text; }); _applyFilterAndSort(); Navigator.pop(ctx); }, child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold)))],
+      actions: [
+        TextButton(
+          onPressed: () {
+            setModalState(() {
+              localFilters.clear();
+              includeController.clear();
+              excludeController.clear();
+              quantityController.clear();
+              localIsSorted = false;
+            });
+          },
+          child: const Text("필터리셋", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+        ),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
+        TextButton(
+          onPressed: () {
+            setState(() {
+              _isSorted = localIsSorted;
+              if (localIsSorted) {
+                _currentSortCol = col;
+                _isAscending = localIsAscending;
+              } else if (_currentSortCol == col) {
+                _currentSortCol = "";
+              }
+              if (_columnFilters.containsKey(col)) _columnFilters[col] = localFilters;
+              if (col == 'remarks') {
+                _remarksFilterQuery = includeController.text;
+                _remarksExcludeQuery = excludeController.text;
+                _remarksIncludeLogic = localIncludeLogic;
+                _remarksExcludeLogic = localExcludeLogic;
+              }
+              if (col == 'quantity') _quantitySearchQuery = quantityController.text;
+            });
+            _applyFilterAndSort();
+            Navigator.pop(ctx);
+          },
+          child: const Text("확인", style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      ],
     );
     }));
   }
@@ -2558,56 +2646,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     );
   }
 
-  void _resetFilteredItemsColumn(String col) {
-    final filtered = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList();
-    if (filtered.isEmpty) return;
-
-    String colName = "";
-    if (col == 'complete') colName = _isPackingMode ? "포장" : "완료";
-    else if (col == 'process') colName = "공정";
-    else if (col == 'complement') colName = "보완";
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text("리스트 항목 $colName 리셋"),
-        content: Text("현재 화면에 보이는 ${filtered.length}개 항목의 [$colName] 항목을 리셋하시겠습니까?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                for (var item in filtered) {
-                  if (col == 'complete') {
-                    if (_isPackingMode) {
-                      item.packed = false;
-                      item.packedTime = "";
-                    } else {
-                      item.complete = false;
-                      item.completeTime = "";
-                      item.complement = "";
-                      item.complementTime = "";
-                    }
-                  } else if (col == 'process') {
-                    item.process = "";
-                    item.processTime = "";
-                  } else if (col == 'complement') {
-                    item.complement = "";
-                    item.complementTime = "";
-                  }
-                }
-              });
-              if (_autoSave) _manualSave(silent: true);
-              Navigator.pop(ctx);
-              _showSnackBar("$colName 리셋 완료");
-            },
-            child: const Text("리셋 실행", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showComplementDialog(ItemModel item) {
     _forgetFocus();
     String lastRecord = "입력시간 : 없음";
@@ -2644,21 +2682,30 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           item.complete = false; 
           item.complementTime = DateTime.now().toString().substring(0, 16);
           _syncDuplicateItemsStatus(item);
-          _applyFilterAndSort();
+          setState(() {
+            _highlightedRealIndex = item.realIndex;
+          });
+          if (_autoSave) _manualSave(silent: true);
         }), 
         _dialogBtn("재작업", Colors.red, () { 
           item.complement = "재작업"; 
           item.complete = false; 
           item.complementTime = DateTime.now().toString().substring(0, 16);
           _syncDuplicateItemsStatus(item);
-          _applyFilterAndSort();
+          setState(() {
+            _highlightedRealIndex = item.realIndex;
+          });
+          if (_autoSave) _manualSave(silent: true);
         }), 
         const Divider(), 
         _dialogBtn("지우기", Colors.grey, () { 
           item.complement = ""; 
           item.complementTime = "";
           _syncDuplicateItemsStatus(item);
-          _applyFilterAndSort();
+          setState(() {
+            _highlightedRealIndex = item.realIndex;
+          });
+          if (_autoSave) _manualSave(silent: true);
         }), 
         _dialogBtn("선택취소", Colors.blueGrey, () {}),
       ]),
@@ -2718,9 +2765,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                         item.process = p; 
                         item.processTime = DateTime.now().toString().substring(0, 16);
                         _syncDuplicateItemsStatus(item);
+                        _highlightedRealIndex = item.realIndex;
                       }); 
-                      _applyFilterAndSort();
-                      if (_autoSave) _manualSave(silent: true); Navigator.pop(context);
+                      if (_autoSave) _manualSave(silent: true); 
+                      Navigator.pop(context);
                     },
                     child: Container(
                       decoration: BoxDecoration(
@@ -4204,8 +4252,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
         }
       }
       _syncDuplicateItemsStatus(item);
+      _highlightedRealIndex = item.realIndex;
     });
-    _applyFilterAndSort();
     if (_autoSave) _manualSave(silent: true);
   }
 
@@ -4348,8 +4396,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                                 final selectedRemark = target.remarks;
                                 item.remarks = selectedRemark;
                                 _syncDuplicateItemsStatus(item);
+                                _highlightedRealIndex = item.realIndex;
                               });
-                              _applyFilterAndSort();
                               if (_autoSave) _manualSave(silent: true);
                               Navigator.pop(ctx);
                               _showSnackBar("비고가 '${target.remarks}'(으)로 통합되었습니다.");
@@ -4446,8 +4494,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                     final newQty = controllers[i].text.trim();
                     targets[i].quantity = newQty;
                   }
+                  _highlightedRealIndex = targets.isNotEmpty ? targets.first.realIndex : item.realIndex;
                 });
-                _applyFilterAndSort();
                 if (_autoSave) _manualSave(silent: true);
                 Navigator.pop(ctx);
               },
@@ -4488,8 +4536,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                   if (targetIdx != -1) {
                     _originalItems[targetIdx].quantity = newQty;
                   }
+                  _highlightedRealIndex = item.realIndex;
                 });
-                _applyFilterAndSort();
                 if (_autoSave) {
                   _manualSave(silent: true);
                 }
@@ -4676,7 +4724,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
 
   Widget _buildDataRow(ItemModel item, bool isDark) {
     bool isSel = _selectedIndices.contains(item.realIndex);
-    bool isHigh = item.realIndex == _highlightedRealIndex;
+    bool isHigh = item.realIndex == _highlightedRealIndex ||
+        (item.isMerged && item.mergedRealIndices.contains(_highlightedRealIndex));
     
     return Container(
       decoration: BoxDecoration(
@@ -4829,8 +4878,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                     onSyncDuplicates: () {
                       setState(() {
                         _syncDuplicateItemsStatus(item);
+                        _highlightedRealIndex = item.realIndex;
                       });
-                      _applyFilterAndSort();
                     },
                   ),
                 ),
