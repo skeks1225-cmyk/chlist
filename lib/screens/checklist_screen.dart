@@ -3839,6 +3839,53 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
         } else if (type == "remarks") {
           item.remarks = value.toString();
         }
+        _syncDuplicateItemsStatus(item);
+      }
+
+      // ❗ 현재 화면에 노출 중인 _displayItems(합산 복사본 포함)에도 즉시 동기화 반영하여 바로 표시
+      for (var dispItem in _displayItems) {
+        if (dispItem.isSubheading) continue;
+
+        bool isTarget = _selectedIndices.contains(dispItem.realIndex) ||
+            (dispItem.isMerged && dispItem.mergedRealIndices.any((r) => _selectedIndices.contains(r))) ||
+            targets.any((t) => t.itemCode.trim() == dispItem.itemCode.trim() && t.subheadingTitle.trim() == dispItem.subheadingTitle.trim());
+
+        if (isTarget) {
+          _batchUpdatedCells[dispItem.realIndex] = type;
+          if (dispItem.isMerged) {
+            for (var r in dispItem.mergedRealIndices) {
+              _batchUpdatedCells[r] = type;
+            }
+          }
+
+          if (type == "process") {
+            dispItem.process = value.toString();
+            dispItem.processTime = value.toString().isEmpty ? "" : now;
+          } else if (type == "complement") {
+            dispItem.complement = value.toString();
+            dispItem.complementTime = value.toString().isEmpty ? "" : now;
+            if (value.toString().isNotEmpty) {
+              dispItem.complete = false;
+              dispItem.completeTime = "";
+            }
+          } else if (type == "complete") {
+            bool val = value as bool;
+            if (_isPackingMode) {
+              dispItem.packed = val;
+              dispItem.packedTime = val ? now : "";
+            } else {
+              dispItem.complete = val;
+              dispItem.completeTime = val ? now : "";
+              if (val) {
+                dispItem.complement = "";
+                dispItem.complementTime = "";
+              }
+            }
+          } else if (type == "remarks") {
+            dispItem.remarks = value.toString();
+            dispItem.hasDifferentRemarks = false;
+          }
+        }
       }
     });
 
