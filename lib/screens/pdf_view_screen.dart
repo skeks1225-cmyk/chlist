@@ -1043,16 +1043,50 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                 ),
                               ),
                             )
-                          : Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.error_outline, color: Colors.red, size: 50),
-                                  const SizedBox(height: 10),
-                                  Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)),
-                                  const SizedBox(height: 5),
-                                  Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12)),
-                                ],
+                          : Container(
+                              width: double.infinity,
+                              height: double.infinity,
+                              color: viewerBgColor,
+                              child: Listener(
+                                behavior: HitTestBehavior.opaque,
+                                onPointerDown: (details) {
+                                  _pointerCount++;
+                                  if (_pointerCount == 1) {
+                                    _swipeStartX = details.localPosition.dx;
+                                    _swipeStartY = details.localPosition.dy;
+                                    _isSwipeActionTriggered = false;
+                                  }
+                                },
+                                onPointerMove: (details) {
+                                  if (_pointerCount != 1 || _isSwipeActionTriggered) return;
+
+                                  final dx = details.localPosition.dx - _swipeStartX;
+                                  final dy = details.localPosition.dy - _swipeStartY;
+                                  final threshold = constraints.maxWidth * widget.swipeSensitivity;
+
+                                  if (dx.abs() > threshold && dx.abs() > dy.abs() * 1.5) {
+                                    _isSwipeActionTriggered = true;
+                                    if (dx > 0) {
+                                      _prev(); // 오른쪽으로 밀기 -> 이전 파일
+                                    } else {
+                                      _next(); // 왼쪽으로 밀기 -> 다음 파일
+                                    }
+                                  }
+                                },
+                                onPointerUp: (details) => _pointerCount = (_pointerCount - 1).clamp(0, 10),
+                                onPointerCancel: (details) => _pointerCount = (_pointerCount - 1).clamp(0, 10),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.error_outline, color: Colors.red, size: 50),
+                                      const SizedBox(height: 10),
+                                      Text("PDF 파일을 찾을 수 없습니다.", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)),
+                                      const SizedBox(height: 5),
+                                      Text("파일: ${item.itemCode}.pdf", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
                               ),
                             )),
                   Positioned(left: 5, bottom: 5, child: Row(children: [_navArrowBtn(Icons.arrow_back, hasPrev ? _prev : () {}, isDark), _navArrowBtn(Icons.arrow_forward, hasNext ? _next : () {}, isDark)])),
