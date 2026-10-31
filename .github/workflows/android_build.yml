@@ -26,45 +26,11 @@ jobs:
           flutter-version: 3.29.2
           channel: stable
 
-      # Secrets에 KEYSTORE_BASE64가 있으면 복원, 없으면 최초 1회 생성
-      - name: Restore or Generate Keystore
-        id: keystore
+      - name: Install Android NDK
         run: |
-          KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
-
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "$KEYSTORE_PATH"
-            echo "Keystore restored from GitHub Secrets"
-          else
-            echo "Generating new keystore..."
-            keytool -genkey -v \
-              -keystore "$KEYSTORE_PATH" \
-              -alias checksheet \
-              -keyalg RSA -keysize 2048 -validity 36500 \
-              -dname "CN=CheckSheet,OU=App,O=CheckSheet,L=Seoul,S=Seoul,C=KR" \
-              -storepass checksheet1234 \
-              -keypass checksheet1234
-            echo ""
-            echo "==========================================="
-            echo " [필수] 아래 4가지를 GitHub Secrets에 등록하세요"
-            echo " Settings -> Secrets -> Actions -> New repository secret"
-            echo "==========================================="
-            echo "Secret: KEYSTORE_BASE64"
-            base64 -w 0 "$KEYSTORE_PATH"
-            echo ""
-            echo "Secret: KEY_ALIAS = checksheet"
-            echo "Secret: KEY_PASSWORD = checksheet1234"
-            echo "Secret: STORE_PASSWORD = checksheet1234"
-            echo "==========================================="
-          fi
-          echo "KEYSTORE_PATH=$KEYSTORE_PATH" >> $GITHUB_ENV
+          echo "y" | sudo $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.0.12077973" || true
 
       - name: Build APK (Release)
-        env:
-          KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'checksheet' }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'checksheet1234' }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'checksheet1234' }}
         run: |
           flutter clean
           flutter pub get

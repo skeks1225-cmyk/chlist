@@ -252,5 +252,9 @@
         - 기존 20개 스레드 100% 풀가동으로 인한 전력/발열 블루스크린(BSOD)을 방지하기 위해 `android/gradle.properties`에 CPU 코어 안전 제한(`org.gradle.workers.max=4`, JVM 4G)을 설정함.
         - 로컬 PC에 Microsoft OpenJDK 17 및 Android SDK(Android 36, Build-Tools 36.0.0, NDK, CMake) 환경을 완벽히 구축하고 라이선스를 등록함.
         - 깃허브 푸시 후 6~10분 대기 없이, 내 PC에서 `flutter build apk --release` 실행 시 **약 1분(65초)** 만에 블루스크린 없이 초고속으로 안정적인 APK 생성이 완료되도록 최적화함.
+      - **영구 고정 릴리즈 서명 키(`release.keystore`) 및 원클릭 업데이트/자동 아카이빙 구축**:
+        - 기존 빌드마다 인증서가 바뀌어 매번 앱을 삭제하고 재설치해야 했던 문제를 영구 해결하기 위해, 전용 고정 릴리즈 키(`android/app/release.keystore`)를 생성하고 `build.gradle.kts` 및 깃허브 액션에 단일화 연동함.
+        - 기존 앱을 삭제할 필요 없이 '업데이트' 버튼 터치 한 번으로 기존 데이터/설정을 100% 보존하며 2초 만에 즉시 갱신 설치되도록 지원함.
+        - `build_apk.ps1` 원클릭 빌드 도구를 신설하여 Git 커밋 수 기반 자동 버전코드 증가(`versionCode`), `releases/` 폴더 내 역대 APK 자동 날짜별 보관(`checksheet_YYYYMMDD_HHmm_v{버전}_{커밋}.apk`) 및 최신 파일(`checksheet_latest.apk`) 복사, 탐색기 자동 열기를 일괄 자동화함.
 
-[최종 업데이트: 2026-10-31 - 로컬 PC 안드로이드 안전 초고속(1분) 빌드 환경 구축 및 CPU 과부하 방지 설정 완료]
+[최종 업데이트: 2026-10-31 - 영구 릴리즈 서명키 고정(앱 삭제 없는 원클릭 업데이트), build_apk.ps1 역대 APK 자동 아카이빙 구축 완료]
