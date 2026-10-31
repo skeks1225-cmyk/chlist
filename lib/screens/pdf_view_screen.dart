@@ -77,6 +77,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   int _pointerCount = 0;
   bool _isSwipeActionTriggered = false;
 
+  // ❗ 다중 도면(서브 파일) 관련 상태 변수
+  List<String> _matchedPdfPaths = [];
+  int _currentSubPdfIndex = 0;
+
   // ❗ 뷰어 스크린 전용 QR 토스트 알림 변수
   String? _qrToastMessage;
   Timer? _qrToastTimer;
@@ -95,6 +99,122 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         });
       }
     });
+  }
+
+  void _nextSubPdf() {
+    if (_matchedPdfPaths.length <= 1) return;
+    if (_currentSubPdfIndex < _matchedPdfPaths.length - 1) {
+      setState(() {
+        _currentSubPdfIndex++;
+        _currentPdfPath = _matchedPdfPaths[_currentSubPdfIndex];
+        _viewerKey = UniqueKey();
+        _fitZoomLevel = null;
+      });
+      _showViewerToast("📄 도면 (${_currentSubPdfIndex + 1}/${_matchedPdfPaths.length}): ${p.basename(_currentPdfPath)}");
+    } else {
+      _showViewerToast("마지막 도면입니다 (${_matchedPdfPaths.length}/${_matchedPdfPaths.length})");
+    }
+  }
+
+  void _prevSubPdf() {
+    if (_matchedPdfPaths.length <= 1) return;
+    if (_currentSubPdfIndex > 0) {
+      setState(() {
+        _currentSubPdfIndex--;
+        _currentPdfPath = _matchedPdfPaths[_currentSubPdfIndex];
+        _viewerKey = UniqueKey();
+        _fitZoomLevel = null;
+      });
+      _showViewerToast("📄 도면 (${_currentSubPdfIndex + 1}/${_matchedPdfPaths.length}): ${p.basename(_currentPdfPath)}");
+    } else {
+      _showViewerToast("첫 번째 도면입니다 (1/${_matchedPdfPaths.length})");
+    }
+  }
+
+  void _showSubPdfListDialog() {
+    if (_matchedPdfPaths.isEmpty) return;
+    final item = _allItems[_currentIndex];
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return AlertDialog(
+          backgroundColor: isDark ? Colors.grey[900] : Colors.white,
+          title: Row(
+            children: [
+              const Icon(Icons.picture_as_pdf, color: Colors.amberAccent, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "[${item.itemCode}] 도면 목록 (${_matchedPdfPaths.length}개)",
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black87,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: _matchedPdfPaths.length,
+              separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey[200]),
+              itemBuilder: (context, idx) {
+                final filePath = _matchedPdfPaths[idx];
+                final fileName = p.basename(filePath);
+                final isSelected = idx == _currentSubPdfIndex;
+                return ListTile(
+                  dense: true,
+                  leading: CircleAvatar(
+                    radius: 13,
+                    backgroundColor: isSelected ? Colors.amberAccent : (isDark ? Colors.grey[800] : Colors.grey[300]),
+                    child: Text(
+                      "${idx + 1}",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isSelected ? Colors.black : (isDark ? Colors.white : Colors.black87),
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    fileName,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? Colors.amberAccent : (isDark ? Colors.white : Colors.black87),
+                    ),
+                  ),
+                  trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.amberAccent, size: 18) : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    if (idx != _currentSubPdfIndex) {
+                      setState(() {
+                        _currentSubPdfIndex = idx;
+                        _currentPdfPath = _matchedPdfPaths[idx];
+                        _viewerKey = UniqueKey();
+                        _fitZoomLevel = null;
+                      });
+                      _showViewerToast("📄 도면 (${idx + 1}/${_matchedPdfPaths.length}): $fileName");
+                    }
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("닫기"),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -118,13 +238,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
-    String localPath = await _resolvePdfPath(widget.pdfFolderPath, cleanCode);
+    List<String> matchedPaths = await _resolveAllPdfPaths(widget.pdfFolderPath, cleanCode);
 
     _remarksController.text = item.remarks;
     _itemInitialCompleteState = item.complete;
     if (mounted) {
       setState(() {
-        _currentPdfPath = localPath;
+        _matchedPdfPaths = matchedPaths;
+        _currentSubPdfIndex = 0;
+        _currentPdfPath = matchedPaths.isNotEmpty ? matchedPaths[0] : "";
         _viewerKey = UniqueKey();
         _isLoading = false;
         _fitZoomLevel = null; // 새 PDF 로드 시 FIT 배율 초기화
@@ -132,10 +254,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
   }
 
-  Future<String> _resolvePdfPath(String pdfFolderPath, String rawCode) async {
+  Future<List<String>> _resolveAllPdfPaths(String pdfFolderPath, String rawCode) async {
     String cleanCode = rawCode.replaceAll('<NUL>', '').replaceAll('<NULL>', '').trim();
     cleanCode = cleanCode.replaceAll(RegExp(r'[\x00-\x1F]'), '');
-    if (cleanCode.isEmpty) return "";
+    if (cleanCode.isEmpty) return [];
 
     if (pdfFolderPath.startsWith("smb://")) {
       try {
@@ -147,21 +269,27 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         List<Map<String, dynamic>> files = await widget.smbService.listFiles(share, folderPath);
         
         List<String> fileNames = files.map((f) => f['name'] as String? ?? "").toList();
-        String matchedRemoteName = _findMatchedPdfFileName(cleanCode, fileNames);
-        if (matchedRemoteName.isEmpty) matchedRemoteName = "$cleanCode.pdf";
+        List<String> matchedRemoteNames = _findAllMatchedPdfFileNames(cleanCode, fileNames);
+        if (matchedRemoteNames.isEmpty) matchedRemoteNames = ["$cleanCode.pdf"];
 
-        String remoteFilePath = folderPath.isEmpty ? matchedRemoteName : "$folderPath/$matchedRemoteName";
-        String localPath = "/storage/emulated/0/Download/CheckSheet/$cleanCode.pdf";
-        await widget.smbService.downloadFile(share, remoteFilePath, localPath);
-        return File(localPath).existsSync() ? localPath : "";
+        List<String> resultPaths = [];
+        for (String remoteName in matchedRemoteNames) {
+          String remoteFilePath = folderPath.isEmpty ? remoteName : "$folderPath/$remoteName";
+          String localPath = "/storage/emulated/0/Download/CheckSheet/$remoteName";
+          await widget.smbService.downloadFile(share, remoteFilePath, localPath);
+          if (File(localPath).existsSync()) {
+            resultPaths.add(localPath);
+          }
+        }
+        return resultPaths;
       } catch (e) {
         debugPrint("SMB Sync Error: $e");
         String fallbackLocal = "/storage/emulated/0/Download/CheckSheet/$cleanCode.pdf";
-        return File(fallbackLocal).existsSync() ? fallbackLocal : "";
+        return File(fallbackLocal).existsSync() ? [fallbackLocal] : [];
       }
     } else {
       final dir = Directory(pdfFolderPath);
-      if (!dir.existsSync()) return "";
+      if (!dir.existsSync()) return [];
 
       List<FileSystemEntity> entities = [];
       try {
@@ -169,20 +297,27 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       } catch (_) {}
 
       List<String> fileNames = entities.map((e) => p.basename(e.path)).toList();
-      String matchedName = _findMatchedPdfFileName(cleanCode, fileNames);
+      List<String> matchedNames = _findAllMatchedPdfFileNames(cleanCode, fileNames);
 
-      if (matchedName.isNotEmpty) {
-        String matchedPath = p.join(pdfFolderPath, matchedName);
-        if (File(matchedPath).existsSync()) return matchedPath;
+      List<String> resultPaths = [];
+      for (String name in matchedNames) {
+        String fullPath = p.join(pdfFolderPath, name);
+        if (File(fullPath).existsSync()) {
+          resultPaths.add(fullPath);
+        }
       }
-      
-      String directPath = p.join(pdfFolderPath, "$cleanCode.pdf");
-      return File(directPath).existsSync() ? directPath : "";
+
+      if (resultPaths.isEmpty) {
+        String directPath = p.join(pdfFolderPath, "$cleanCode.pdf");
+        if (File(directPath).existsSync()) resultPaths.add(directPath);
+      }
+
+      return resultPaths;
     }
   }
 
-  String _findMatchedPdfFileName(String cleanCode, List<String> availableFileNames) {
-    if (availableFileNames.isEmpty) return "";
+  List<String> _findAllMatchedPdfFileNames(String cleanCode, List<String> availableFileNames) {
+    if (availableFileNames.isEmpty) return [];
 
     String baseLower = cleanCode.toLowerCase();
     if (baseLower.endsWith('.pdf')) baseLower = baseLower.substring(0, baseLower.length - 4);
@@ -190,34 +325,48 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     String baseNoS = baseLower.endsWith('-s') ? baseLower.substring(0, baseLower.length - 2).trim() : baseLower;
     String baseStripped = baseNoS.contains(RegExp(r'-[0-9]{2}$')) ? baseNoS.substring(0, baseNoS.lastIndexOf('-')).trim() : baseNoS;
 
-    // 1차: 정확한 일치
-    for (String name in availableFileNames) {
-      String nameWithoutExt = name.toLowerCase().endsWith('.pdf') ? name.substring(0, name.length - 4) : name;
-      if (nameWithoutExt.toLowerCase() == baseLower) return name;
-    }
+    List<String> exactMatches = [];
+    List<String> otherMatches = [];
+    Set<String> added = {};
 
-    // 2차: -S 제거 일치
     for (String name in availableFileNames) {
-      String nameWithoutExt = name.toLowerCase().endsWith('.pdf') ? name.substring(0, name.length - 4) : name;
-      if (nameWithoutExt.toLowerCase() == baseNoS) return name;
-    }
+      if (!name.toLowerCase().endsWith('.pdf')) continue;
+      String nameWithoutExt = name.substring(0, name.length - 4);
+      String lower = nameWithoutExt.toLowerCase().trim();
 
-    // 3차: -01, -02 등 -## 제거 일치
-    for (String name in availableFileNames) {
-      String nameWithoutExt = name.toLowerCase().endsWith('.pdf') ? name.substring(0, name.length - 4) : name;
-      if (nameWithoutExt.toLowerCase() == baseStripped) return name;
-    }
+      // 1차: 정확한 일치
+      if (lower == baseLower) {
+        if (added.add(name)) exactMatches.add(name);
+        continue;
+      }
 
-    // 4차: 접두사 일치 (PDF 파일명 측에 -01, -S 등이 붙은 경우)
-    for (String name in availableFileNames) {
-      String nameWithoutExt = name.toLowerCase().endsWith('.pdf') ? name.substring(0, name.length - 4) : name;
-      String lowerName = nameWithoutExt.toLowerCase();
-      if (lowerName.startsWith("$baseLower-") || lowerName.startsWith("$baseNoS-") || lowerName.startsWith("$baseStripped-")) {
-        return name;
+      // 2차: -S 제거 일치
+      if (lower == baseNoS) {
+        if (added.add(name)) otherMatches.add(name);
+        continue;
+      }
+
+      // 3차: -01, -02 등 -## 제거 일치
+      if (lower == baseStripped) {
+        if (added.add(name)) otherMatches.add(name);
+        continue;
+      }
+
+      // 4차: 접두사 일치 (PDF 파일명 측에 -01, -S, _1, _2 등이 붙은 경우)
+      if (lower.startsWith("$baseLower-") ||
+          lower.startsWith("$baseNoS-") ||
+          lower.startsWith("$baseStripped-") ||
+          lower.startsWith("${baseLower}_") ||
+          lower.startsWith("${baseNoS}_") ||
+          lower.startsWith("${baseStripped}_")) {
+        if (added.add(name)) otherMatches.add(name);
       }
     }
 
-    return "";
+    // 자연 정렬: 숫자 순서 (예: _1, _2, _3 또는 -01, -02)
+    otherMatches.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    return [...exactMatches, ...otherMatches];
   }
 
   void _resetFit() {
@@ -986,13 +1135,22 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                   final dy = details.localPosition.dy - _swipeStartY;
                                   final threshold = constraints.maxWidth * widget.swipeSensitivity;
 
-                                  // 가로축 이동이 감도 이상이고 세로축보다 확실히 클 때 (각도 판정)
+                                  // 가로축 이동이 감도 이상이고 세로축보다 확실히 클 때 (각도 판정: 좌/우 품목 이동)
                                   if (dx.abs() > threshold && dx.abs() > dy.abs() * 1.5) {
                                     _isSwipeActionTriggered = true;
                                     if (dx > 0) {
-                                      _prev(); // 오른쪽으로 밀기 -> 이전 파일
+                                      _prev(); // 오른쪽으로 밀기 -> 이전 품목
                                     } else {
-                                      _next(); // 왼쪽으로 밀기 -> 다음 파일
+                                      _next(); // 왼쪽으로 밀기 -> 다음 품목
+                                    }
+                                  }
+                                  // 세로축 이동이 감도 이상이고 가로축보다 확실히 클 때 (각도 판정: 상/하 서브 도면 이동)
+                                  else if (_matchedPdfPaths.length > 1 && dy.abs() > threshold && dy.abs() > dx.abs() * 1.5) {
+                                    _isSwipeActionTriggered = true;
+                                    if (dy < 0) {
+                                      _nextSubPdf(); // 위로 밀기 -> 다음 도면 (001_2.pdf)
+                                    } else {
+                                      _prevSubPdf(); // 아래로 밀기 -> 이전 도면 (001.pdf)
                                     }
                                   }
                                 },
@@ -1067,9 +1225,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                   if (dx.abs() > threshold && dx.abs() > dy.abs() * 1.5) {
                                     _isSwipeActionTriggered = true;
                                     if (dx > 0) {
-                                      _prev(); // 오른쪽으로 밀기 -> 이전 파일
+                                      _prev(); // 오른쪽으로 밀기 -> 이전 품목
                                     } else {
-                                      _next(); // 왼쪽으로 밀기 -> 다음 파일
+                                      _next(); // 왼쪽으로 밀기 -> 다음 품목
+                                    }
+                                  } else if (_matchedPdfPaths.length > 1 && dy.abs() > threshold && dy.abs() > dx.abs() * 1.5) {
+                                    _isSwipeActionTriggered = true;
+                                    if (dy < 0) {
+                                      _nextSubPdf(); // 위로 밀기 -> 다음 도면
+                                    } else {
+                                      _prevSubPdf(); // 아래로 밀기 -> 이전 도면
                                     }
                                   }
                                 },
@@ -1090,6 +1255,41 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                               ),
                             )),
                   Positioned(left: 5, bottom: 5, child: Row(children: [_navArrowBtn(Icons.arrow_back, hasPrev ? _prev : () {}, isDark), _navArrowBtn(Icons.arrow_forward, hasNext ? _next : () {}, isDark)])),
+                  if (_matchedPdfPaths.length > 1)
+                    Positioned(
+                      right: 10,
+                      bottom: 5,
+                      child: GestureDetector(
+                        onTap: _showSubPdfListDialog,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xDD1E1E1E) : const Color(0xEEFFFFFF),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.amberAccent, width: 1.5),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black38, blurRadius: 6, offset: Offset(0, 2)),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.picture_as_pdf, size: 15, color: Colors.amberAccent),
+                              const SizedBox(width: 5),
+                              Text(
+                                "${_currentSubPdfIndex + 1} / ${_matchedPdfPaths.length}",
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : Colors.black87,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   if (_searchResults.isNotEmpty) Positioned(left: 8, bottom: 2, child: Container(width: MediaQuery.of(context).size.width * 0.45, constraints: BoxConstraints(maxHeight: constraints.maxHeight - 5), decoration: BoxDecoration(color: isDark ? Colors.grey[850] : Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, -2))]), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ListView.separated(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: _searchResults.length, separatorBuilder: (ctx, idx) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]), itemBuilder: (ctx, idx) { final res = _searchResults[idx]; return ListTile(dense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0), title: Text(res.itemCode, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87, fontWeight: res == item ? FontWeight.bold : FontWeight.normal)), trailing: res == item ? const Icon(Icons.check_circle, size: 14, color: Colors.blue) : null, onTap: () => _jumpToItem(res)); })))),
                   if (_qrToastMessage != null)
                     Positioned(
@@ -1408,7 +1608,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    pageText, 
+                                    _matchedPdfPaths.length > 1
+                                        ? "$pageText (도면 ${_currentSubPdfIndex + 1}/${_matchedPdfPaths.length})"
+                                        : pageText,
                                     style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 14, fontWeight: FontWeight.bold)
                                   ),
                                 ],
