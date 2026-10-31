@@ -110,9 +110,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         _viewerKey = UniqueKey();
         _fitZoomLevel = null;
       });
-      _showViewerToast("📄 도면 (${_currentSubPdfIndex + 1}/${_matchedPdfPaths.length}): ${p.basename(_currentPdfPath)}");
-    } else {
-      _showViewerToast("마지막 도면입니다 (${_matchedPdfPaths.length}/${_matchedPdfPaths.length})");
     }
   }
 
@@ -125,9 +122,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         _viewerKey = UniqueKey();
         _fitZoomLevel = null;
       });
-      _showViewerToast("📄 도면 (${_currentSubPdfIndex + 1}/${_matchedPdfPaths.length}): ${p.basename(_currentPdfPath)}");
-    } else {
-      _showViewerToast("첫 번째 도면입니다 (1/${_matchedPdfPaths.length})");
     }
   }
 
@@ -199,7 +193,6 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         _viewerKey = UniqueKey();
                         _fitZoomLevel = null;
                       });
-                      _showViewerToast("📄 도면 (${idx + 1}/${_matchedPdfPaths.length}): $fileName");
                     }
                   },
                 );
