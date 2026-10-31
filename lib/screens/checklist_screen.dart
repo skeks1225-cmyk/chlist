@@ -2931,31 +2931,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
   Future<void> _processQrCode(String cleaned) async {
     List<ItemModel> matches = [];
 
-    ItemModel? target = _originalItems.firstWhere((i) => !i.isSubheading && i.itemCode == cleaned, orElse: () => ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "", quantity: "", isSubheading: false));
+    ItemModel? target = _originalItems.firstWhere((i) => !i.isSubheading && i.itemCode.trim() == cleaned, orElse: () => ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "", quantity: "", isSubheading: false));
     
     if (target.realIndex != -1) {
       matches = [target];
     } else if (cleaned.contains(RegExp(r'-[0-9]{2}$'))) {
       String strippedCode = cleaned.substring(0, cleaned.lastIndexOf('-'));
-      matches = _originalItems.where((i) => !i.isSubheading && i.itemCode.startsWith(strippedCode)).toList();
+      matches = _originalItems.where((i) => !i.isSubheading && i.itemCode.trim().startsWith(strippedCode)).toList();
     }
 
     if (matches.isNotEmpty) {
-      if (_qrScanActionMode == 1) {
-        _handleItemClick(matches.first);
-      } else {
-        setState(() {
-          _searchController.text = matches.first.itemCode;
-          _searchQuery = matches.first.itemCode;
-        });
-        _applyFilterAndSort();
-        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToItem(matches.first.itemCode));
-      }
+      final targetItem = matches.first;
+      // ❗ QR 스캔 시 필터링 상태라도 인식한 품목의 PDF 뷰어를 100% 열도록 연동
+      _handleItemClick(targetItem);
 
       if (matches.length == 1) {
-        _showSnackBar("품목 ${matches.first.itemCode}(으)로 연결되었습니다.");
+        _showSnackBar("품목 ${targetItem.itemCode}(으)로 연결되었습니다.");
       } else {
-        String msg = "연결된 품목: ${matches.first.itemCode}";
+        String msg = "연결된 품목: ${targetItem.itemCode}";
         msg += "\n\n기타 발견 항목: ${matches.sublist(1).map((m) => m.itemCode).join(', ')}";
         if (mounted) {
           showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("코드 인식 알림"), content: Text("인식한 코드: $cleaned\n\n$msg\n\n리스트에 유사한 항목이 있어 혼동될 수 있으니 확인 바랍니다."), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인"))]));
@@ -2972,6 +2965,17 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     _forgetFocus(); if (_autoSave) _manualSave(silent: true);
     if (!mounted) return;
 
+    // ❗ 스캔/클릭한 항목이 현재 필터링된 화면(_displayItems)에 없는 경우,
+    // 임시 표시 객체(_temporaryVisibleItem)로 등록하여 필터 파이프라인에 즉시 포함시킴
+    bool isDisplayed = _displayItems.any((i) =>
+        i.realIndex == item.realIndex ||
+        (i.isMerged && i.mergedRealIndices.contains(item.realIndex)) ||
+        (!i.isSubheading && i.itemCode.trim() == item.itemCode.trim() && i.subheadingTitle.trim() == item.subheadingTitle.trim()));
+    if (!isDisplayed) {
+      _temporaryVisibleItem = item;
+      _applyFilterAndSort();
+    }
+
     final rawNonSubheadings = _originalItems.where((i) => !i.isSubheading).toList();
     final List<ItemModel> viewerAllItems;
     final List<ItemModel> viewerFilteredItems;
@@ -2981,14 +2985,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       // ❗ 합산모드: 합산된 대표 항목들을 전달 (수량이 합산값이며 isMerged = true)
       viewerAllItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList();
       viewerFilteredItems = List.from(viewerAllItems);
-      initialIdx = viewerAllItems.indexWhere((i) => i.realIndex == item.realIndex || (i.isMerged && i.mergedRealIndices.contains(item.realIndex)));
-      if (initialIdx == -1) initialIdx = 0;
+      initialIdx = viewerAllItems.indexWhere((i) =>
+          i.realIndex == item.realIndex ||
+          (i.isMerged && i.mergedRealIndices.contains(item.realIndex)) ||
+          (!i.isSubheading && i.itemCode.trim() == item.itemCode.trim()));
+      if (initialIdx == -1) {
+        viewerAllItems.add(item);
+        viewerFilteredItems.add(item);
+        initialIdx = viewerAllItems.length - 1;
+      }
     } else {
       // ❗ 원본모드: 개별 항목 전체 전달
       viewerAllItems = rawNonSubheadings;
       viewerFilteredItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1).toList();
       initialIdx = viewerAllItems.indexWhere((i) => i.realIndex == item.realIndex);
-      if (initialIdx == -1) initialIdx = 0;
+      if (initialIdx == -1) {
+        initialIdx = viewerAllItems.indexWhere((i) => i.itemCode.trim() == item.itemCode.trim());
+        if (initialIdx == -1) initialIdx = 0;
+      }
     }
 
     final dynamic popResult = await Navigator.push(

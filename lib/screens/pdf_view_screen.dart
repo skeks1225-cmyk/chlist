@@ -476,10 +476,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _overrideTargetRealIndex = target.realIndex;
     int index = _allItems.indexWhere((i) =>
         i.realIndex == target.realIndex ||
-        (i.isMerged && i.mergedRealIndices.contains(target.realIndex)));
-    if (index != -1) {
+        (i.isMerged && i.mergedRealIndices.contains(target.realIndex)) ||
+        (!i.isSubheading && i.itemCode.trim() == target.itemCode.trim()));
+    if (index == -1) {
+      // ❗ 필터 외 항목이더라도 안전하게 뷰어 리스트에 즉시 포함하여 바로 표시
+      setState(() {
+        _currentAllItems.add(target);
+        _currentFilteredItems.add(target);
+        _currentIndex = _currentAllItems.length - 1;
+        _searchResults = [];
+        _searchController.clear();
+      });
+      _searchFocusNode.unfocus();
+      _loadPdf();
+    } else {
       setState(() { _currentIndex = index; _searchResults = []; _searchController.clear(); });
-      _searchFocusNode.unfocus(); _loadPdf();
+      _searchFocusNode.unfocus();
+      _loadPdf();
     }
   }
 
@@ -1140,10 +1153,11 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                           cleaned = cleaned.substring(0, cleaned.length - 2);
                                         }
 
-                                        // 1. 완벽 일치 우선 검색
+                                        // 1. 전체 원본 목록(searchPool) 기준 완벽 일치 우선 검색
+                                        final searchPool = widget.rawOriginalItems ?? widget.allItems;
                                         List<ItemModel> matches = [];
-                                        ItemModel? target = _allItems.firstWhere(
-                                          (i) => i.itemCode == cleaned,
+                                        ItemModel? target = searchPool.firstWhere(
+                                          (i) => !i.isSubheading && i.itemCode.trim() == cleaned,
                                           orElse: () => ItemModel(realIndex: -1, no: "", displayNo: "", itemCode: "", quantity: "", isSubheading: false)
                                         );
 
@@ -1152,7 +1166,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                         } else if (cleaned.contains(RegExp(r'-[0-9]{2}$'))) {
                                           // 2. 일치 항목이 없으면 스마트 폴백 매칭 (-## 제거)
                                           String strippedCode = cleaned.substring(0, cleaned.lastIndexOf('-'));
-                                          matches = _allItems.where((i) => i.itemCode.startsWith(strippedCode)).toList();
+                                          matches = searchPool.where((i) => !i.isSubheading && i.itemCode.trim().startsWith(strippedCode)).toList();
                                         }
 
                                         if (matches.isNotEmpty) {
