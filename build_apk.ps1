@@ -1,4 +1,4 @@
-﻿# ========================================================
+# ========================================================
 # CheckSheet 안드로이드 릴리즈 APK 초고속 안전 빌드 & 자동 아카이빙 스크립트
 # ========================================================
 
@@ -28,17 +28,18 @@ $dateStr = Get-Date -Format "yyyyMMdd_HHmm"
 Write-Host ""
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "  [CheckSheet] 안드로이드 릴리즈 APK 빌드 & 아카이빙" -ForegroundColor Cyan
+Write-Host "  타겟 플랫폼            : arm64-v8a (최신 스마트폰 초경량 고속)" -ForegroundColor White
 Write-Host "  버전코드(versionCode) : $buildNum (원클릭 업데이트 지원)" -ForegroundColor White
 Write-Host "  커밋(Git Hash)         : $shortHash" -ForegroundColor White
 Write-Host "  빌드 일시              : $dateStr" -ForegroundColor White
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 3. 플러터 릴리즈 빌드 실행
-Write-Host ">> 플러터 릴리즈 APK 빌드 시작..." -ForegroundColor Yellow
+# 3. 플러터 릴리즈 빌드 실행 (arm64-v8a 전용 초경량 빌드)
+Write-Host ">> 플러터 릴리즈 APK 빌드 시작 (arm64-v8a 초경량)..." -ForegroundColor Yellow
 $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
-flutter build apk --release --build-number=$buildNum
+flutter build apk --release --build-number=$buildNum --target-platform=android-arm64
 
 $stopwatch.Stop()
 $elapsedSec = [math]::Round($stopwatch.Elapsed.TotalSeconds, 1)

@@ -223,6 +223,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
   }
 
   Future<void> _ensureBaseDirectory() async {
+    if (!Platform.isAndroid) return;
     final baseDir = Directory("$_baseDownloadPath/CheckSheet");
     if (!baseDir.existsSync()) baseDir.createSync(recursive: true);
   }
