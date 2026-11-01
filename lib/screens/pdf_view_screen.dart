@@ -19,6 +19,7 @@ class PdfViewerScreen extends StatefulWidget {
   final int completeMode; // ❗ 완료 체크 모드 (0: 클릭, 1: 더블클릭, 2: 확인창)
   final double swipeSensitivity; // ❗ 슬라이드 감도 (0.05 ~ 0.50)
   final double pdfDoubleTapZoom; // ❗ 더블탭 확대 배율 (기본 3.0)
+  final double pdfMaxZoom; // ❗ 최대 확대 배율 (기본 15.0)
   final bool isPackingMode; // ❗ 포장모드 여부 추가
   final int pdfPackingShowCompleteMode; // ❗ 포장모드 완료버튼 표시 방식 (0: 미완료 시만 스마트 노출, 1: 상시 4개 노출)
   final List<ItemModel>? rawOriginalItems; // ❗ 원본 항목 전체 목록 (중복 탐색용)
@@ -38,6 +39,7 @@ class PdfViewerScreen extends StatefulWidget {
     required this.completeMode,
     required this.swipeSensitivity,
     this.pdfDoubleTapZoom = 3.0,
+    this.pdfMaxZoom = 15.0,
     required this.isPackingMode,
     this.pdfPackingShowCompleteMode = 0,
     this.rawOriginalItems,
@@ -1154,7 +1156,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                   key: _viewerKey,
                                   controller: _pdfController,
                                   params: PdfViewerParams(
-                                    maxScale: 15.0,
+                                    maxScale: widget.pdfMaxZoom,
                                     backgroundColor: viewerBgColor,
                                     // PDF 로드 시 실제 FIT 배율을 캡처
                                     calculateInitialZoom: (doc, ctrl, fitScale, coverScale) {

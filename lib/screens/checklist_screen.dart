@@ -39,6 +39,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
   int _qrScanActionMode = 0; // ❗ QR 인식 시 동작 모드 (0: 리스트 검색, 1: 뷰어 바로보기)
   double _swipeSensitivity = 0.2; // ❗ 슬라이드 감도 (기본 20%)
   double _pdfDoubleTapZoom = 3.0; // ❗ PDF 더블탭 확대 배율 (기본 3.0)
+  double _pdfMaxZoom = 15.0; // ❗ PDF 최대 확대 배율 (기본 15.0)
   bool _enableLongPressEdit = false; // ❗ 부분제목/수량 롱프레스 편집 허용 여부 (기본 false)
   int _keepScreenMode = 0; // ❗ 화면 꺼짐 모드 (0: 사용 안 함, 1: 상시 켜짐, 2: 분 단위 설정)
   double _keepScreenMinutes = 5.0; // ❗ 분 단위 유지 시간 (1~20분, 기본 5분)
@@ -259,6 +260,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       _qrScanActionMode = _getInt(prefs, 'qrScanActionMode', 0);
       _swipeSensitivity = _getDouble(prefs, 'swipeSensitivity', 0.2);
       _pdfDoubleTapZoom = _getDouble(prefs, 'pdfDoubleTapZoom', 3.0);
+      _pdfMaxZoom = _getDouble(prefs, 'pdfMaxZoom', 15.0);
       _enableLongPressEdit = prefs.getBool('enableLongPressEdit') ?? false;
       _keepScreenMode = _getInt(prefs, 'keepScreenMode', 0);
       _keepScreenMinutes = _getDouble(prefs, 'keepScreenMinutes', 5.0);
@@ -327,6 +329,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
     await prefs.setInt('qrScanActionMode', _qrScanActionMode);
     await prefs.setDouble('swipeSensitivity', _swipeSensitivity);
     await prefs.setDouble('pdfDoubleTapZoom', _pdfDoubleTapZoom);
+    await prefs.setDouble('pdfMaxZoom', _pdfMaxZoom);
     await prefs.setBool('enableLongPressEdit', _enableLongPressEdit);
     await prefs.setInt('keepScreenMode', _keepScreenMode);
     await prefs.setDouble('keepScreenMinutes', _keepScreenMinutes);
@@ -397,7 +400,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       // 기존 설정 완전히 클리어 후 복원
       await prefs.clear();
 
-      const doubleKeys = {'scannerZoom', 'swipeSensitivity', 'pdfDoubleTapZoom', 'keepScreenMinutes'};
+      const doubleKeys = {'scannerZoom', 'swipeSensitivity', 'pdfDoubleTapZoom', 'pdfMaxZoom', 'keepScreenMinutes'};
       const intKeys = {'completeMode', 'qrScanActionMode', 'keepScreenMode', 'pdfPackingShowCompleteMode', 'filter_noFilterMode'};
       const boolKeys = {'autoSave', 'enableLongPressEdit', 'filter_isAscending', 'filter_isSorted', 'filter_showUnfinishedOnly', 'filter_isSubheadingViewMode', 'confirmComplete'};
       
@@ -2086,6 +2089,38 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
             ]),
           ),
           const SizedBox(height: 10),
+          // ❗ PDF 최대 확대 배율 설정 추가
+          Align(alignment: Alignment.centerLeft, child: Text("PDF 뷰어 최대 확대 배율 (${_pdfMaxZoom.toInt()}배)", style: const TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(height: 5),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blueGrey.withOpacity(0.2))),
+            child: Column(children: [
+              Row(children: [
+                const Icon(Icons.zoom_out_map, size: 20, color: Colors.blue),
+                const SizedBox(width: 10),
+                Expanded(child: Slider(
+                  value: _pdfMaxZoom, min: 5.0, max: 50.0,
+                  divisions: 45,
+                  onChanged: (v) => setDialogState(() => _pdfMaxZoom = v.roundToDouble()),
+                )),
+                Text("${_pdfMaxZoom.toInt()}배", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+              ]),
+              const SizedBox(height: 5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _pdfMaxZoomQuickBtnDialog("5배", 5.0, setDialogState),
+                  _pdfMaxZoomQuickBtnDialog("10배", 10.0, setDialogState),
+                  _pdfMaxZoomQuickBtnDialog("15배", 15.0, setDialogState),
+                  _pdfMaxZoomQuickBtnDialog("20배", 20.0, setDialogState),
+                  _pdfMaxZoomQuickBtnDialog("30배", 30.0, setDialogState),
+                  _pdfMaxZoomQuickBtnDialog("50배", 50.0, setDialogState),
+                ],
+              ),
+            ]),
+          ),
+          const SizedBox(height: 10),
           // ❗ 포장모드 뷰어 완료 버튼 표시 방식 설정 추가
           const Align(alignment: Alignment.centerLeft, child: Text("포장모드 PDF 뷰어 완료 버튼 표시", style: TextStyle(fontWeight: FontWeight.bold))),
           const SizedBox(height: 5),
@@ -3023,6 +3058,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
           completeMode: _completeMode,
           swipeSensitivity: _swipeSensitivity,
           pdfDoubleTapZoom: _pdfDoubleTapZoom,
+          pdfMaxZoom: _pdfMaxZoom,
           isPackingMode: _isPackingMode,
           pdfPackingShowCompleteMode: _pdfPackingShowCompleteMode,
           onStatusUpdate: (it, type) {
@@ -5011,6 +5047,30 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
       onTap: () => setDialogState(() => _scannerZoom = value),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isSelected ? Colors.blue : Colors.grey.withOpacity(0.3)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: isSelected ? Colors.white : Colors.black87,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ❗ 설정 다이얼로그용 PDF 최대 줌 퀵 버튼 헬퍼
+  Widget _pdfMaxZoomQuickBtnDialog(String label, double value, StateSetter setDialogState) {
+    bool isSelected = (_pdfMaxZoom - value).abs() < 0.05;
+    return GestureDetector(
+      onTap: () => setDialogState(() => _pdfMaxZoom = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected ? Colors.blue : Colors.white,
           borderRadius: BorderRadius.circular(8),
