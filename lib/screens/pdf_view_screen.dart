@@ -1190,69 +1190,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                                             _pdfController.setZoom(docTapPos, widget.pdfDoubleTapZoom);
                                           }
                                         },
-                                      ),
-                                      // ❗ [임시 테스트용] PDF 배율 실시간 중앙 표시기 (안전한 viewerOverlayBuilder 내부 배치 + IgnorePointer)
-                                      IgnorePointer(
-                                        child: Center(
-                                          child: AnimatedBuilder(
-                                            animation: _pdfController,
-                                            builder: (context, _) {
-                                              final currentZoom = _pdfController.isReady ? _pdfController.currentZoom : 1.0;
-                                              final fitZoom = _fitZoomLevel ?? 1.0;
-                                              final fitRatio = fitZoom > 0 ? (currentZoom / fitZoom) : 1.0;
-                                              final isMax = currentZoom >= (widget.pdfMaxZoom - 0.2);
-
-                                              return Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xDD000000),
-                                                  borderRadius: BorderRadius.circular(16),
-                                                  border: Border.all(
-                                                    color: isMax ? Colors.redAccent : Colors.cyanAccent,
-                                                    width: 2.0,
-                                                  ),
-                                                  boxShadow: const [
-                                                    BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
-                                                  ],
-                                                ),
-                                                child: Column(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Text(
-                                                      "🔍 현재 배율: ${currentZoom.toStringAsFixed(1)}배",
-                                                      style: TextStyle(
-                                                        color: isMax ? Colors.yellowAccent : Colors.white,
-                                                        fontSize: 22,
-                                                        fontWeight: FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      "(화면맞춤 대비: ${fitRatio.toStringAsFixed(1)}배 / 최대설정: ${widget.pdfMaxZoom.toInt()}배)",
-                                                      style: const TextStyle(
-                                                        color: Colors.white70,
-                                                        fontSize: 13,
-                                                        fontWeight: FontWeight.w500,
-                                                      ),
-                                                    ),
-                                                    if (isMax) ...[
-                                                      const SizedBox(height: 4),
-                                                      const Text(
-                                                        "⚠️ 최대 한계(maxScale) 도달!",
-                                                        style: TextStyle(
-                                                          color: Colors.redAccent,
-                                                          fontSize: 12,
-                                                          fontWeight: FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ],
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ),
+                                      )
                                     ],
                                   ),
                                 ),
