@@ -2100,9 +2100,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
                 const Icon(Icons.zoom_out_map, size: 20, color: Colors.blue),
                 const SizedBox(width: 10),
                 Expanded(child: Slider(
-                  value: _pdfMaxZoom.clamp(5.0, 500.0), min: 5.0, max: 500.0,
-                  divisions: 99,
-                  onChanged: (v) => setDialogState(() => _pdfMaxZoom = ((v / 5).round() * 5.0).clamp(5.0, 500.0)),
+                  value: _pdfMaxZoom.clamp(5.0, 2000.0), min: 5.0, max: 2000.0,
+                  divisions: 199,
+                  onChanged: (v) => setDialogState(() => _pdfMaxZoom = ((v / 10).round() * 10.0).clamp(5.0, 2000.0)),
                 )),
                 Text("${_pdfMaxZoom.toInt()}배", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
               ]),
@@ -2110,12 +2110,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _pdfMaxZoomQuickBtnDialog("15배", 15.0, setDialogState),
-                  _pdfMaxZoomQuickBtnDialog("30배", 30.0, setDialogState),
                   _pdfMaxZoomQuickBtnDialog("50배", 50.0, setDialogState),
                   _pdfMaxZoomQuickBtnDialog("100배", 100.0, setDialogState),
                   _pdfMaxZoomQuickBtnDialog("200배", 200.0, setDialogState),
                   _pdfMaxZoomQuickBtnDialog("500배", 500.0, setDialogState),
+                  _pdfMaxZoomQuickBtnDialog("1000배", 1000.0, setDialogState),
+                  _pdfMaxZoomQuickBtnDialog("2000배", 2000.0, setDialogState),
                 ],
               ),
             ]),
