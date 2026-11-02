@@ -2914,17 +2914,85 @@ class _ChecklistScreenState extends State<ChecklistScreen> with WidgetsBindingOb
   void _toggleSectionSelection(String headerTitle) { String? currentHeader; List<int> sectionRealIndices = []; for (var item in _originalItems) { if (item.isSubheading) { currentHeader = item.itemCode; if (currentHeader == headerTitle) sectionRealIndices.add(item.realIndex); } else if (currentHeader == headerTitle) sectionRealIndices.add(item.realIndex); } setState(() { bool allSelected = sectionRealIndices.every((idx) => _selectedIndices.contains(idx)); if (allSelected) { for (var idx in sectionRealIndices) _selectedIndices.remove(idx); } else _selectedIndices.addAll(sectionRealIndices); }); }
   bool _isSectionSelected(String header) { String? current; List<int> indices = []; for (var i in _originalItems) { if (i.isSubheading) current = i.itemCode; else if (current == header) indices.add(i.realIndex); } return indices.isNotEmpty && indices.every((idx) => _selectedIndices.contains(idx)); }
 
+  // ❗ 통계용 무필터 합산 목록 생성 (동일 부분제목 내에서만 합산)
+  List<ItemModel> _getUnfilteredMergedItems() {
+    if (_originalItems.isEmpty) return [];
+
+    String? currentHeader;
+    Map<String, List<ItemModel>> sectionMap = {};
+    List<String> headerOrder = [];
+
+    for (var item in _originalItems) {
+      if (item.isSubheading) {
+        currentHeader = item.itemCode;
+        sectionMap[currentHeader] = [];
+        headerOrder.add(currentHeader);
+      } else {
+        // ❗ 포장모드인 경우 '-' 하위 항목 제외
+        if (_isPackingMode && item.displayNo.contains('-')) continue;
+
+        if (currentHeader != null) {
+          sectionMap[currentHeader]!.add(item);
+        } else {
+          if (!sectionMap.containsKey("ROOT")) {
+            sectionMap["ROOT"] = [];
+            headerOrder.insert(0, "ROOT");
+          }
+          sectionMap["ROOT"]!.add(item);
+        }
+      }
+    }
+
+    List<ItemModel> mergedAll = [];
+    for (var header in headerOrder) {
+      final sectionItems = sectionMap[header] ?? [];
+      if (sectionItems.isEmpty) continue;
+
+      Map<String, List<ItemModel>> dupMap = {};
+      List<String> codeOrder = [];
+      for (var item in sectionItems) {
+        final code = item.itemCode.trim();
+        if (!dupMap.containsKey(code)) {
+          dupMap[code] = [];
+          codeOrder.add(code);
+        }
+        dupMap[code]!.add(item);
+      }
+
+      for (var code in codeOrder) {
+        final group = dupMap[code]!;
+        if (group.length == 1) {
+          mergedAll.add(group.first);
+        } else {
+          int totalQty = 0;
+          for (var it in group) {
+            totalQty += int.tryParse(it.quantity.trim()) ?? 0;
+          }
+          final mergedItem = group.first.copy(
+            quantity: totalQty.toString(),
+            isMerged: true,
+            mergedRealIndices: group.map((e) => e.realIndex).toList(),
+          );
+          mergedAll.add(mergedItem);
+        }
+      }
+    }
+    return mergedAll;
+  }
+
   Widget _buildSummaryWidget(bool isDark) {
     if (_originalItems.isEmpty) return const SizedBox.shrink();
-    // ❗ 포장모드인 경우에는 displayNo에 하이픈(-)이 포함된 하위 항목을 통계 모수에서 완전 제외
-    final dataItems = _originalItems.where((i) => !i.isSubheading && (!_isPackingMode || !i.displayNo.contains('-')));
+    // ❗ 모드별 기준 목록 산출 (합산모드: 부분제목 내 합산된 목록, 원본모드: 원본 목록)
+    final List<ItemModel> dataItems = _isMergeDuplicateMode
+        ? _getUnfilteredMergedItems()
+        : _originalItems.where((i) => !i.isSubheading && (!_isPackingMode || !i.displayNo.contains('-'))).toList();
     int total = dataItems.length;
     int completed = _isPackingMode ? dataItems.where((i) => i.packed).length : dataItems.where((i) => i.complete).length;
     int shortage = dataItems.where((i) => i.complement == "부족").length;
     int rework = dataItems.where((i) => i.complement == "재작업").length;
 
     // ❗ 필터된 목록도 동일하게 하이픈(-) 항목 제외
-    final fItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1 && (!_isPackingMode || !i.displayNo.contains('-')));
+    final fItems = _displayItems.where((i) => !i.isSubheading && i.realIndex != -1 && (!_isPackingMode || !i.displayNo.contains('-'))).toList();
     int fTotal = fItems.length;
     int fComp = _isPackingMode ? fItems.where((i) => i.packed).length : fItems.where((i) => i.complete).length;
     int fShortage = fItems.where((i) => i.complement == "부족").length;
